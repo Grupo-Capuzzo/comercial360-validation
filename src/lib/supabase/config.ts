@@ -10,3 +10,5 @@ export const supabaseConfig = {
 export const isSupabaseConfigured = Boolean(
   supabaseConfig.url && supabaseConfig.publishableKey,
 );
+
+

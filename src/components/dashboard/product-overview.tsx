@@ -67,3 +67,5 @@ export function ProductOverview({ products }: { products: ProductSummaryRow[] })
     </section>
   );
 }
+
+

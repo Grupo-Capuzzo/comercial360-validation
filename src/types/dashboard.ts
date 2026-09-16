@@ -19,3 +19,5 @@ export type DashboardLoadResult =
         source: "configuration" | "dashboard_executivo" | "produtos_resumo";
       };
     };
+
+
