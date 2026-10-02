@@ -37,14 +37,13 @@ jobs:
           python tools/finance-migration/strict_tests.py test_engine.py 11
           python tools/finance-migration/strict_tests.py test_regressions.py 16
           python tools/finance-migration/strict_tests.py test_postgres.py 13
-          python -m unittest discover -s tools/portal-integration -p test_prepare_load.py -v
+          python -m unittest discover -s tools/portal-integration -p 'test_*.py' -v
       - name: Fresh local Supabase only, no link or remote commands
         run: |
           mkdir -p tests/isolated
           cd tests/isolated
           supabase --help
           supabase init
-          python -c "from pathlib import Path; p=Path('supabase/config.toml'); s=p.read_text(); s=s.replace('schemas = [\"public\", \"graphql_public\"]','schemas = [\"public\", \"graphql_public\", \"portal_acesso\", \"financeiro\", \"api_comercial\"]'); p.write_text(s)"
           supabase start --help
           supabase start -x studio,imgproxy,vector,realtime,storage-api,edge-runtime,logflare,supavisor
           supabase status -o json > status.json

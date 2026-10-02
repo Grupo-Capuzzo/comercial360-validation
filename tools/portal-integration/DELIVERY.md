@@ -43,8 +43,10 @@ O inventário campo a campo das 26 tabelas permanece em ../finance-migration/MAP
 
 `financeiro.registros_consulta` é projeção de leitura aprovada por empresa/origem/lote,
 não livro de novas movimentações. `registros_lista` é security_invoker, sem acesso anon.
-As cinco telas já têm serviços reais, mas o projetor completo das 26 tabelas para esta
-projeção ainda precisa de implementação e validação; CI semeia linhas sintéticas.
+As cinco telas já têm serviços reais. `read_projection.py` prepara projeções puras de
+15 tabelas com campos explicitamente permitidos e vínculos aprovados; não grava nada.
+A execução transacional completa da projeção e o tratamento operacional das demais
+tabelas ainda precisam de implementação e validação; CI semeia linhas sintéticas.
 Não somar projeção histórica às investment_positions nos dashboards. A correspondência
 individual das posições existentes ainda não foi homologada. Consultas antigas do CRM
 foram preservadas; não se declara seu isolamento completo entre empresas validado.

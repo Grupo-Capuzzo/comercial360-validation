@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 import urllib.request
+import urllib.error
+import time
 import psycopg
 
 root=Path(__file__).parents[2]
@@ -41,7 +43,31 @@ with psycopg.connect(dsn) as db:
         db.execute('INSERT INTO financeiro_origem.lotes VALUES (%s,%s,%s,%s)',(batch,source,'synthetic-hash','synthetic-reference'))
         for section in ['clientes','cotas','apuracoes','titulos','parcelas']:
             db.execute("INSERT INTO financeiro.registros_consulta(empresa_id,source_system,tabela_origem,origem_id,tipo,lote_id,cliente_id_global,produto_id,descricao,status,valor_preservado,data_referencia,detalhes) VALUES (%s,%s,%s,'1',%s,%s,%s,%s,%s,'synthetic',10.250000000001,'2026-10-01','{\"historico\":\"sintetico\"}')",(company,source,section,section,batch,company,company,section+' synthetic-'+label))
+    db.execute('CREATE SCHEMA api_comercial')
+    # Test-only SQL-invoker probe confirms the actual JWT role, not the preparation role.
+    db.execute("""CREATE FUNCTION portal_acesso.ci_role() RETURNS jsonb LANGUAGE sql
+      SECURITY INVOKER SET search_path='' AS $$
+      SELECT jsonb_build_object('role',current_user,'superuser',r.rolsuper,
+      'bypassrls',r.rolbypassrls,'owner',EXISTS(SELECT 1 FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='financeiro'
+      AND c.relname='registros_consulta' AND c.relowner=r.oid))
+      FROM pg_catalog.pg_roles r WHERE r.rolname=current_user $$;
+      REVOKE ALL ON FUNCTION portal_acesso.ci_role() FROM PUBLIC,anon;
+      GRANT EXECUTE ON FUNCTION portal_acesso.ci_role() TO authenticated""")
+    db.execute("ALTER ROLE authenticator SET pgrst.db_schemas='public,graphql_public,portal_acesso,financeiro,api_comercial'")
+    db.execute("NOTIFY pgrst,'reload config'")
     db.execute("NOTIFY pgrst,'reload schema'")
+# Confirm the new profile is live, rather than letting cache races pass silently.
+for attempt in range(30):
+    request=urllib.request.Request(url+'/rest/v1/',headers={'apikey':key,'Authorization':'Bearer '+key,'Accept-Profile':'portal_acesso'})
+    try:
+        with urllib.request.urlopen(request) as response:
+            if response.status == 200: break
+    except urllib.error.HTTPError:
+        if attempt == 29: raise
+        time.sleep(1)
+else:
+    raise ValueError('PostgREST_profile_not_ready')
 # Runtime fixture only; no production credentials or users.
 (root/'tests/isolated/fixture.json').write_text(json.dumps({'users':users,'a':a,'b':b}))
 with open(os.environ['GITHUB_ENV'],'a') as env:
