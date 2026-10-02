@@ -1,0 +1,59 @@
+name: Portal real Auth synthetic integration
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths: ['src/**','tests/**','tools/**','package*.json','playwright.config.mjs','.github/workflows/portal-integration-synthetic.yml']
+permissions:
+  contents: read
+jobs:
+  isolated:
+    if: github.event.pull_request.head.ref == 'codex/portal-finance-integration' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env: {POSTGRES_DB: capuzzo_test_ci, POSTGRES_USER: synthetic_runner, POSTGRES_PASSWORD: synthetic_ci_only}
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U synthetic_runner -d capuzzo_test_ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      FINANCE_LOCAL_POSTGRES_DSN: postgresql://synthetic_runner:synthetic_ci_only@127.0.0.1:5432/capuzzo_test_ci
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, ref: '${{ github.event.pull_request.head.sha || github.sha }}'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.13'}
+      - uses: supabase/setup-cli@v1
+        with: {version: '2.119.0'}
+      - run: npm ci
+      - run: python -m pip install -r tools/finance-migration/requirements-test.txt
+      - name: Preserve the forty homologated regressions
+        run: |
+          python -c "import psycopg,os; db=psycopg.connect(os.environ['FINANCE_LOCAL_POSTGRES_DSN']); db.execute(\"ALTER DATABASE capuzzo_test_ci SET capuzzo.disposable='synthetic-only'\"); db.commit(); db.close()"
+          python tools/finance-migration/strict_tests.py test_engine.py 11
+          python tools/finance-migration/strict_tests.py test_regressions.py 16
+          python tools/finance-migration/strict_tests.py test_postgres.py 13
+          python -m unittest discover -s tools/portal-integration -p test_prepare_load.py -v
+      - name: Fresh local Supabase only, no link or remote commands
+        run: |
+          mkdir -p tests/isolated
+          cd tests/isolated
+          supabase --help
+          supabase init
+          python -c "from pathlib import Path; p=Path('supabase/config.toml'); s=p.read_text(); s=s.replace('schemas = [\"public\", \"graphql_public\"]','schemas = [\"public\", \"graphql_public\", \"portal_acesso\", \"financeiro\", \"api_comercial\"]'); p.write_text(s)"
+          supabase start --help
+          supabase start -x studio,imgproxy,vector,realtime,storage-api,edge-runtime,logflare,supavisor
+          supabase status -o json > status.json
+      - name: Real synthetic Auth and read model
+        run: python tests/portal-e2e/bootstrap.py
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Browser E2E with real local Auth JWTs
+        run: npx playwright test --fail-on-flaky-tests
+      - run: node tools/portal-integration/check-e2e.mjs

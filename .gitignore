@@ -8,3 +8,8 @@ node_modules/
 
 desktop.ini
 **/desktop.ini
+tests/isolated/
+test-results/
+playwright-report/
+**/__pycache__/
+*.pyc

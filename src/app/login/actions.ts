@@ -23,5 +23,5 @@ export async function login(formData: FormData) {
     redirect("/login?error=Email+ou+senha+invalidos");
   }
 
-  redirect("/");
+  redirect("/portal");
 }

@@ -45,6 +45,9 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth")
   ) {
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ code: "session_required" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

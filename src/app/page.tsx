@@ -1,12 +1,7 @@
-import { Dashboard } from "@/components/dashboard/dashboard";
-import { AppShell } from "@/components/layout/app-shell";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return (
-    <AppShell>
-      <Dashboard />
-    </AppShell>
-  );
+  redirect("/portal");
 }
 
 
