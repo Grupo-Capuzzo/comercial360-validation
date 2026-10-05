@@ -1,0 +1,3 @@
+import {defineConfig} from 'playwright/test';
+import {fileURLToPath} from 'node:url';
+export default defineConfig({testDir:'.',testMatch:'input.spec.mjs',timeout:30000,retries:0,workers:1,reporter:'list',use:{baseURL:'http://127.0.0.1:3999',browserName:'chromium',headless:true},webServer:{command:'node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3999',cwd:fileURLToPath(new URL('../../',import.meta.url)),url:'http://127.0.0.1:3999/contato',timeout:60000,reuseExistingServer:false,env:{NEXT_PUBLIC_SUPABASE_URL:'',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'',COMMERCIAL_PUBLIC_ORIGIN:'http://127.0.0.1:3999'}}});

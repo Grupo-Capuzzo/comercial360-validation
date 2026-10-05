@@ -4,6 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { supabaseConfig } from "@/lib/supabase/config";
 
 export async function updateSession(request: NextRequest) {
+  // Exact public intake boundary. No CRM/customer/output endpoints are public.
+  if (["/contato", "/api/comercial/input", "/api/comercial/catalogo"].includes(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
   let supabaseResponse = NextResponse.next({
     request,
   });

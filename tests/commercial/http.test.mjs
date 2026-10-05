@@ -1,0 +1,17 @@
+import {test} from 'node:test'; import assert from 'node:assert/strict';
+import ts from 'typescript'; import {readFile} from 'node:fs/promises';
+import * as journey from '../../src/lib/commercial/journey.ts';
+// Transpile ONLY the pure HTTP module; runtime Supabase clients are not loaded.
+const source=await readFile(new URL('../../src/lib/commercial/http.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const exports={}; new Function('require','exports',js)(()=>journey,exports);
+const {readJson,intakePayload}=exports;
+const request=(body,origin='http://127.0.0.1:3999',extra={})=>new Request('http://127.0.0.1:3999/api/comercial/input',{method:'POST',headers:{origin,'Content-Type':'application/json',...extra},body:JSON.stringify(body)});
+test('same-origin JSON intake accepts only simple contact and submission UUID',async()=>{const req=request({nome:'Contato sintético',email:'test@example.invalid',interesse:'synthetic-product' },undefined,{'Idempotency-Key':'00000000-0000-4000-8000-000000000001'});const result=intakePayload(await readJson(req),req);assert.equal(result.contact.nome,'Contato sintético');assert.equal(result.submission,'00000000-0000-4000-8000-000000000001');});
+test('cross-origin/missing-origin mutation is denied',async()=>{for(const origin of ['http://attacker.invalid','null'])await assert.rejects(readJson(request({},origin)),/origin_denied/);});
+test('actual body bytes bounded independently of content-length',async()=>await assert.rejects(readJson(request({value:'a'.repeat(33000)},undefined,{'Content-Length':'1'})),/body_too_large/));
+test('form without valid submission UUID rejected',()=>assert.throws(()=>intakePayload({},request({})),/submission_key_required/));
+test('invalid JSON structures rejected',async()=>await assert.rejects(readJson(request([])),/invalid_body/));
+test('no public customer GET or write privileges: source boundary contract',async()=>{const route=await readFile(new URL('../../src/app/api/comercial/input/route.ts',import.meta.url),'utf8');assert.match(route,/export async function POST/);assert.doesNotMatch(route,/export async function (GET|PUT|PATCH|DELETE)/);assert.doesNotMatch(route,/service_role|\.from\("clientes"\)/);});
+test('configured public origin survives internal request URL and rejects forged origins',async()=>{const previous=process.env.COMMERCIAL_PUBLIC_ORIGIN;try{process.env.COMMERCIAL_PUBLIC_ORIGIN='https://crm.example.invalid';const req=new Request('http://internal.invalid/api/comercial/input',{method:'POST',headers:{origin:'https://crm.example.invalid','Content-Type':'application/json'},body:'{}'});assert.deepEqual(await readJson(req),{});await assert.rejects(readJson(request({})),/origin_denied/);}finally{if(previous===undefined)delete process.env.COMMERCIAL_PUBLIC_ORIGIN;else process.env.COMMERCIAL_PUBLIC_ORIGIN=previous;}});
+test('production without an explicitly configured public origin fails closed',async()=>{const prior=process.env.NODE_ENV,origin=process.env.COMMERCIAL_PUBLIC_ORIGIN;try{process.env.NODE_ENV='production';delete process.env.COMMERCIAL_PUBLIC_ORIGIN;await assert.rejects(readJson(request({})),/origin_not_configured/);}finally{if(prior===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=prior;if(origin===undefined)delete process.env.COMMERCIAL_PUBLIC_ORIGIN;else process.env.COMMERCIAL_PUBLIC_ORIGIN=origin;}});

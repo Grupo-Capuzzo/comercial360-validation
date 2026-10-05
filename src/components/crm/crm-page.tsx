@@ -1065,6 +1065,7 @@ function OpportunityCard({
       <p className="mt-1 text-xs text-slate-500">
         {displayName}
       </p>
+      <a className="mt-2 inline-block text-xs font-semibold underline" href={`/crm/${opportunity.oportunidade_id}/formalizacao`}>Proposta, cadastro contratual e output</a>
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <span className="text-sm font-semibold text-[var(--navy)]">
