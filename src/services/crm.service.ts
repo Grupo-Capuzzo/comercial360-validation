@@ -146,6 +146,9 @@ export async function moveOpportunity(input: {
   etapaCodigo: string;
   motivoPerda?: string;
 }) {
+  if (input.etapaCodigo.toUpperCase() === "FECHADO") {
+    return { ok: false, oportunidadeId: null, error: "Conclua a formalização contratual para fechar e disponibilizar o output comercial." };
+  }
   const payload: Record<string, Json> = {
     oportunidade_id: input.oportunidadeId,
     etapa_codigo: input.etapaCodigo,

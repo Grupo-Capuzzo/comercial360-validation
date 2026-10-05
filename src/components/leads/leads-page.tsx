@@ -478,6 +478,7 @@ export function LeadsPage() {
           <h1 className="mt-2 font-serif text-3xl font-semibold text-[var(--navy)] sm:text-4xl">
             Leads
           </h1>
+          <a href="/contato" className="text-sm underline">Abrir formulário simples de entrada</a>
 
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
             Central multproduto para
