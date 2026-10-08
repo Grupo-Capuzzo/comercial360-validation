@@ -1,0 +1,1959 @@
+{
+  "audit_logs": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "entity_type",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "entity_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "action",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "old_value",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "new_value",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "user_note",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": true
+  },
+  "backups": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "file_name",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "file_path",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "reason",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": true
+  },
+  "bank_configs": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "bank_code",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_name",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "company_name",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "company_document",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "agency",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "agency_digit",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "account_number",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "account_digit",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "address_street",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "address_number",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "address_complement",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "city",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "zip_code",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "state",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "remittance_sequence",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "active",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "updated_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "agreement_code",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": true
+  },
+  "bank_remittance_files": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "calculation_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "condominium_code",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_code",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_name",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "file_name",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "file_path",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "conference_file_path",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "payment_date",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "total_amount",
+        "type": "REAL",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "total_payments",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "monthly_calculations",
+        "calculation_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "bank_remittance_items": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "remittance_file_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "calculation_item_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "client_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "client_name",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "client_document",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "pix_key",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "pix_key_type",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "amount",
+        "type": "REAL",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "clients",
+        "client_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ],
+      [
+        1,
+        0,
+        "bank_remittance_files",
+        "remittance_file_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "central_etapas": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "tarefa_id",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "ordem",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "nome",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "responsavel",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "prazo",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "percentual",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "observacoes",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": true
+  },
+  "central_subetapas": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "etapa_id",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "ordem",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "nome",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "feito",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "prazo",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "concluido_em",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": true
+  },
+  "central_tarefas": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "titulo",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "responsavel",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "prazo_total",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "descricao",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "criado_em",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "atualizado_em",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "prioridade",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": true
+  },
+  "clients": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "cpf",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "full_name",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "email",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "pix_key",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "phone",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "updated_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_name",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_agency",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_account",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_account_digit",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_account_type",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_holder_name",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_holder_document",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "bank_notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": true
+  },
+  "condominiums": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "name",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "code",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "default_monthly_rate",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "payment_day",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "accrual_start_day",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "accrual_end_day",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "active",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": true
+  },
+  "email_logs": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "client_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "condominium_code",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "reference_year",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "reference_month",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "to_email",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "subject",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "body",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "gmail_draft_id",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "gmail_message_id",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "clients",
+        "client_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "monthly_calculation_items": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "monthly_calculation_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "share_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "client_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "condominium_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "period_start",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "period_end",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "active_days",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "total_period_days",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "applied_rate",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "share_value",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "income_value",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "calculation_details",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "condominiums",
+        "condominium_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ],
+      [
+        1,
+        0,
+        "clients",
+        "client_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ],
+      [
+        2,
+        0,
+        "shares",
+        "share_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ],
+      [
+        3,
+        0,
+        "monthly_calculations",
+        "monthly_calculation_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "monthly_calculations": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "calculation_month",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "calculation_year",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "condominium_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "agro_special_rate",
+        "type": "REAL",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "calculated_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "condominiums",
+        "condominium_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "portal_empresa_status": {
+    "columns": [
+      {
+        "name": "slug",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "obs",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": true
+  },
+  "portal_favoritos": {
+    "columns": [
+      {
+        "name": "usuario_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 1
+      },
+      {
+        "name": "empresa_slug",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 2
+      }
+    ],
+    "foreign_keys": [],
+    "import": false
+  },
+  "portal_login_tentativas": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "email",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "momento",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "sucesso",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": false
+  },
+  "portal_usuario_empresas": {
+    "columns": [
+      {
+        "name": "usuario_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 1
+      },
+      {
+        "name": "empresa_slug",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 2
+      }
+    ],
+    "foreign_keys": [],
+    "import": false
+  },
+  "portal_usuarios": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "nome",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "email",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "senha_hash",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "perfil",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "ativo",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "criado_em",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "ultimo_login",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [],
+    "import": false
+  },
+  "private_loan_amortizations": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "loan_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "payment_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "amortization_type",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "applied_to",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "installment_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "target_mode",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "price_action",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "amount_before",
+        "type": "REAL",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "amount_after",
+        "type": "REAL",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "recalculated_schedule_json",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "private_loan_installments",
+        "installment_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ],
+      [
+        1,
+        0,
+        "private_loans",
+        "loan_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "private_loan_calculations_log": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "loan_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "calculation_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "base_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "base_amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "days_overdue",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "monthly_rate",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "daily_rate",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "calculated_amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "calculation_details",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "private_loans",
+        "loan_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "private_loan_clients": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "linked_client_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "name",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "document",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "email",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "phone",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "pix_key",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "updated_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "clients",
+        "linked_client_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "private_loan_extensions": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "loan_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "reference_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "paid_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "extension_amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "covered_until_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "principal_kept_amount",
+        "type": "REAL",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "private_loans",
+        "loan_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "private_loan_installments": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "loan_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "installment_number",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "due_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "principal_amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "interest_amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "installment_amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "paid_amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "paid_date",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "updated_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "private_loans",
+        "loan_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "private_loan_payments": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "loan_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "installment_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "payment_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "payment_type",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "private_loan_installments",
+        "installment_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ],
+      [
+        1,
+        0,
+        "private_loans",
+        "loan_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "private_loans": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "private_client_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "linked_client_id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "loan_number",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "original_amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "contracted_amount",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "interest_rate_monthly",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "interest_rate_daily",
+        "type": "REAL",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "interest_type",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "calculation_method",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "start_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "first_due_date",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "final_due_date",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "installments_count",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "installment_amount",
+        "type": "REAL",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "updated_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "clients",
+        "linked_client_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ],
+      [
+        1,
+        0,
+        "private_loan_clients",
+        "private_client_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  },
+  "shares": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 1
+      },
+      {
+        "name": "condominium_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "client_id",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "share_number",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "share_value",
+        "type": "REAL",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "acquisition_date",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "maturity_date",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "last_renewal_date",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "withdrawal_date",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "created_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "updated_at",
+        "type": "TEXT",
+        "not_null": true,
+        "pk_order": 0
+      },
+      {
+        "name": "withdrawal_requested",
+        "type": "INTEGER",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "withdrawal_request_date",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "withdrawal_effective_date",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "withdrawal_notes",
+        "type": "TEXT",
+        "not_null": false,
+        "pk_order": 0
+      },
+      {
+        "name": "accrual_until_withdrawal",
+        "type": "INTEGER",
+        "not_null": true,
+        "pk_order": 0
+      }
+    ],
+    "foreign_keys": [
+      [
+        0,
+        0,
+        "clients",
+        "client_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ],
+      [
+        1,
+        0,
+        "condominiums",
+        "condominium_id",
+        "id",
+        "NO ACTION",
+        "NO ACTION",
+        "NONE"
+      ]
+    ],
+    "import": true
+  }
+}

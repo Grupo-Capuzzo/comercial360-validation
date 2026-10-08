@@ -4,6 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { supabaseConfig } from "@/lib/supabase/config";
 
 export async function updateSession(request: NextRequest) {
+  // Exact public intake boundary. No CRM/customer/output endpoints are public.
+  if (["/contato", "/api/comercial/input", "/api/comercial/catalogo"].includes(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
   let supabaseResponse = NextResponse.next({
     request,
   });
@@ -45,6 +49,9 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth")
   ) {
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ code: "session_required" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
