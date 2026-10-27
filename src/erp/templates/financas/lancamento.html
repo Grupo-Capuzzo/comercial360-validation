@@ -1,0 +1,101 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}{{ l.descricao }}{% endblock %}
+{% block fin_conteudo %}
+{% set receber = l.tipo == 'receber' %}
+<a class="fin-voltar" href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo=l.tipo) }}">{{ ic('arrow_back') }} {{ 'Contas a receber' if receber else 'Contas a pagar' }}</a>
+
+<section class="fin-detalhe sit-{{ l.situacao }}">
+  <div class="fin-detalhe-topo">
+    <div>
+      <div class="fin-meta">
+        <span class="fin-tipo {{ l.tipo }}">{{ fic(l.tipo) }} {{ 'A receber' if receber else 'A pagar' }}</span>
+        <span class="fin-sit {{ l.situacao }}">{{ SITUACOES[l.situacao] }}</span>
+        {% if l.parcelas > 1 %}<span class="fin-chip">Parcela {{ l.parcela }} de {{ l.parcelas }}</span>{% endif %}
+      </div>
+      <h1>{{ l.descricao }}</h1>
+      <p class="fin-sub">{{ l.pessoa_nome or 'Sem ' ~ ('cliente' if receber else 'fornecedor') }} · {{ l.categoria_nome or 'Sem categoria' }}
+        · Vencimento {{ data_br(l.vencimento) }} · Competência {{ data_br(l.competencia) }}</p>
+    </div>
+    <div class="fin-valores">
+      <div><small>Valor</small><b>{{ moeda(l.valor) }}</b></div>
+      <div><small>{{ 'Recebido' if receber else 'Pago' }}</small><b class="pos">{{ moeda(l.pago) }}</b></div>
+      <div><small>Saldo</small><b class="{{ 'neg' if l.saldo and l.situacao == 'vencido' }}">{{ moeda(l.saldo) }}</b></div>
+    </div>
+  </div>
+  <div class="fin-acoes linha">
+    {% if l.situacao in ('aberto','vencido','parcial') %}
+      <button type="button" class="btn-pill fin-btn {{ 'entrada' if receber else 'saida' }}" data-baixar="{{ l.id }}" data-desc="{{ l.descricao }}" data-saldo="{{ valor_campo(l.saldo) }}" data-conta="{{ l.conta_id or '' }}">{{ fic('check') }} {{ 'Registrar recebimento' if receber else 'Registrar pagamento' }}</button>
+    {% endif %}
+    <form method="post" action="{{ url_for('financas.lancamento_acao', slug=empresa.slug, lid=l.id, acao='reativar' if l.cancelado else 'cancelar') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <button class="btn-pill outline fin-btn" type="submit">{{ 'Reativar' if l.cancelado else 'Cancelar lançamento' }}</button>
+    </form>
+    {% if not baixas %}<button type="button" class="fin-link-risco" data-abrir="dlg-excluir">Excluir</button>{% endif %}
+  </div>
+</section>
+
+<div class="fin-cols">
+  <section class="fin-box">
+    <header><h3>Dados do lançamento</h3></header>
+    <form method="post" class="fin-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label class="lbl">Descrição</label><input class="inp" name="descricao" required maxlength="200" value="{{ l.descricao }}">
+      <div class="fin-3col">
+        <div><label class="lbl">Valor (R$)</label><input class="inp" name="valor" required data-moeda value="{{ valor_campo(l.valor) }}"></div>
+        <div><label class="lbl">Vencimento</label><input class="inp" type="date" name="vencimento" required value="{{ l.vencimento }}"></div>
+        <div><label class="lbl">Competência</label><input class="inp" type="date" name="competencia" value="{{ l.competencia }}"></div>
+      </div>
+      <div class="fin-2col">
+        <div><label class="lbl">{{ 'Cliente' if receber else 'Fornecedor' }}</label>
+          <select class="inp" name="pessoa_id"><option value="">—</option>{% for p in pessoas %}<option value="{{ p.id }}" {{ 'selected' if p.id == l.pessoa_id }}>{{ p.nome }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Categoria</label>
+          <select class="inp" name="categoria_id"><option value="">—</option>{% for c in categorias %}<option value="{{ c.id }}" {{ 'selected' if c.id == l.categoria_id }}>{{ c.nome }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="fin-3col">
+        <div><label class="lbl">Conta prevista</label>
+          <select class="inp" name="conta_id"><option value="">—</option>{% for c in contas %}<option value="{{ c.id }}" {{ 'selected' if c.id == l.conta_id }}>{{ c.nome }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Forma de pagamento</label>
+          <select class="inp" name="forma_pagamento"><option value="">—</option>{% for f in FORMAS %}<option {{ 'selected' if f == l.forma_pagamento }}>{{ f }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Centro de custo</label>
+          <select class="inp" name="centro_id"><option value="">—</option>{% for c in centros %}<option value="{{ c.id }}" {{ 'selected' if c.id == l.centro_id }}>{{ c.nome }}</option>{% endfor %}</select></div>
+      </div>
+      <label class="lbl">Nº documento / NF</label><input class="inp" name="documento" maxlength="60" value="{{ l.documento }}">
+      <label class="lbl">Observações</label><textarea class="inp" name="obs" rows="3">{{ l.obs }}</textarea>
+      <button class="btn-pill fin-btn" type="submit">Salvar alterações</button>
+    </form>
+  </section>
+  <div class="fin-coluna">
+    <section class="fin-box">
+      <header><h3>{{ 'Recebimentos' if receber else 'Pagamentos' }}</h3></header>
+      <ul class="fin-lista">
+        {% for b in baixas %}
+          <li><span><b>{{ moeda(b.valor) }}</b> em {{ data_br(b.data) }}<small>{{ b.conta_nome }}{% if b.juros %} · juros {{ moeda(b.juros) }}{% endif %}{% if b.desconto %} · desconto {{ moeda(b.desconto) }}{% endif %}</small></span>
+            <form method="post" action="{{ url_for('financas.baixa_estornar', slug=empresa.slug, bid=b.id) }}">
+              <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link-risco" type="submit">Estornar</button></form></li>
+        {% else %}<li class="vazio">Nenhum {{ 'recebimento' if receber else 'pagamento' }} registrado.</li>{% endfor %}
+      </ul>
+    </section>
+    {% if irmaos|length > 1 %}
+    <section class="fin-box">
+      <header><h3>Parcelas / repetições</h3></header>
+      <ul class="fin-lista">
+        {% for x in irmaos %}
+          <li class="{{ 'atual' if x.id == l.id }}"><a href="{{ url_for('financas.lancamento', slug=empresa.slug, lid=x.id) }}">{{ x.parcela }}/{{ x.parcelas }} · {{ data_br(x.vencimento) }}</a>
+            <span class="dir">{{ moeda(x.valor) }} <span class="fin-sit {{ x.situacao }}">{{ SITUACOES[x.situacao] }}</span></span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </div>
+</div>
+
+<dialog id="dlg-excluir" class="dlg fin-dlg">
+  <form method="post" action="{{ url_for('financas.lancamento_acao', slug=empresa.slug, lid=l.id, acao='excluir') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="dlg-head"><h3>Excluir lançamento?</h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+    <p class="fin-sub">“{{ l.descricao }}” será apagado. Para manter no histórico, use “Cancelar lançamento”.</p>
+    <div class="row-btns"><button type="button" class="btn-pill outline" data-fechar>Voltar</button><button class="btn-pill fin-risco" type="submit">Excluir</button></div>
+  </form>
+</dialog>
+{% include "financas/_dlg_baixa.html" %}
+{% endblock %}

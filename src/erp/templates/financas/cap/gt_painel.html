@@ -1,0 +1,82 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Gestão Tática{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Painel gerencial', ('Posição de ' ~ rotulo(uc) ~ ' — o último mês apurado.' if uc else 'Importe a planilha ou cadastre os clientes para começar.') , 'Gestão Tática') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.gt_mes', slug=empresa.slug, comp=trabalho) }}">{{ fic('calculo') }} Apurar {{ rotulo(trabalho, True) }}</a>
+{% endcall %}
+
+{% if vazio %}
+<section class="vg-box gt-vazio">
+  <h3>Nenhum dado da Gestão Tática ainda</h3>
+  <p class="fin-sub">Importe a planilha uma única vez para trazer o histórico; depois a apuração é feita só aqui.</p>
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.gt_importar', slug=empresa.slug) }}">{{ fic('abrir') }} Importar planilha</a>
+</section>
+{% else %}
+<p class="gt-aviso-div">{{ fic('calendario') }} Próxima divulgação: <b>{{ data_br(divulgacao.isoformat()) }}</b> — resultado de {{ rotulo(trabalho) }}.</p>
+
+<div class="vg-kpis gt-kpis">
+  <div class="vg-kpi escuro"><small>{{ fic('tatica') }} Total da banca</small><b>{{ reais(total_banca) }}</b><em>saldo final de {{ rotulo(uc, True) }}</em></div>
+  <div class="vg-kpi"><small>{{ fic('receber') }} Rendimento líquido</small><b>{{ reais(atual.liquido if atual else 0) }}</b>
+    <em>bruto {{ reais(atual.bruto if atual else 0) }} · taxa {{ reais(atual.taxa if atual else 0) }}</em></div>
+  <a class="vg-kpi" href="{{ url_for('financas.gt_clientes', slug=empresa.slug) }}"><small>{{ fic('pessoas') }} Investidores</small><b>{{ ativos|length }}</b>
+    <em>{{ ranking|length }} com banca{% if ativos|length > ranking|length %} · {{ ativos|length - ranking|length }} só com congelado{% endif %}</em></a>
+  <div class="vg-kpi"><small>{{ fic('pagar') }} Saques</small><b>{{ reais(atual.saque if atual else 0) }}</b>
+    <em>rendimentos pagos em {{ rotulo(uc, True) }}{% if ret_mes %} · + {{ reais(ret_mes) }} de retiradas{% endif %}</em></div>
+  <div class="vg-kpi {{ 'alerta' if total_cong }}"><small>{{ fic('relogio') }} Congelados</small><b>{{ reais(total_cong) }}</b>
+    <em>{{ cong|length }} aguardando saque (60 dias)</em></div>
+</div>
+
+<div class="vg-cols gt-cols">
+  <section class="vg-box">
+    <header><h3>Ranking dos investidores</h3><span>banca em {{ rotulo(uc, True) }}</span></header>
+    {% set mx = (ranking|map(attribute='saldo')|max) if ranking else 1 %}
+    <ol class="gt-rank">
+      {% for c in ranking %}
+      <li><a href="{{ url_for('financas.gt_cliente', slug=empresa.slug, cid=c.id) }}">
+        <span class="gt-pos">{{ loop.index }}</span>
+        <span class="gt-rank-n"><b>{{ c.nome }}</b><small>{{ pct(c.saldo / (total_banca or 1), 1) }} da banca · peso {{ '%g'|format(c.peso) }} · taxa {{ pct(c.taxa_pct, 0) }}</small>
+          <span class="gt-rank-b"><i style="width:{{ 100 * c.saldo / (mx or 1) }}%"></i></span></span>
+        <b class="gt-rank-v">{{ reais(c.saldo) }}</b></a></li>
+      {% else %}<li class="fin-vazio">Nenhum investidor com banca.</li>{% endfor %}
+    </ol>
+  </section>
+  <section class="vg-box">
+    <header><h3>Valores congelados</h3><span>sem rendimento até o saque</span></header>
+    {% if cong %}
+    <table class="pr-tabela gt-cong">
+      <thead><tr><th>Investidor</th><th class="num">Valor</th><th>Congelado em</th><th>Saque em</th></tr></thead>
+      <tbody>{% for p in cong %}
+        <tr class="clic" onclick="location.href='{{ url_for('financas.gt_cliente', slug=empresa.slug, cid=p.gt_cliente_id) }}'">
+          <td><b>{{ p.cliente }}</b></td><td class="num"><b>{{ reais(p.valor) }}</b></td>
+          <td>{{ data_br(p.congelado_em.isoformat()) }}</td>
+          <td>{{ data_br(p.libera_em.isoformat()) }}<br>{% if p.dias > 0 %}<span class="pr-st aviso">faltam {{ p.dias }} dias</span>{% else %}<span class="pr-st risco">liberado para saque</span>{% endif %}</td></tr>
+      {% endfor %}</tbody>
+      <tfoot><tr><td><b>Total</b></td><td class="num"><b>{{ reais(total_cong) }}</b></td><td colspan="2"></td></tr></tfoot>
+    </table>
+    {% else %}<p class="fin-vazio">Nenhum valor congelado aguardando saque.</p>{% endif %}
+    <p class="co-dica" style="margin-top:.6rem">O congelado rende até o dia do congelamento; depois fica parado {{ 60 }} dias até virar saque (retirada).
+      Ao abrir o mês em que vence, a retirada já entra sugerida na apuração.</p>
+  </section>
+</div>
+
+<section class="vg-box" style="margin-top:1rem">
+  <header><h3>Evolução mês a mês</h3><span>clique no mês para abrir a apuração</span></header>
+  <div class="mv-wrap">
+  <table class="pr-tabela gt-tab">
+    <thead><tr><th>Mês</th><th class="num">Investidores</th><th class="num">Banca inicial</th><th class="num">Aportes</th><th class="num">Distribuído</th>
+      <th class="num">Rentab.</th><th class="num">Taxa gestão</th><th class="num">Líquido</th><th class="num">Saques</th><th class="num">Saldo final</th></tr></thead>
+    <tbody>
+    {% for mm in ult12|reverse %}
+      <tr class="clic" onclick="location.href='{{ url_for('financas.gt_mes', slug=empresa.slug, comp=mm.c) }}'">
+        <td><b>{{ rotulo(mm.c, True) }}</b></td><td class="num">{{ mm.n }}</td><td class="num">{{ reais(mm.banca) }}</td>
+        <td class="num">{{ reais(mm.aporte) if mm.aporte else '—' }}</td><td class="num">{{ reais(mm.distribuido) }}</td>
+        <td class="num">{{ pct(mm.rentab) }}</td><td class="num">{{ reais(mm.taxa) }}</td><td class="num">{{ reais(mm.liquido) }}</td>
+        <td class="num">{{ reais(mm.saque) if mm.saque else '—' }}</td><td class="num"><b>{{ reais(mm.saldo) }}</b></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

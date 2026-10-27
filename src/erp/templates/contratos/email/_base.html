@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f3f1ec;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f1ec;padding:24px 0;">
+<tr><td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e4dfd2;">
+  <tr><td style="background:#0d0d0d;padding:18px 28px;">
+    <span style="font-family:Georgia,serif;font-size:22px;letter-spacing:3px;color:#f3ebd6;">CAPUZZO</span>
+    <span style="display:block;font-size:10px;letter-spacing:3px;color:#c7a955;margin-top:2px;">ASSESSORIA EMPRESARIAL</span>
+  </td></tr>
+  <tr><td style="height:4px;background:linear-gradient(90deg,#9e7c34,#f1d98a,#9e7c34);background-color:#c7a955;"></td></tr>
+  <tr><td style="padding:28px 28px 8px;font-size:15px;line-height:1.55;">
+{% block corpo %}{% endblock %}
+  </td></tr>
+  <tr><td style="padding:16px 28px 26px;font-size:12px;color:#777;line-height:1.5;border-top:1px solid #eee;">
+    {{ cfg.empresa_nome }} · CNPJ {{ cfg.empresa_cnpj }}<br>
+    Atendimento ao cotista: {{ cfg.email_copia }} · (61) 4042-9355<br>
+    <span style="color:#999;">Nunca pedimos senhas por e-mail. Em caso de dúvida sobre este e-mail, fale com a Capuzzo pelos canais acima.</span>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>

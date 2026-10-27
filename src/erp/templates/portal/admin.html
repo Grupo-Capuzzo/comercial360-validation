@@ -1,0 +1,89 @@
+{% extends "portal/base.html" %}
+{% block title %}Administração · Portal Grupo Capuzzo{% endblock %}
+{% block tb_links %}
+  <a class="tb-btn" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span class="lbl">Empresas</span></a>
+{% endblock %}
+{% block content %}
+<section class="page-title"><div class="eyebrow-line">Grupo Capuzzo</div><h1>Administração</h1></section>
+<nav class="tabs">
+  <a class="{{ 'on' if aba != 'empresas' }}" href="{{ url_for('portal_admin') }}">Usuários</a>
+  <a class="{{ 'on' if aba == 'empresas' }}" href="{{ url_for('portal_admin', aba='empresas') }}">Empresas</a>
+</nav>
+
+{% if aba != 'empresas' %}
+<div class="box">
+  <table class="tbl">
+    <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th>Empresas</th><th>Último acesso</th><th></th></tr></thead>
+    <tbody>
+    {% for u in usuarios %}
+      <tr class="{{ 'sel' if editar and editar.id == u.id }}">
+        <td><b>{{ u.nome }}</b></td><td>{{ u.email }}</td>
+        <td>{{ 'Administrador' if u.perfil == 'admin' else 'Usuário' }}</td>
+        <td>{% if u.ativo %}<span class="tag tag-on">Ativo</span>{% else %}<span class="tag tag-off">Bloqueado</span>{% endif %}</td>
+        <td>{% if u.perfil == 'admin' %}Todas{% else %}{{ empresas|selectattr('slug', 'in', u.empresas)|map(attribute='nome')|join(', ') or '—' }}{% endif %}</td>
+        <td>{{ (u.ultimo_login or '—')|replace('T', ' ') }}</td>
+        <td><a class="lnk" href="{{ url_for('portal_admin', u=u.id) }}">Editar</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="cols">
+  {% for modo in ['novo', 'editar'] %}
+  {% set u = editar if modo == 'editar' else none %}
+  {% if modo == 'novo' or u %}
+  <form class="box" method="post" action="{{ url_for('portal_admin_usuario') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% if u %}<input type="hidden" name="id" value="{{ u.id }}">{% endif %}
+    <div class="box-title">{{ 'Editar ' ~ u.nome if u else 'Novo usuário' }}</div>
+    <label class="lbl">Nome</label><input class="inp" name="nome" value="{{ u.nome if u else '' }}" required>
+    <label class="lbl">E-mail</label>
+    <input class="inp" name="email" type="email" value="{{ u.email if u else '' }}" {% if u %}disabled{% else %}required{% endif %}>
+    {% set eu = u and u.id == portal_user.id %}
+    <label class="lbl">Perfil</label>
+    <div class="radios">
+      <label><input type="radio" name="perfil" value="usuario" {% if not u or u.perfil != 'admin' %}checked{% endif %} {% if eu %}disabled{% endif %}> Usuário</label>
+      <label><input type="radio" name="perfil" value="admin" {% if u and u.perfil == 'admin' %}checked{% endif %} {% if eu %}disabled{% endif %}> Administrador</label>
+    </div>
+    <label class="lbl">Empresas liberadas <small>(para perfil Usuário)</small></label>
+    <div class="checks">
+      {% for e in empresas %}
+        <label><input type="checkbox" name="empresas" value="{{ e.slug }}" {% if u and e.slug in u.empresas %}checked{% endif %}>
+          <span class="logo-circle xxs"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt=""></span>{{ e.nome }}</label>
+      {% endfor %}
+    </div>
+    <label class="lbl">{{ 'Redefinir senha (opcional)' if u else 'Senha provisória' }}</label>
+    <input class="inp" name="senha" type="password" {% if not u %}required{% endif %} minlength="8" autocomplete="new-password">
+    <p class="hint">Mínimo de 8 caracteres, com letras e números.</p>
+    {% if u %}
+    <label class="check-line"><input type="checkbox" name="ativo" value="1" {% if u.ativo %}checked{% endif %} {% if eu %}disabled{% endif %}> Acesso ativo</label>
+    {% if eu %}<p class="hint">Você não pode remover o seu próprio acesso de administrador.</p>{% endif %}
+    {% else %}<input type="hidden" name="ativo" value="1">{% endif %}
+    <div class="row-btns">
+      {% if u %}<a class="btn-pill outline" href="{{ url_for('portal_admin') }}">Fechar</a>{% endif %}
+      <button class="btn-pill" type="submit">{{ 'Salvar alterações' if u else 'Criar usuário' }}</button>
+    </div>
+  </form>
+  {% endif %}
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="emp-admin">
+  {% for e in empresas %}
+  <form class="box emp-row" method="post" action="{{ url_for('portal_admin_empresa', slug=e.slug) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="voltar" value="{{ url_for('portal_admin', aba='empresas') }}">
+    <span class="logo-circle"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt=""></span>
+    <div class="emp-row-name"><b>{{ e.nome }}</b>
+      <span class="swatches">{% for k in ['primary','secondary','accent','bg'] %}<i style="background:{{ e.tema_full[k] }}"></i>{% endfor %}</span></div>
+    <select class="inp" name="status">{% for k, v in STATUS.items() %}<option value="{{ k }}" {% if e.status == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+    <input class="inp" name="obs" value="{{ e.obs }}" placeholder="Observação (ex.: Pendência financeira)" maxlength="120">
+    <button class="btn-pill" type="submit">Salvar</button>
+  </form>
+  {% endfor %}
+  <p class="hint">Cores, logos e módulos de cada empresa ficam no arquivo <code>app/portal_grupo.py</code>.</p>
+</div>
+{% endif %}
+{% endblock %}

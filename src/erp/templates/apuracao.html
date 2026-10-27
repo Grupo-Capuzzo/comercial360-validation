@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}Apuração Mensal — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">📐</div>
+  <div class="page-header-title">Apuração Mensal</div>
+  <div class="page-header-sub">Calcule os rendimentos mensais e consolide os valores por cliente.</div>
+</div>
+
+<!-- FORMULÁRIO -->
+<div class="card-gold" style="margin-bottom:24px;">
+  <form method="post" id="form-apuracao">
+    <div class="form-section">
+      <div class="form-section-title">Período e Produto</div>
+      <div class="form-row">
+
+        <div class="form-group" style="max-width:140px;">
+          <label>Mês *</label>
+          <select name="mes" class="form-control" id="sel-mes">
+            {% for m in range(1,13) %}
+            {% set nomes = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                             'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'] %}
+            <option value="{{ m }}" {{ 'selected' if mes == m else '' }}>{{ nomes[m] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group" style="max-width:120px;">
+          <label>Ano *</label>
+          <input type="number" name="ano" value="{{ ano }}" min="2020" max="2099"
+                 class="form-control" id="inp-ano">
+        </div>
+
+        <div class="form-group">
+          <label>Produto</label>
+          <select name="produto" class="form-control" id="sel-produto">
+            <option value="" {{ 'selected' if not produto_sel else '' }}>Todos os produtos</option>
+            {% for c in conds %}
+            <option value="{{ c.code }}" {{ 'selected' if produto_sel == c.code else '' }}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group" id="div-agro-rate"
+             style="{% if not (produto_sel == 'agro' or not produto_sel) %}display:none;{% endif %}">
+          <label>Taxa especial Agro <span style="color:#888;font-size:11px;">(%)</span></label>
+          <input type="text" name="agro_special_rate" id="inp-agro-rate"
+                 value="{{ resultado.agro_rate | float * 100 if resultado and resultado.agro_rate else '' }}"
+                 class="form-control" placeholder="Ex: 4 ou 4,0" style="max-width:160px;">
+          <div style="font-size:11px;color:#888;margin-top:4px;">Aceita: 3,5% a 4,5%</div>
+        </div>
+
+      </div>
+    </div>
+    <div class="page-actions" style="padding-top:0;margin-top:0;">
+      <a href="{{ url_for('apuracao') }}" class="btn btn-secondary">Limpar</a>
+      <button type="submit" class="btn btn-primary">📐 Calcular</button>
+    </div>
+  </form>
+</div>
+
+<!-- ERRO -->
+{% if erro %}
+<div class="alert alert-error" style="margin-bottom:20px;">⚠️ {{ erro }}</div>
+{% endif %}
+
+<!-- RESULTADO -->
+{% if resultado %}
+{% set r = resultado %}
+{% set meses_nome = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                      'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'] %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+  <div>
+    <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">Resultado da Apuração</div>
+    <div style="font-size:18px;font-weight:700;color:#d4af37;">
+      {{ meses_nome[r.mes] }}/{{ r.ano }}
+      {% if r.produto %}— {{ conds|selectattr('code','equalto',r.produto)|map(attribute='name')|first }}{% else %}— Todos os Produtos{% endif %}
+    </div>
+  </div>
+  {% if r.duplicata %}
+  <div class="note-box" style="border-color:rgba(251,191,36,0.4);background:rgba(251,191,36,0.06);margin:0;max-width:360px;">
+    <strong style="color:#fbbf24;">⚠️ Atenção:</strong> Já existe apuração salva para este período.
+    <a href="{{ url_for('historico') }}" style="color:#d4af37;">Ver histórico</a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- KPIs -->
+<div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+  <div class="metric-card">
+    <div class="metric-value text-gold">{{ formatar_moeda(r.total_geral) }}</div>
+    <div class="metric-label">Total a Pagar</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#4ade80;">{{ r.consolidado|length }}</div>
+    <div class="metric-label">Clientes</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">{{ r.qty_cotas }}</div>
+    <div class="metric-label">Cotas</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#888;font-size:13px;">
+      {% if r.produto %}{{ conds|selectattr('code','equalto',r.produto)|map(attribute='name')|first }}{% else %}Todos{% endif %}
+    </div>
+    <div class="metric-label">Produto</div>
+  </div>
+</div>
+
+{% if r.total_agro > 0 %}
+<div class="note-box" style="margin-bottom:16px;">
+  <span style="color:#fbbf24;font-weight:600;">🌾 Agronegócio: </span>{{ formatar_moeda(r.total_agro) }}
+  {% if r.agro_rate %} · taxa especial {{ "%.2f"|format(r.agro_rate|float * 100) }}%{% endif %}
+</div>
+{% endif %}
+
+<!-- Botão Salvar -->
+{% if not r.duplicata %}
+<form method="post" action="{{ url_for('apuracao_salvar') }}" id="form-salvar" style="margin-bottom:24px;">
+  <input type="hidden" name="mes"        value="{{ r.mes }}">
+  <input type="hidden" name="ano"        value="{{ r.ano }}">
+  <input type="hidden" name="produto"    value="{{ r.produto }}">
+  <input type="hidden" name="agro_rate"  value="{{ r.agro_rate|float if r.agro_rate else '' }}">
+  <input type="hidden" name="items_json" id="items-json-hidden" value="">
+  <div style="display:flex;gap:12px;align-items:center;padding:14px 16px;background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.2);border-radius:8px;">
+    <button type="submit" class="btn btn-primary" id="btn-salvar">💾 Salvar no Histórico</button>
+    <span style="color:#888;font-size:13px;">A apuração será salva para consulta posterior. Durante a fase de implantação, ela poderá ser excluída e refeita se necessário.</span>
+  </div>
+</form>
+{% else %}
+<div style="margin-bottom:24px;padding:12px 16px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:8px;font-size:13px;color:#fbbf24;">
+  ⚠️ Apuração já salva para este período. <a href="{{ url_for('historico') }}" style="color:#d4af37;font-weight:600;">Abrir Histórico</a>
+</div>
+{% endif %}
+
+<!-- CONSOLIDADO POR CLIENTE -->
+<div class="section-label" style="margin-bottom:12px;">● Consolidado por Cliente</div>
+<div class="table-wrap" style="margin-bottom:8px;">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:28px;"></th>
+        <th>Cliente</th>
+        <th>CPF</th>
+        <th>Pix</th>
+        <th>Produto</th>
+        <th style="text-align:center;">Cotas</th>
+        <th style="text-align:right;">Capital Investido</th>
+        <th style="text-align:right;color:#d4af37;">Rendimento</th>
+        <th style="text-align:center;">Detalhes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cli in r.consolidado %}
+      {% set rid = loop.index0 %}
+      <tr>
+        <td style="text-align:center;color:#888;font-size:12px;">{{ loop.index }}</td>
+        <td style="font-weight:600;color:#F5F5F5;">{{ cli.client_name }}</td>
+        <td class="text-mono text-dim">{{ cli.client_cpf }}</td>
+        <td class="text-dim" style="font-size:12px;">{{ cli.client_pix or '—' }}</td>
+        <td>
+          {% if cli.condominium_code == 'civil' %}<span class="badge badge-civil">🏗️ Civil</span>
+          {% elif cli.condominium_code == 'agro' %}<span class="badge badge-agro">🌾 Agro</span>
+          {% else %}<span class="badge badge-saude">🏥 Saúde</span>
+          {% endif %}
+        </td>
+        <td style="text-align:center;color:#888;">
+          {{ cli.active_shares_count if cli.active_shares_count is defined else cli.shares_count }}
+          {% if cli.withdrawn_count %}<br><small style="color:#38bdf8;">+{{ cli.withdrawn_count }} retirada(s)</small>{% endif %}
+        </td>
+        <td style="text-align:right;color:#aaa;">
+          {{ formatar_moeda(cli.total_share_value) }}
+          {% if cli.withdrawn_count %}<br><small style="color:#38bdf8;" title="Capital retirado dentro do período — rendeu proporcional, mas saiu do ativo">− {{ formatar_moeda(cli.total_withdrawn_value) }} retirado</small>{% endif %}
+        </td>
+        <td style="text-align:right;font-weight:700;color:#d4af37;font-size:16px;">{{ formatar_moeda(cli.total_income) }}</td>
+        <td style="text-align:center;">
+          <button type="button" class="btn btn-secondary btn-sm"
+                  onclick="toggleCotas({{ rid }})" id="btn-{{ rid }}">▶ Ver cotas</button>
+        </td>
+      </tr>
+      <tr id="detalhe-{{ rid }}" style="display:none;background:rgba(0,0,0,0.25);">
+        <td colspan="9" style="padding:0;">
+          <div style="padding:12px 16px 16px;">
+            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">
+              Cotas de {{ cli.client_name }} · {{ cli.condominium_name }}
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+                  <th style="padding:6px 8px;text-align:left;color:#888;font-weight:500;">Nº Cota</th>
+                  <th style="padding:6px 8px;text-align:right;color:#888;font-weight:500;">Valor</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Aquisição</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Vencimento</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Ú. Renovação</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Período</th>
+                  <th style="padding:6px 8px;text-align:center;color:#888;font-weight:500;">Dias</th>
+                  <th style="padding:6px 8px;text-align:right;color:#888;font-weight:500;">Taxa</th>
+                  <th style="padding:6px 8px;text-align:right;color:#d4af37;font-weight:500;">Rendimento</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Tipo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in cli["shares_detail"] %}
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                  <td style="padding:6px 8px;font-weight:700;color:#d4af37;">{{ it.share_number }}</td>
+                  <td style="padding:6px 8px;text-align:right;color:#ccc;">{{ formatar_moeda(it.share_value) }}</td>
+                  <td style="padding:6px 8px;color:#888;">{{ it.acquisition_date or '—' }}</td>
+                  <td style="padding:6px 8px;color:#888;">{{ it.maturity_date or '—' }}</td>
+                  <td style="padding:6px 8px;color:#888;">{{ it.last_renewal_date or '—' }}</td>
+                  <td style="padding:6px 8px;color:#888;font-size:11px;">{{ it.period_start }} →<br>{{ it.period_end }}</td>
+                  <td style="padding:6px 8px;text-align:center;color:#888;">{{ it.active_days }}/{{ it.total_period_days }}</td>
+                  <td style="padding:6px 8px;text-align:right;color:#888;">{{ "%.2f"|format(it.applied_rate * 100) }}%</td>
+                  <td style="padding:6px 8px;text-align:right;font-weight:700;color:#d4af37;">{{ formatar_moeda(it.income_value) }}</td>
+                  <td style="padding:6px 8px;font-size:11px;">
+                    {% if it.calc_type == 'Integral' %}<span style="color:#4ade80;">✓ Integral</span>
+                    {% elif it.calc_type == 'Proporcional' %}<span style="color:#fbbf24;">⊘ Proporcional</span>
+                    {% elif 'até retirada' in it.calc_type %}<span style="color:#38bdf8;" title="{{ it.calculation_details }}">↩ Proporc. até retirada{% if it.withdrawal_date %}<br><small style="color:#64748b;">retirada {{ it.withdrawal_date }}</small>{% endif %}</span>
+                    {% elif 'Especial' in it.calc_type %}<span style="color:#f97316;">★ Especial Agro</span>
+                    {% else %}<span style="color:#fbbf24;">⊘ {{ it.calc_type }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr style="border-top:1px solid rgba(212,175,55,0.3);">
+                  <td colspan="8" style="padding:8px;text-align:right;color:#888;font-weight:600;">Total {{ cli.client_name }}</td>
+                  <td style="padding:8px;text-align:right;font-weight:700;color:#d4af37;">{{ formatar_moeda(cli.total_income) }}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="border-top:2px solid rgba(212,175,55,0.3);">
+        <td colspan="6" style="font-weight:600;color:#d4af37;padding:10px 12px;">TOTAL GERAL</td>
+        <td style="text-align:right;font-weight:600;color:#aaa;padding:10px 12px;">
+          {{ formatar_moeda(r.consolidado | sum(attribute='total_share_value')) }}
+        </td>
+        <td style="text-align:right;font-weight:700;color:#d4af37;font-size:18px;padding:10px 12px;">
+          {{ formatar_moeda(r.total_geral) }}
+        </td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+<div style="font-size:11px;color:#555;margin-bottom:28px;text-align:right;">
+  {{ r.consolidado|length }} cliente(s) · {{ r.qty_cotas }} cota(s)
+</div>
+
+<script>
+(function(){
+  var items = {{ r["items"] | tojson }};
+  var el = document.getElementById('items-json-hidden');
+  if (el) el.value = JSON.stringify(items);
+})();
+</script>
+
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleCotas(idx) {
+  var row = document.getElementById('detalhe-' + idx);
+  var btn = document.getElementById('btn-' + idx);
+  if (!row) return;
+  var open = row.style.display === 'none' || row.style.display === '';
+  row.style.display = open ? 'table-row' : 'none';
+  btn.textContent = open ? '▼ Ocultar' : '▶ Ver cotas';
+}
+
+(function(){
+  var sel = document.getElementById('sel-produto');
+  var div = document.getElementById('div-agro-rate');
+  if (!sel || !div) return;
+  function toggle(){
+    div.style.display = (sel.value === '' || sel.value === 'agro') ? '' : 'none';
+  }
+  sel.addEventListener('change', toggle);
+  toggle();
+})();
+
+</script>
+{% endblock %}

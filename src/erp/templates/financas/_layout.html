@@ -1,0 +1,91 @@
+{% extends "portal/base.html" %}
+{% block title %}{% block fin_titulo %}Finanças{% endblock %} · {{ empresa.nome }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('financas.static', filename='financas.css') }}?v=18">{% endblock %}
+{% block body_class %}erp-com-trilho{% endblock %}
+{% block brand %}
+  <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt=""></span>
+  <span class="tb-name"><b>{{ empresa.nome }}</b><small>Grupo Capuzzo</small></span>
+{% endblock %}
+{% block tb_links %}
+  <a class="tb-btn" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">{{ ic('grid_view') }}<span class="lbl">Módulos</span></a>
+  {% include "operacao/_barra_empresa.html" ignore missing %}
+{% endblock %}
+{% block content %}
+
+{# ── Menu lateral: barra fina só com ícones; abre ao passar o mouse ── #}
+<nav class="erp-trilho" id="erp-trilho" aria-label="Menu do ERP">
+  <button type="button" class="erp-t erp-fixar" id="erp-fixar" title="Fixar menu aberto (M)">
+    {{ fic('menu') }}<span class="rot">Fixar menu</span></button>
+  {% set ns = namespace(prod=false) %}
+  {% for t in menu %}
+    {% if t == '-' %}<span class="erp-t-sep"></span>
+    {% else %}
+      {% if t.produto and not ns.prod %}<span class="erp-rot-sec">Produtos</span>{% set ns.prod = true %}{% endif %}
+      <div class="erp-item {{ 'grupo' if t.itens }} {{ 'on' if topico == t.id }}">
+        {% if t.url %}
+          <a class="erp-t {{ 'on' if topico == t.id }}" href="{{ t.url }}" title="{{ t.rotulo }}">{{ fic(t.icone) }}<span class="rot">{{ t.rotulo }}</span></a>
+        {% else %}
+          <button type="button" class="erp-t {{ 'on' if topico == t.id }}" title="{{ t.rotulo }}">{{ fic(t.icone) }}<span class="rot">{{ t.rotulo }}</span>
+            <span class="seta">{{ ic('expand_more') }}</span></button>
+          <div class="erp-sub">
+            {% for i in t.itens %}<a class="{{ 'on' if fin_ativo == i.chave }}" href="{{ i.url }}">{{ i.rotulo }}</a>{% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endfor %}
+  <div class="erp-item erp-fim">
+    <a class="erp-t" href="{{ url_for('portal_empresa', slug=empresa.slug) }}" title="Voltar à empresa">{{ ic('arrow_back') }}<span class="rot">Voltar à empresa</span></a>
+  </div>
+</nav>
+<div class="erp-fundo" id="erp-fundo"></div>
+<button type="button" class="erp-movel" id="erp-movel" aria-label="Abrir menu">{{ fic('menu') }}</button>
+
+<section class="fin-main erp-main">
+  {% block fin_conteudo %}{% endblock %}
+</section>
+
+<script>
+(function () {
+  var b = document.body, r = document.getElementById('erp-trilho'), t;
+  try { if (localStorage.getItem('erp_menu_fixo') === '1' && window.innerWidth > 1200) b.classList.add('erp-fixo'); } catch (e) {}
+  function fixar(v) { b.classList.toggle('erp-fixo', v); try { localStorage.setItem('erp_menu_fixo', v ? '1' : '0'); } catch (e) {} }
+  // abre ao passar o mouse (com pequeno atraso para não abrir sem querer)
+  r.addEventListener('mouseenter', function () { clearTimeout(t); t = setTimeout(function () { b.classList.add('erp-hover'); }, 120); });
+  r.addEventListener('mouseleave', function () { clearTimeout(t); t = setTimeout(function () { b.classList.remove('erp-hover'); }, 180); });
+  document.getElementById('erp-fixar').addEventListener('click', function () { fixar(!b.classList.contains('erp-fixo')); });
+  document.getElementById('erp-movel').addEventListener('click', function () { b.classList.add('erp-movel-on'); });
+  document.getElementById('erp-fundo').addEventListener('click', function () { b.classList.remove('erp-movel-on'); });
+  // grupos: no toque/clique abre e fecha as opções
+  r.querySelectorAll('.erp-item.grupo > .erp-t').forEach(function (x) {
+    x.addEventListener('click', function () { x.parentNode.classList.toggle('aberto'); b.classList.add('erp-hover'); });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { b.classList.remove('erp-movel-on', 'erp-hover'); }
+    if ((e.key === 'm' || e.key === 'M') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      fixar(!b.classList.contains('erp-fixo'));
+    }
+  });
+  var tb = document.querySelector('.topbar');
+  function topo() { document.documentElement.style.setProperty('--erp-topo', (tb ? tb.getBoundingClientRect().bottom : 0) + 'px'); }
+  topo(); window.addEventListener('resize', topo); window.addEventListener('scroll', topo, {passive: true});
+})();
+
+// Campos de valor: aceita 1.234,56 e mostra com separador de milhar ao sair do campo.
+document.querySelectorAll('input[data-moeda]').forEach(function (i) {
+  i.addEventListener('blur', function () {
+    var s = i.value.replace(/[^\d,.-]/g, ''); if (!s) { i.value = ''; return; }
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    var n = parseFloat(s); if (isNaN(n)) return;
+    i.value = (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  });
+});
+document.querySelectorAll('[data-abrir]').forEach(function (b) {
+  b.addEventListener('click', function () { var d = document.getElementById(b.dataset.abrir); if (d) d.showModal(); });
+});
+document.querySelectorAll('dialog [data-fechar]').forEach(function (b) {
+  b.addEventListener('click', function () { b.closest('dialog').close(); });
+});
+</script>
+{% block fin_scripts %}{% endblock %}
+{% endblock %}

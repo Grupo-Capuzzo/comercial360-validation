@@ -1,0 +1,195 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Nova cota{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Nova cota', 'Cadastre uma ou mais cotas de um cotista de uma só vez.') %}
+  <a class="btn-pill outline fin-btn" href="{{ voltar or url_for('financas.cond_painel', slug=empresa.slug) }}">{{ ic('arrow_back') }} Voltar</a>
+{% endcall %}
+
+<form method="post" class="fin-form co-form" id="f-cota" autocomplete="off" novalidate>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ voltar }}">
+  <section class="fin-box">
+    <div class="pe-sec">Produto e cotista</div>
+    <div class="co-l2">
+      <div><label class="lbl">Produto *</label>
+        <select class="inp" name="condominium_id" id="co-cond" required>
+          <option value="">Selecione…</option>
+          {% for c in conds %}<option value="{{ c.id }}" data-code="{{ c.code }}" data-padrao="{{ padroes.get(c.code, 0) }}" {{ 'selected' if cota.condominium_id|string == c.id|string }}>{{ c.name }}</option>{% endfor %}
+        </select></div>
+      <div><label class="lbl">Cotista *</label>
+        <div class="co-cb">
+          <input class="inp" id="co-cli-txt" placeholder="Digite nome, CPF/CNPJ ou Pix…">
+          <input type="hidden" name="client_id" id="co-cli" value="{{ cota.client_id or '' }}">
+          <a class="btn-pill outline fin-btn mini" id="co-cli-novo" href="{{ url_for('financas.cond_cotista_novo', slug=empresa.slug) }}">{{ ic('add') }} Novo</a>
+          <div class="co-cb-lista" id="co-cli-lista" hidden></div>
+        </div>
+        <small class="co-dica" id="co-cli-info"></small></div>
+    </div>
+
+    <div class="pe-sec">Cotas</div>
+    <div class="co-l4">
+      <div><label class="lbl">Quantidade *</label><input class="inp" type="number" min="1" max="200" id="co-qtd" value="{{ cota.linhas|length or 1 }}"></div>
+      <div><label class="lbl">Valor unitário</label>
+        <input class="inp" name="share_value" id="co-valor" value="{{ cota.share_value or 0 }}" readonly>
+        <label class="co-chk"><input type="checkbox" id="co-valor-dif"> usar valor diferente do padrão</label></div>
+      <div><label class="lbl">Status</label>
+        <select class="inp" name="status" id="co-status">
+          {% for k, v in [('ativa', 'Ativa'), ('pendente', 'Pendente'), ('inativa', 'Inativa')] %}<option value="{{ k }}" {{ 'selected' if cota.status == k }}>{{ v }}</option>{% endfor %}
+        </select></div>
+      <div><label class="lbl">Total</label><div class="co-total" id="co-total">R$ 0,00</div></div>
+    </div>
+
+    <div class="pe-sec">Datas <small>preenchem todas as linhas — depois dá para ajustar cada uma</small></div>
+    <div class="co-l4">
+      <div><label class="lbl">Aquisição <span id="co-acq-req">*</span></label><input class="inp" type="date" id="co-acq"></div>
+      <div><label class="lbl">Última renovação</label><input class="inp" type="date" id="co-lrd"></div>
+      <div><label class="lbl">Vencimento <small class="co-dica">sugerido: aquisição + 1 ano</small></label><input class="inp" type="date" id="co-mat"></div>
+      <div><label class="lbl">&nbsp;</label><button type="button" class="btn-pill outline fin-btn" id="co-aplicar">{{ ic('south') }} Aplicar em todas</button></div>
+    </div>
+    <p class="co-aviso" id="co-pend" hidden>Cota pendente: as datas podem ser preenchidas depois, quando o depósito for confirmado.</p>
+
+    <div style="overflow-x:auto;margin-top:.6rem">
+      <table class="pr-tabela co-linhas">
+        <thead><tr><th>#</th><th>Número</th><th class="num">Valor</th><th>Aquisição</th><th>Última renovação</th><th>Vencimento</th></tr></thead>
+        <tbody id="co-corpo"></tbody>
+      </table>
+    </div>
+    <label class="co-chk co-hist"><input type="checkbox" name="allow_duplicate_share_number" value="on" {{ 'checked' if cota.allow_dup }}>
+      <span><b>Lançamento histórico: permitir número repetido</b><small>Só para importar histórico com numeração inconsistente.</small></span></label>
+  </section>
+
+  <section class="fin-box" id="co-sec-contrato">
+    <label class="co-chk co-contrato"><input type="checkbox" name="gerar_contrato" id="co-contrato" value="on" {{ 'checked' if cota.gerar_contrato }}>
+      <span><b>Gerar Termo de Aquisição + Regulamento e preparar para assinatura</b>
+        <small id="co-contrato-info">O contrato sai preenchido e já assinado pela empresa. As cotas ficam <b>pendentes</b> até o cliente assinar e o depósito ser confirmado.</small></span></label>
+    <div class="pe-sec">Observações</div>
+    <textarea class="inp" name="notes" rows="2" placeholder="Anotações internas (opcional)">{{ cota.notes or '' }}</textarea>
+  </section>
+
+  <div class="lf-barra co-barra">
+    <span class="co-barra-info" id="co-resumo"></span>
+    <a class="btn-pill outline fin-btn" href="{{ voltar or url_for('financas.cond_painel', slug=empresa.slug) }}">Cancelar</a>
+    <button class="btn-pill fin-btn" type="submit">{{ ic('check') }} Cadastrar cotas</button>
+  </div>
+</form>
+
+<script>
+(function () {
+  var CLIENTES = {{ clientes|tojson }}, LINHAS = {{ cota.linhas|tojson }};
+  var URL_SUG = '{{ url_for("financas.cond_cotas_sugerir", slug=empresa.slug, cond_id=0, qty=0) }}'.replace(/0\/0$/, '');
+  var MODELOS = {{ modelos_aq|tojson }};   // produto → tem regulamento anexo (true) / termo sem regulamento ainda (false)
+  var $ = function (id) { return document.getElementById(id); };
+  var cond = $('co-cond'), qtd = $('co-qtd'), valor = $('co-valor'), dif = $('co-valor-dif'), st = $('co-status'), corpo = $('co-corpo');
+  function num(s) { s = String(s || '').replace(/[^\d,.-]/g, ''); if (s.indexOf(',') >= 0 || /^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
+  function br(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
+  function maisUmAno(s) { if (!s) return ''; var p = s.split('-'); var a = +p[0] + 1, m = p[1], dd = p[2]; if (m === '02' && dd === '29') dd = '28'; return a + '-' + m + '-' + dd; }
+
+  // ── cotista (busca) ──
+  var txt = $('co-cli-txt'), hid = $('co-cli'), lista = $('co-cli-lista'), info = $('co-cli-info'), foco = -1;
+  function escolher(c) { hid.value = c.id; txt.value = c.nome; info.textContent = (c.cpf ? 'CPF/CNPJ ' + c.cpf : '') + (c.pix ? ' · Pix ' + c.pix : '') + (c.inativo ? ' · cadastro inativo' : ''); lista.hidden = true; }
+  function filtrar() {
+    var q = txt.value.toLowerCase().trim(), qd = q.replace(/\D/g, '');
+    var r = CLIENTES.filter(function (c) { return !q || c.nome.toLowerCase().indexOf(q) >= 0 || (qd && c.cpf.replace(/\D/g, '').indexOf(qd) >= 0) || c.pix.toLowerCase().indexOf(q) >= 0; }).slice(0, 30);
+    foco = -1;
+    lista.innerHTML = r.length ? r.map(function (c) { return '<button type="button" data-id="' + c.id + '"><b>' + esc(c.nome) + (c.inativo ? ' <i>inativo</i>' : '') + '</b><small>' + esc(c.cpf) + (c.pix ? ' · Pix ' + esc(c.pix) : '') + '</small></button>'; }).join('')
+      : '<div class="co-cb-vazio">Nenhum cotista encontrado. Use “+ Novo”.</div>';
+    lista.hidden = false;
+  }
+  txt.addEventListener('input', function () { hid.value = ''; info.textContent = ''; filtrar(); });
+  txt.addEventListener('focus', filtrar);
+  txt.addEventListener('keydown', function (e) {
+    var b = lista.querySelectorAll('button'); if (!b.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); foco = Math.max(0, Math.min(b.length - 1, foco + (e.key === 'ArrowDown' ? 1 : -1))); b.forEach(function (x, i) { x.classList.toggle('on', i === foco); }); }
+    else if (e.key === 'Enter') { e.preventDefault(); (b[foco] || b[0]).dispatchEvent(new MouseEvent('mousedown')); }
+    else if (e.key === 'Escape') lista.hidden = true;
+  });
+  lista.addEventListener('mousedown', function (e) { var b = e.target.closest('button'); if (!b) return; e.preventDefault(); escolher(CLIENTES.find(function (c) { return String(c.id) === b.dataset.id; })); });
+  document.addEventListener('click', function (e) { if (!e.target.closest('.co-cb')) lista.hidden = true; });
+  if (hid.value) { var pre = CLIENTES.find(function (c) { return String(c.id) === String(hid.value); }); if (pre) escolher(pre); }
+  $('co-cli-novo').addEventListener('click', function () {
+    var u = new URL(location.href); if (cond.value) u.searchParams.set('produto', cond.selectedOptions[0].dataset.code);
+    this.href += '?voltar=' + encodeURIComponent(u.pathname + u.search);
+  });
+
+  // ── linhas ──
+  function linha(i, x) {
+    return '<tr><td class="co-i">' + (i + 1) + '</td>' +
+      '<td><input class="inp mono" name="share_numbers" value="' + esc(x.n) + '" required></td>' +
+      '<td><input class="inp num co-v" name="share_values" value="' + (x.v ? Number(x.v).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '') + '"></td>' +
+      '<td><input class="inp co-acq" type="date" name="acquisition_dates" value="' + esc(x.acq) + '"></td>' +
+      '<td><input class="inp co-lrd" type="date" name="last_renewal_dates" value="' + esc(x.lrd) + '"></td>' +
+      '<td><input class="inp co-mat" type="date" name="maturity_dates" value="' + esc(x.mat) + '"></td></tr>';
+  }
+  function linhasAtuais() {
+    return Array.prototype.map.call(corpo.rows, function (r) { var i = r.querySelectorAll('input'); return {n: i[0].value, v: num(i[1].value), acq: i[2].value, lrd: i[3].value, mat: i[4].value}; });
+  }
+  function desenhar(arr) { corpo.innerHTML = arr.map(function (x, i) { return linha(i, x); }).join(''); total(); }
+  function padrao() { return {n: '', v: num(valor.value), acq: $('co-acq').value, lrd: $('co-lrd').value, mat: $('co-mat').value}; }
+  function total() {
+    var t = 0; corpo.querySelectorAll('.co-v').forEach(function (i) { t += num(i.value); });
+    $('co-total').textContent = br(t);
+    $('co-resumo').textContent = corpo.rows.length + ' cota(s) · ' + br(t);
+  }
+  function sugerir(manter) {
+    var n = Math.max(1, Math.min(200, parseInt(qtd.value) || 1)), atuais = linhasAtuais();
+    if (!cond.value) { while (atuais.length < n) atuais.push(padrao()); desenhar(atuais.slice(0, n)); return; }
+    fetch(URL_SUG + cond.value + '/' + n, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+      if (!dif.checked && j.valor_padrao) valor.value = Number(j.valor_padrao).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      var arr = [];
+      for (var i = 0; i < n; i++) {
+        var x = (manter && atuais[i]) ? atuais[i] : padrao();
+        if (!manter || !atuais[i] || !atuais[i].n) x.n = j.numeros[i] || '';
+        if (!dif.checked && !manter) x.v = num(valor.value);
+        if (!x.v) x.v = num(valor.value);
+        arr.push(x);
+      }
+      desenhar(arr);
+    });
+  }
+  cond.addEventListener('change', function () { sugerir(false); contrato(); });
+  qtd.addEventListener('change', function () { sugerir(true); });
+  dif.addEventListener('change', function () {
+    valor.readOnly = !dif.checked;
+    if (dif.checked) { valor.focus(); valor.select(); } else { var o = cond.selectedOptions[0]; if (o && o.dataset.padrao) { valor.value = Number(o.dataset.padrao).toLocaleString('pt-BR', {minimumFractionDigits: 2}); aplicarValor(); } }
+  });
+  function aplicarValor() { var v = num(valor.value); corpo.querySelectorAll('.co-v').forEach(function (i) { i.value = v.toLocaleString('pt-BR', {minimumFractionDigits: 2}); }); total(); }
+  valor.addEventListener('input', function () { if (dif.checked) aplicarValor(); });
+  corpo.addEventListener('input', function (e) { if (e.target.classList.contains('co-v')) total(); });
+  $('co-acq').addEventListener('change', function () { var m = $('co-mat'); if (!m.value || m.dataset.auto) { m.value = maisUmAno(this.value); m.dataset.auto = '1'; } aplicarDatas(false); });
+  $('co-mat').addEventListener('input', function () { this.dataset.auto = ''; });
+  function aplicarDatas(tudo) {
+    [['co-acq', '.co-acq'], ['co-lrd', '.co-lrd'], ['co-mat', '.co-mat']].forEach(function (p) {
+      var v = $(p[0]).value; corpo.querySelectorAll(p[1]).forEach(function (i) { if (tudo || !i.value || i.dataset.auto) { i.value = v; i.dataset.auto = '1'; } });
+    });
+  }
+  $('co-aplicar').addEventListener('click', function () { aplicarDatas(true); });
+  corpo.addEventListener('change', function (e) {
+    var t = e.target; t.dataset.auto = '';
+    if (t.classList.contains('co-acq')) { var m = t.closest('tr').querySelector('.co-mat'); if (!m.value || m.dataset.auto) { m.value = maisUmAno(t.value); m.dataset.auto = '1'; } }
+  });
+
+  // ── status / contrato ──
+  var chk = $('co-contrato'), cinfo = $('co-contrato-info'), ctxt = cinfo.innerHTML;
+  function contrato() {
+    var o = cond.selectedOptions[0], code = o ? o.dataset.code : '';
+    if (cond.value && !(code in MODELOS)) { chk.checked = false; chk.disabled = true; cinfo.textContent = 'Modelo de contrato deste produto ainda não cadastrado.'; }
+    else if (cond.value && MODELOS[code] === false) { chk.disabled = false; cinfo.innerHTML = ctxt + ' <b>O regulamento deste produto ainda não foi cadastrado</b> — o termo sai sem o anexo.'; }
+    else { chk.disabled = false; cinfo.innerHTML = ctxt; }
+    if (chk.checked) st.value = 'pendente';
+    st.disabled = chk.checked; status();
+  }
+  function status() { var p = st.value === 'pendente'; $('co-pend').hidden = !p; $('co-acq-req').hidden = p; }
+  chk.addEventListener('change', contrato); st.addEventListener('change', status);
+  $('f-cota').addEventListener('submit', function (e) {
+    st.disabled = false;
+    if (!hid.value) { e.preventDefault(); txt.focus(); txt.classList.add('erro'); info.textContent = 'Selecione o cotista (ou cadastre com “+ Novo”).'; st.disabled = chk.checked; return; }
+    if (!cond.value) { e.preventDefault(); cond.focus(); st.disabled = chk.checked; }
+  });
+
+  valor.value = num(valor.value).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+  if (LINHAS.length) { desenhar(LINHAS); } else { sugerir(false); }
+  contrato();
+})();
+</script>
+{% endblock %}

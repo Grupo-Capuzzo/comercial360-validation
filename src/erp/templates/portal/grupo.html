@@ -1,0 +1,144 @@
+{% extends "portal/base.html" %}
+{% block title %}Empresas · Portal Grupo Capuzzo{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <div class="eyebrow-line">Portal do Grupo Capuzzo</div>
+    <h1>Olá, <b>{{ portal_user.nome.split()[0] }}</b>.</h1>
+    <p>Escolha a empresa que deseja acessar.</p>
+  </div>
+  <div class="stats">
+    <div class="stat dark"><b>{{ empresas|length }}</b><span>Empresas</span></div>
+    <div class="stat"><b>{{ ativas }}</b><span>Ativas</span></div>
+    <div class="stat"><b>{{ pendentes }}</b><span>Pendentes</span></div>
+  </div>
+</section>
+
+{% if not empresas %}
+  <div class="vazio">Nenhuma empresa liberada para o seu usuário. Fale com o administrador.</div>
+{% else %}
+<div class="toolbar">
+  <label class="search">{{ ic('search') }}
+    <input id="busca" type="search" placeholder="Buscar empresa…" autocomplete="off"></label>
+  <div class="chips" id="filtros">
+    <button class="chip on" data-f="todas">Todas</button>
+    <button class="chip" data-f="fav">Favoritas</button>
+    <button class="chip" data-f="ativo">Ativas</button>
+    <button class="chip" data-f="pendente">Pendentes</button>
+  </div>
+</div>
+
+<div class="grid" id="grid">
+  {% for e in empresas %}
+    {% if loop.index0 == 1 %}
+    <article class="promo" id="promo">
+      <div class="slide"><small>Grupo Capuzzo</small><h4>Bem-vindo, <b>{{ portal_user.nome.split()[0] }}</b>.</h4>
+        <p>Selecione uma empresa para ver os módulos dela, com a identidade visual da própria marca.</p></div>
+      <div class="slide"><small>Visão do grupo</small><h4><b>{{ ativas }}</b> empresas ativas</h4>
+        <p>{{ pendentes }} com pendência no momento. Acompanhe a situação de cada uma pelos cartões.</p></div>
+      <div class="slide"><small>Dica</small><h4>Seus <b>favoritos</b> primeiro</h4>
+        <p>Toque no coração de um cartão para fixar a empresa no topo da lista.</p></div>
+      <img class="mark" src="{{ url_for('static', filename='portal/logos/grupo_word_light.png') }}" alt="">
+      <div class="dots"><i></i><i></i><i></i></div>
+    </article>
+    {% endif %}
+    {% set fav = e.slug in favs %}
+    <article class="card st-{{ e.status }}" id="emp-{{ e.slug }}" data-nome="{{ e.nome|lower }}"
+             data-status="{{ e.status }}" data-fav="{{ 1 if fav else 0 }}">
+      <header class="card-head">
+        <div class="status"><span class="bar"></span>
+          <div><b>{{ STATUS[e.status] }}{% if e.status != 'ativo' %} *{% endif %}</b>
+            {% if e.status != 'ativo' %}<small>* {{ e.obs or ('Pendência' if e.status == 'pendente' else 'Acesso suspenso') }}</small>{% endif %}</div>
+        </div>
+        <div class="head-actions">
+          <form method="post" action="{{ url_for('portal_favorito', slug=e.slug) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button class="ico {{ 'fav-on' if fav }}" title="{{ 'Remover dos favoritos' if fav else 'Favoritar' }}">
+              {{ ic('favorite' if fav else 'favorite_border') }}</button>
+          </form>
+          {% if portal_user.admin %}
+          <button class="ico" type="button" title="Configurar" onclick="abrirConfig('{{ e.slug }}')">{{ ic('settings') }}</button>
+          {% endif %}
+        </div>
+      </header>
+      <div class="card-body">
+        <span class="logo-circle"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt="{{ e.nome }}"></span>
+        <div><h3>{{ e.nome }}</h3>{% if e.descricao %}<p>{{ e.descricao }}</p>{% endif %}</div>
+      </div>
+      <footer class="card-foot">
+        {% if e.status == 'inativo' and not portal_user.admin %}
+          <span class="btn-pill disabled">Acessar</span>
+        {% else %}
+          <a class="btn-pill {{ 'outline' if e.status != 'ativo' }}" href="{{ url_for('portal_empresa', slug=e.slug) }}">Acessar</a>
+        {% endif %}
+      </footer>
+    </article>
+  {% endfor %}
+</div>
+<div class="vazio" id="semres" hidden>Nenhuma empresa encontrada com esse filtro.</div>
+
+{% if portal_user.admin %}
+<dialog id="dlg-config" class="dlg">
+  <form method="post" id="form-config">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="voltar" value="{{ url_for('portal_grupo') }}">
+    <div class="dlg-head"><h3>Configurar empresa</h3>
+      <button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
+    <div class="dlg-emp"><span class="logo-circle"><img id="cfg-logo" src="" alt=""></span><b id="cfg-nome"></b></div>
+    <label class="lbl">Situação</label>
+    <select class="inp" name="status" id="cfg-status">
+      {% for k, v in STATUS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+    </select>
+    <label class="lbl">Observação da situação</label>
+    <input class="inp" name="obs" id="cfg-obs" maxlength="120" placeholder="Ex.: Pendência financeira">
+    <p class="hint">Usuários com acesso a cada empresa são definidos em Administração.</p>
+    <button class="btn-pill" type="submit">Salvar</button>
+  </form>
+</dialog>
+<script>
+  const DADOS = {
+    {% for e in empresas %}"{{ e.slug }}": {nome: {{ e.nome|tojson }}, status: "{{ e.status }}", obs: {{ e.obs|tojson }},
+      logo: "{{ url_for('static', filename='portal/logos/' ~ e.logo) }}",
+      url: "{{ url_for('portal_admin_empresa', slug=e.slug) }}"},{% endfor %}
+  };
+  function abrirConfig(slug) {
+    const d = DADOS[slug];
+    document.getElementById('form-config').action = d.url;
+    document.getElementById('cfg-nome').textContent = d.nome;
+    document.getElementById('cfg-logo').src = d.logo;
+    document.getElementById('cfg-status').value = d.status;
+    document.getElementById('cfg-obs').value = d.obs;
+    document.getElementById('dlg-config').showModal();
+  }
+</script>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const busca = document.getElementById('busca');
+  if (!busca) return;
+  const cards = [...document.querySelectorAll('#grid .card')];
+  const promo = document.getElementById('promo');
+  let filtro = 'todas';
+  function aplicar() {
+    const q = busca.value.trim().toLowerCase();
+    let vis = 0;
+    cards.forEach(c => {
+      const ok = (!q || c.dataset.nome.includes(q)) &&
+        (filtro === 'todas' || (filtro === 'fav' ? c.dataset.fav === '1' : c.dataset.status === filtro));
+      c.hidden = !ok; if (ok) vis++;
+    });
+    if (promo) promo.hidden = !(filtro === 'todas' && !q);
+    document.getElementById('semres').hidden = vis > 0;
+  }
+  busca.addEventListener('input', aplicar);
+  document.querySelectorAll('#filtros .chip').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('#filtros .chip').forEach(x => x.classList.remove('on'));
+    b.classList.add('on'); filtro = b.dataset.f; aplicar();
+  }));
+})();
+</script>
+{% endblock %}

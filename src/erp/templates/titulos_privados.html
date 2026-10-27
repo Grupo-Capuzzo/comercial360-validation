@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Títulos Privados — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">📜</div>
+  <div class="page-header-title">Títulos Privados</div>
+  <div class="page-header-sub">Controle de empréstimos privados a clientes — módulo isolado dos condomínios.</div>
+</div>
+
+<!-- KPIs -->
+<div class="metrics-grid" style="grid-template-columns: repeat(4,1fr);margin-bottom:16px;">
+  <div class="metric-card">
+    <div class="metric-value">{{ formatar_moeda(cards.total_original) }}</div>
+    <div class="metric-label">Total Emprestado (Original)</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#d4af37;">{{ formatar_moeda(cards.saldo_atualizado) }}</div>
+    <div class="metric-label">Saldo Atualizado em Aberto</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#f87171;">{{ formatar_moeda(cards.total_atraso) }}</div>
+    <div class="metric-label">Total em Atraso</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#f0ad4e;">{{ formatar_moeda(cards.juros_acumulados) }}</div>
+    <div class="metric-label">Juros Acumulados</div>
+  </div>
+</div>
+
+<div class="metrics-grid" style="grid-template-columns: repeat(4,1fr);margin-bottom:28px;">
+  <div class="metric-card">
+    <div class="metric-value">{{ cards.clientes_ativos }}</div>
+    <div class="metric-label">Clientes Ativos</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#4ade80;">{{ cards.emprestimos_ativos }}</div>
+    <div class="metric-label">Empréstimos Ativos</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#f87171;">{{ cards.emprestimos_atraso }}</div>
+    <div class="metric-label">Empréstimos em Atraso</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">{{ cards.proximos_vencimentos }}</div>
+    <div class="metric-label">Próximos Vencimentos</div>
+  </div>
+</div>
+
+<div class="page-actions" style="margin-bottom:24px;justify-content:flex-start;">
+  <a href="{{ url_for('titulos_privados_clientes_novo') }}" class="btn btn-secondary">+ Novo Cliente de Títulos</a>
+  <a href="{{ url_for('titulos_privados_emprestimos_novo') }}" class="btn btn-primary">+ Novo Empréstimo</a>
+  <a href="{{ url_for('titulos_privados_calculadora_price') }}" class="btn btn-secondary">🧮 Calculadora Price</a>
+</div>
+
+<!-- Empréstimos em atraso -->
+<div class="section-label">⏰ &nbsp;Empréstimos em Atraso</div>
+{% if emprestimos_em_atraso %}
+<div class="table-wrap" style="margin-bottom:28px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th><th>Empréstimo</th><th>Dias em Atraso</th>
+        <th style="text-align:right;">Saldo Atualizado</th><th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in emprestimos_em_atraso %}
+      <tr>
+        <td>{{ l.client_name }}</td>
+        <td class="text-mono">{{ l.loan_number or ('#' ~ l.id) }}</td>
+        <td><span class="badge badge-inactive">{{ l.calc.days_overdue }} dia(s)</span></td>
+        <td style="text-align:right;font-weight:600;color:#f87171;">{{ formatar_moeda(l.calc.updated_amount) }}</td>
+        <td style="text-align:right;">
+          <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=l.id) }}" class="btn btn-secondary btn-sm">Ver</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:28px;">
+  <div class="empty-state-icon">✅</div>
+  <div class="empty-state-title">Nenhum empréstimo em atraso</div>
+  <div class="empty-state-sub">Todos os empréstimos ativos estão dentro do prazo.</div>
+</div>
+{% endif %}
+
+<!-- Próximos vencimentos -->
+<div class="section-label">📅 &nbsp;Próximos Vencimentos</div>
+{% if proximos_vencimentos %}
+<div class="table-wrap" style="margin-bottom:28px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th><th>Empréstimo</th><th>Data Base</th>
+        <th style="text-align:right;">Saldo Atual</th><th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in proximos_vencimentos %}
+      <tr>
+        <td>{{ l.client_name }}</td>
+        <td class="text-mono">{{ l.loan_number or ('#' ~ l.id) }}</td>
+        <td class="text-dim">{{ formatar_data(l.calc.base_date) }}</td>
+        <td style="text-align:right;font-weight:600;">{{ formatar_moeda(l.calc.updated_amount) }}</td>
+        <td style="text-align:right;">
+          <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=l.id) }}" class="btn btn-secondary btn-sm">Ver</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:28px;">
+  <div class="empty-state-icon">📅</div>
+  <div class="empty-state-title">Nenhum vencimento futuro cadastrado</div>
+</div>
+{% endif %}
+
+<!-- Maiores saldos devedores -->
+<div class="section-label">📈 &nbsp;Maiores Saldos Devedores</div>
+{% if maiores_saldos %}
+<div class="table-wrap" style="margin-bottom:28px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th><th>Empréstimo</th><th style="text-align:right;">Saldo Atualizado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in maiores_saldos %}
+      <tr>
+        <td>{{ l.client_name }}</td>
+        <td class="text-mono">{{ l.loan_number or ('#' ~ l.id) }}</td>
+        <td style="text-align:right;font-weight:600;color:#d4af37;">{{ formatar_moeda(l.calc.updated_amount) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:28px;">
+  <div class="empty-state-icon">📈</div>
+  <div class="empty-state-title">Nenhum empréstimo ativo</div>
+</div>
+{% endif %}
+
+<!-- Clientes com prorrogação ativa -->
+<div class="section-label">⏳ &nbsp;Clientes com Prorrogação Ativa</div>
+{% if clientes_prorrogacao_ativa %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Cliente</th><th>Empréstimo</th><th>Coberto até</th></tr>
+    </thead>
+    <tbody>
+      {% for l in clientes_prorrogacao_ativa %}
+      <tr>
+        <td>{{ l.client_name }}</td>
+        <td class="text-mono">{{ l.loan_number or ('#' ~ l.id) }}</td>
+        <td class="text-dim">{{ formatar_data(l.covered_until) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">⏳</div>
+  <div class="empty-state-title">Nenhuma prorrogação ativa no momento</div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,129 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Contrato · {{ c.cliente_nome }}{% endblock %}
+{% block fin_conteudo %}
+{% set st = STATUS[c.status] %}{% set st_nome = STATUS_CONCLUIDO.get(c.tipo, st.nome) if c.status == 'concluido' else st.nome %}
+{% call m.cabecalho(TIPOS[c.tipo] ~ ' · ' ~ c.cliente_nome, c.produto_nome ~ ' · ' ~ c.dados.qtd ~ ' cota(s) · ' ~ reais((c.dados.retirada or {}).valor or c.dados.valor_total) ~ ' · ' ~ c.codigo, 'Contratos e assinaturas') %}
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_contratos', slug=empresa.slug) }}">{{ ic('arrow_back') }} Contratos</a>
+  <a class="btn-pill outline fin-btn" href="{{ url_for('contratos.documento', cid=c.id) }}" target="_blank">{{ ic('open_in_new') }} Documento</a>
+  <a class="btn-pill outline fin-btn" href="{{ url_for('contratos.documento', cid=c.id, imprimir=1) }}" target="_blank">{{ ic('download') }} PDF</a>
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_cotista', slug=empresa.slug, cid=c.client_id) }}">{{ fic('pessoas') }} Cotista</a>
+  {% if c.status in ('rascunho', 'aguardando', 'assinado') %}<button type="button" class="btn-pill outline fin-btn co-perigo-t" data-abrir="dlg-cancelar">{{ ic('block') }} Cancelar envio</button>{% endif %}
+  {% if c.status != 'concluido' %}<button type="button" class="btn-pill outline fin-btn" data-abrir="dlg-excluir" title="Contrato de teste ou gerado por engano">{{ ic('delete') }} Apagar</button>{% endif %}
+{% endcall %}
+
+{% if c.dados.sem_regulamento %}<p class="co-aviso">Este Termo de Aquisição foi gerado <b>sem o regulamento anexo</b> — o regulamento de {{ c.produto_nome }} ainda não foi cadastrado no sistema.</p>{% endif %}
+<div class="ctf-grid">
+  <div class="ctf-doc"><div class="ctf-st"><span class="ctf-badge" style="--c:{{ st.cor }}">{{ st_nome }}</span></div>
+    <iframe src="{{ url_for('contratos.documento', cid=c.id) }}" title="Documento"></iframe></div>
+
+  <div class="ctf-lado">
+    <section class="fin-box">
+      {% if c.status in ('rascunho', 'aguardando') %}
+        <h3>{{ '1. Enviar para assinatura' if c.status == 'rascunho' else 'Aguardando assinatura do cliente' }}</h3>
+        {% if link_local %}<p class="co-aviso">O link ainda aponta para este computador — o cliente não abre de fora.
+          Configure o <a href="{{ url_for('financas.cond_contratos_config', slug=empresa.slug) }}">link público</a>.</p>{% endif %}
+        <form method="post" action="{{ url_for('financas.cond_contrato_acao', slug=empresa.slug, cid=c.id, acao='enviar') }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <button class="btn-pill fin-btn ctf-full" {{ 'disabled' if not cli.email }}>{{ ic('mail') }} {{ 'Enviar para assinatura' if c.status == 'rascunho' else 'Reenviar e-mail' }}</button>
+          <p class="co-dica" style="text-align:center">para {{ cli.email or 'cliente sem e-mail' }}</p>
+        </form>
+        {% if fone_wpp %}<a class="btn-pill outline fin-btn ctf-full js-manual" data-canal="WhatsApp" target="_blank" rel="noopener" href="https://wa.me/{{ fone_wpp }}?text={{ msg_wpp|urlencode }}">Enviar link pelo WhatsApp</a>{% endif %}
+        <div class="ctf-link"><input class="inp" id="ct-link" value="{{ link }}" readonly><button type="button" class="btn-pill outline fin-btn mini" id="ct-copiar">Copiar</button></div>
+      {% elif c.status == 'assinado' %}
+        <h3>2. Confirmar depósito e ativar cotas</h3>
+        <p class="co-dica">O cliente assinou. As cotas seguem <b>pendentes</b> até você confirmar o depósito.</p>
+        <form method="post" action="{{ url_for('financas.cond_contrato_acao', slug=empresa.slug, cid=c.id, acao='ativar') }}" class="fin-form" onsubmit="return confirm('Confirmar o depósito e ativar {{ c.cotas|length }} cota(s)?')">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <label class="lbl">Data do depósito</label><input class="inp" type="date" name="data_deposito" id="dt-dep" value="{{ hoje }}">
+          <table class="pr-tabela" style="margin:.5rem 0">
+            <thead><tr><th>Cota</th><th>Aquisição</th><th>Vencimento</th></tr></thead>
+            <tbody>{% for x in c.cotas %}<tr><td class="mono">{{ x.share_number }}</td>
+              <td><input class="inp js-aq" type="date" name="aq_{{ x.id }}" value="{{ aq_sugerida }}"></td>
+              <td><input class="inp js-venc" type="date" name="venc_{{ x.id }}" value="{{ venc_sugerido }}"></td></tr>{% endfor %}</tbody>
+          </table>
+          <p class="co-dica">Vencimento sugerido = aquisição + {{ c.dados.prazo_meses }} meses.</p>
+          <button class="btn-pill fin-btn ctf-full">{{ ic('check') }} Confirmar depósito e ativar cotas</button>
+        </form>
+      {% elif c.status == 'concluido' %}
+        <h3>Concluído</h3><p class="co-dica">{% if c.tipo == 'aquisicao' %}Depósito confirmado e cotas ativadas{% elif c.tipo == 'renovacao' %}Renovação assinada pelo cliente{% else %}Retirada assinada pelo cliente{% endif %} em {{ c.concluido_em|ct_data(True) }}.</p>
+        {% if c.tipo == 'renovacao' and c.dados.renovacao %}<p class="co-dica">Renovação registrada nas cotas: {{ c.dados.renovacao.data|ct_data }} · novo vencimento {{ c.dados.renovacao.vencimento|ct_data }}.</p>{% endif %}
+        {% if c.tipo == 'retirada' and c.dados.retirada %}<p class="co-dica">Retirada efetiva em {{ c.dados.retirada.data_efetiva|ct_data }} — finalize a cota em <a href="{{ url_for('financas.cond_vencimentos', slug=empresa.slug, aba='retiradas') }}">Retiradas solicitadas</a> nessa data.</p>{% endif %}
+      {% else %}
+        <h3>Contrato cancelado</h3><p class="co-dica">{{ c.cancelado_em|ct_data(True) }}{% if c.motivo_cancelamento %} — {{ c.motivo_cancelamento }}{% endif %}</p>
+        <a class="btn-pill outline fin-btn mini" href="{{ url_for('financas.cond_contrato_novo', slug=empresa.slug, client_id=c.client_id) }}">Gerar novo contrato</a>
+      {% endif %}
+    </section>
+
+    <section class="fin-box">
+      <h3>Signatários</h3>
+      {% for s in c.signatarios %}
+      <div class="ctf-sig"><span class="ctf-dot {{ 'ok' if s.status == 'assinado' }}">{{ '✓' if s.status == 'assinado' }}</span>
+        <div><b>{{ s.nome }}</b> <small>· {{ 'Empresa' if s.papel == 'empresa' else 'Investidor(a)' }}</small>
+          <small class="ctf-l">{{ s.email or '—' }}</small>
+          <small class="ctf-l {{ 'pos' if s.status == 'assinado' else 'aviso' }}">{{ 'Assinou em ' ~ (s.assinado_em|ct_data(True)) ~ (' · IP ' ~ s.ip if s.ip else '') if s.status == 'assinado' else 'Aguardando assinatura' }}</small></div></div>
+      {% endfor %}
+    </section>
+
+    <section class="fin-box">
+      <h3>Cotas deste contrato</h3>
+      <div class="vg-linhas">{% for x in c.cotas %}<a href="{{ url_for('financas.cond_cota_editar', slug=empresa.slug, sid=x.id) }}"><span class="mono">nº {{ x.share_number }} · {{ reais(x.share_value) }}</span><b>{{ m.status_cota(x.status) }}</b></a>{% endfor %}</div>
+    </section>
+
+    <section class="fin-box">
+      <h3>Histórico</h3>
+      <ul class="co-hist-lista">{% for ev in c.eventos|reverse %}
+        <li class="{{ 'erro' if ev.tipo in ('email_erro', 'codigo_invalido', 'cancelado') }}"><b>{{ EVENTOS.get(ev.tipo, ev.tipo) }}</b><span>{{ ev.criado_em|ct_data(True) }}{% if ev.ip %} · IP {{ ev.ip }}{% endif %}</span>{% if ev.descricao %}<small>{{ ev.descricao }}</small>{% endif %}</li>
+      {% endfor %}</ul>
+    </section>
+  </div>
+</div>
+
+<dialog class="dlg fin-dlg" id="dlg-cancelar">
+  <form method="post" class="fin-form" action="{{ url_for('financas.cond_contrato_acao', slug=empresa.slug, cid=c.id, acao='cancelar') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="dlg-head"><h3>Cancelar envio do contrato</h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+    <p class="co-dica">O link de assinatura deixa de funcionar e o documento passa a mostrar <b>CANCELADO</b>.
+      {% if c.status == 'assinado' %}<b class="neg">A assinatura já feita pelo cliente perde a validade.</b>{% endif %} As cotas continuam pendentes.</p>
+    <label class="lbl">Motivo</label><input class="inp" name="motivo" maxlength="300" placeholder="Ex.: CPF digitado errado, valor incorreto…">
+    {% if c.status in ('aguardando', 'assinado') and cli.email %}
+    <label class="co-chk"><input type="checkbox" name="avisar" value="1" checked> Avisar o cliente por e-mail ({{ cli.email }})</label>{% endif %}
+    <p class="co-aviso">Se o erro é no cadastro, primeiro <a href="{{ url_for('financas.cond_cotista_editar', slug=empresa.slug, cid=c.client_id) }}">corrija o cotista</a> e depois use <b>Cancelar e gerar novo</b> — sai com as mesmas cotas e os dados atualizados.</p>
+    <div class="dlg-acoes"><button type="button" class="btn-pill outline fin-btn" data-fechar>Voltar</button>
+      <button name="acao" value="cancelar" class="btn-pill outline fin-btn co-perigo-t">Só cancelar</button>
+      <button name="acao" value="regerar" class="btn-pill fin-btn">Cancelar e gerar novo</button></div>
+  </form>
+</dialog>
+
+<dialog class="dlg fin-dlg" id="dlg-excluir">
+  <form method="post" class="fin-form" action="{{ url_for('financas.cond_contrato_acao', slug=empresa.slug, cid=c.id, acao='excluir') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="dlg-head"><h3>Apagar contrato</h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+    <p class="co-dica">Para contratos de <b>teste</b> ou gerados por engano. O contrato e o histórico de assinatura são apagados (fica o registro na auditoria) e o link enviado deixa de existir.</p>
+    {% set pend = c.cotas|selectattr('status', 'equalto', 'pendente')|list %}
+    {% if pend %}<label class="co-chk"><input type="checkbox" name="excluir_cotas" value="1"> Apagar também as cotas pendentes ({{ pend|map(attribute='share_number')|join(', ') }})</label>{% endif %}
+    <label class="lbl">Digite <b>APAGAR</b> para confirmar</label><input class="inp" id="conf-apagar" autocomplete="off">
+    <div class="dlg-acoes"><button type="button" class="btn-pill outline fin-btn" data-fechar>Voltar</button>
+      <button class="btn-pill fin-btn co-perigo" id="bt-apagar" disabled>Apagar definitivamente</button></div>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  var ca = document.getElementById('conf-apagar'), ba = document.getElementById('bt-apagar');
+  if (ca) ca.addEventListener('input', function () { ba.disabled = ca.value.trim().toUpperCase() !== 'APAGAR'; });
+  function manual(canal) { var fd = new FormData(); fd.append('_csrf', '{{ csrf_token() }}'); fd.append('canal', canal);
+    fetch('{{ url_for("financas.cond_contrato_acao", slug=empresa.slug, cid=c.id, acao="enviado-manual") }}', {method: 'POST', body: fd, credentials: 'same-origin'}); }
+  var cp = document.getElementById('ct-copiar');
+  if (cp) cp.addEventListener('click', function () { var i = document.getElementById('ct-link'); i.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(i.value) : Promise.resolve(document.execCommand('copy'))).then(function () { cp.textContent = 'Copiado ✓'; manual('link copiado'); }); });
+  document.querySelectorAll('.js-manual').forEach(function (a) { a.addEventListener('click', function () { manual(a.dataset.canal); }); });
+  var dep = document.getElementById('dt-dep'), prazo = {{ c.dados.prazo_meses|int }};
+  function somaMeses(iso, n) { var p = iso.split('-').map(Number), x = new Date(p[0], p[1] - 1 + n, 1), ult = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate();
+    x.setDate(Math.min(p[2], ult)); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+  if (dep) dep.addEventListener('change', function () { if (!dep.value) return;
+    document.querySelectorAll('.js-aq').forEach(function (i) { i.value = dep.value; }); document.querySelectorAll('.js-venc').forEach(function (i) { i.value = somaMeses(dep.value, prazo); }); });
+  document.querySelectorAll('.js-aq').forEach(function (i) { i.addEventListener('change', function () { if (i.value) i.closest('tr').querySelector('.js-venc').value = somaMeses(i.value, prazo); }); });
+})();
+</script>
+{% endblock %}

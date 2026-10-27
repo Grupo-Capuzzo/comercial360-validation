@@ -1,0 +1,114 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Cota {{ cota.share_number }}{% endblock %}
+{% block fin_conteudo %}
+{% set aqui = request.path %}
+{% call m.cabecalho('Cota ' ~ cota.share_number, (cota.condominium_name or COND_NOMES.get(cota.condominium_code, '')) ~ ' · ' ~ (cota.client_name or '')) %}
+  <a class="btn-pill outline fin-btn" href="{{ voltar if voltar and voltar != request.url else url_for('financas.cond_produto', slug=empresa.slug, code=cota.condominium_code) }}">{{ ic('arrow_back') }} Voltar</a>
+{% endcall %}
+
+<div class="co-grid co-grid-ed">
+<form method="post" class="fin-form co-form" id="f-cota" autocomplete="off" novalidate>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ voltar if voltar and '/editar' not in voltar else '' }}">
+  <section class="fin-box">
+    <div class="pe-sec">Produto e cotista</div>
+    <div class="co-l2">
+      <div><label class="lbl">Produto *</label>
+        <select class="inp" name="condominium_id">{% for c in conds %}<option value="{{ c.id }}" {{ 'selected' if cota.condominium_id|string == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></div>
+      <div><label class="lbl">Cotista *</label>
+        <div class="co-cb"><input class="inp" id="co-cli-txt"><input type="hidden" name="client_id" id="co-cli" value="{{ cota.client_id }}">
+          <div class="co-cb-lista" id="co-cli-lista" hidden></div></div></div>
+    </div>
+    <div class="pe-sec">Dados da cota</div>
+    <div class="co-l4">
+      <div><label class="lbl">Número *</label><input class="inp mono" name="share_number" required value="{{ cota.share_number }}"></div>
+      <div><label class="lbl">Valor *</label><input class="inp num" name="share_value" id="co-valor" value="{{ '%.2f'|format(cota.share_value|float) }}"></div>
+      <div><label class="lbl">Status</label>
+        <select class="inp" name="status">{% for k, v in [('ativa', 'Ativa'), ('pendente', 'Pendente'), ('inativa', 'Inativa')] %}<option value="{{ k }}" {{ 'selected' if cota.status == k }}>{{ v }}</option>{% endfor %}</select></div>
+      <div></div>
+    </div>
+    <div class="co-l4">
+      <div><label class="lbl">Aquisição</label><input class="inp" type="date" name="acquisition_date" value="{{ cota.acquisition_date or '' }}"></div>
+      <div><label class="lbl">Última renovação</label><input class="inp" type="date" name="last_renewal_date" value="{{ cota.last_renewal_date or '' }}"></div>
+      <div><label class="lbl">Vencimento</label><input class="inp" type="date" name="maturity_date" value="{{ cota.maturity_date or '' }}"></div>
+      <div><label class="lbl">Data de retirada</label><input class="inp" type="date" name="withdrawal_date" value="{{ cota.withdrawal_date or '' }}"></div>
+    </div>
+    <label class="co-chk co-hist"><input type="checkbox" name="accrual_until_withdrawal" value="on" {{ 'checked' if (cota.accrual_until_withdrawal or 0)|int == 1 }}>
+      <span><b>Retirada fora do período — render proporcional até a retirada</b>
+        <small>Ligado: mesmo inativa, a cota entra na apuração e rende até o dia anterior à data de retirada. Desligado = regra padrão (cota inativada não rende no período).</small></span></label>
+    <label class="co-chk co-hist"><input type="checkbox" name="allow_duplicate_share_number" value="on">
+      <span><b>Lançamento histórico: permitir número repetido</b><small>Só para histórico com numeração inconsistente.</small></span></label>
+    <div class="pe-sec">Observações</div>
+    <textarea class="inp" name="notes" rows="2">{{ cota.notes or '' }}</textarea>
+    <div class="co-acoes-form"><button class="btn-pill fin-btn" type="submit">{{ ic('check') }} Salvar alterações</button></div>
+  </section>
+</form>
+
+<aside>
+  <section class="fin-box co-lado">
+    <h3>Situação</h3>
+    <div class="vg-linhas">
+      <div><span>Status</span><b>{{ m.status_cota(cota.status) }}</b></div>
+      {% if cota.withdrawal_requested %}<div><span>Retirada pedida</span><b>efetiva {{ data_br(cota.withdrawal_effective_date) }}</b></div>{% endif %}
+      <div><span>Vencimento</span><b>{{ data_br(cota.maturity_date) if cota.maturity_date else '—' }}</b></div>
+      <div><span>Valor</span><b>{{ reais(cota.share_value) }}</b></div>
+    </div>
+    {% if cota.status == 'ativa' %}
+      <div class="co-acao-linha" style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <a class="btn-pill fin-btn mini" href="{{ url_for('financas.cond_termo', slug=empresa.slug, tipo='renovacao', ids=cota.id, referrer=aqui) }}">{{ ic('autorenew') }} Renovar (gera termo)</a>
+      {% if not cota.withdrawal_requested %}
+        <a class="btn-pill outline fin-btn mini" href="{{ url_for('financas.cond_termo', slug=empresa.slug, tipo='retirada', ids=cota.id, referrer=aqui) }}">{{ ic('event') }} Marcar retirada (gera termo)</a>
+      </div>
+      {% else %}
+      </div>
+      <form method="post" action="{{ url_for('financas.cond_cota_acao', slug=empresa.slug, sid=cota.id, acao='cancelar-retirada') }}" class="co-acao-linha">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ aqui }}">
+        <button class="btn-pill outline fin-btn mini">Cancelar pedido de retirada</button></form>
+      {% endif %}
+      <details class="co-acao"><summary>{{ ic('logout') }} Retirar agora (inativar)</summary>
+        <form method="post" action="{{ url_for('financas.cond_cota_acao', slug=empresa.slug, sid=cota.id, acao='inativar') }}" onsubmit="return confirm('Inativar a cota {{ cota.share_number }}?')">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="referrer" value="{{ aqui }}">
+          <label class="lbl">Data de retirada *</label><input class="inp" type="date" name="withdrawal_date" value="{{ hoje }}" required>
+          <label class="co-chk"><input type="checkbox" name="accrual_until_withdrawal" value="on"> render proporcional até a retirada</label>
+          <label class="lbl">Observação</label><input class="inp" name="user_note">
+          <button class="btn-pill fin-btn mini co-perigo">Inativar cota</button></form></details>
+    {% elif cota.status == 'inativa' %}
+      <form method="post" action="{{ url_for('financas.cond_cota_acao', slug=empresa.slug, sid=cota.id, acao='reativar') }}" class="co-acao-linha" onsubmit="return confirm('Reativar a cota? A data de retirada será removida.')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="referrer" value="{{ aqui }}">
+        <button class="btn-pill outline fin-btn mini">{{ ic('undo') }} Reativar cota</button></form>
+    {% endif %}
+    <details class="co-acao"><summary class="co-perigo-t">{{ ic('delete') }} Excluir cota</summary>
+      <form method="post" action="{{ url_for('financas.cond_cota_acao', slug=empresa.slug, sid=cota.id, acao='excluir') }}" onsubmit="return confirm('Excluir DEFINITIVAMENTE a cota {{ cota.share_number }}? Um backup é feito antes.')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ url_for('financas.cond_produto', slug=empresa.slug, code=cota.condominium_code) }}">
+        <p class="co-dica">Use só para lançamentos errados. Para saída do cotista, use “Retirar”. Um backup do banco é feito antes.</p>
+        <button class="btn-pill fin-btn mini co-perigo">Excluir definitivamente</button></form></details>
+  </section>
+  {% if hist %}
+  <section class="fin-box co-lado">
+    <h3>Histórico</h3>
+    <ul class="co-hist-lista">
+      {% for h in hist %}<li><b>{{ {'INSERT':'Cadastro','UPDATE':'Alteração','RENEW':'Renovação','DEACTIVATE':'Inativação','REACTIVATE':'Reativação','WITHDRAWAL_REQUEST':'Retirada pedida','WITHDRAWAL_CANCEL':'Retirada cancelada','WITHDRAWAL_UPDATE':'Data de retirada alterada','WITHDRAWAL_FINALIZE':'Retirada finalizada'}.get(h.action, h.action) }}</b>
+        <span>{{ data_br(h.created_at[:10]) }} {{ h.created_at[11:16] }}</span>{% if h.user_note %}<small>{{ h.user_note }}</small>{% endif %}</li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</aside>
+</div>
+
+<script>
+(function () {
+  var CLIENTES = {{ clientes|tojson }}, txt = document.getElementById('co-cli-txt'), hid = document.getElementById('co-cli'), lista = document.getElementById('co-cli-lista');
+  function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
+  var pre = CLIENTES.find(function (c) { return String(c.id) === String(hid.value); }); if (pre) txt.value = pre.nome;
+  txt.addEventListener('input', function () {
+    var q = txt.value.toLowerCase().trim(), qd = q.replace(/\D/g, '');
+    var r = CLIENTES.filter(function (c) { return c.nome.toLowerCase().indexOf(q) >= 0 || (qd && c.cpf.replace(/\D/g, '').indexOf(qd) >= 0); }).slice(0, 30);
+    lista.innerHTML = r.map(function (c) { return '<button type="button" data-id="' + c.id + '"><b>' + esc(c.nome) + '</b><small>' + esc(c.cpf) + '</small></button>'; }).join('') || '<div class="co-cb-vazio">Nenhum cotista</div>';
+    lista.hidden = false;
+  });
+  lista.addEventListener('mousedown', function (e) { var b = e.target.closest('button'); if (!b) return; e.preventDefault(); hid.value = b.dataset.id; txt.value = b.querySelector('b').textContent; lista.hidden = true; });
+  txt.addEventListener('blur', function () { setTimeout(function () { lista.hidden = true; if (pre && !txt.value) { txt.value = pre.nome; hid.value = pre.id; } }, 150); });
+  var v = document.getElementById('co-valor'); v.value = Number(v.value).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+})();
+</script>
+{% endblock %}

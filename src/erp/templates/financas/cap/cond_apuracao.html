@@ -1,0 +1,33 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Apurações{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Apurações de rendimentos', 'Histórico mensal dos rendimentos calculados para os cotistas.') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.cond_apuracao_nova', slug=empresa.slug) }}">{{ fic('calculo') }} Nova apuração</a>
+{% endcall %}
+{% set mx = (meses|map(attribute='total')|max) if meses else 1 %}
+<section class="vg-box" style="margin-bottom:1rem">
+  <header><h3>Rendimentos por mês</h3></header>
+  {% for mm in meses[:12]|reverse %}
+    <div style="display:grid;grid-template-columns:70px 1fr 130px;gap:.7rem;align-items:center;margin:.35rem 0;font-size:.85rem">
+      <span>{{ '%02d/%d'|format(mm.mes, mm.ano) }}</span>
+      <span class="pr-barra-h" style="margin:0">{% for a in mm.itens %}<i title="{{ COND_NOMES.get(a.code, '') }} {{ reais(a.total) }}" style="width:{{ 100 * a.total / (mx or 1) }}%;background:{{ COND_CORES.get(a.code, '#888') }}"></i>{% endfor %}</span>
+      <b style="text-align:right">{{ reais(mm.total) }}</b>
+    </div>
+  {% else %}<p class="fin-vazio">Nenhuma apuração registrada.</p>{% endfor %}
+  <div class="pr-leg" style="margin-top:.6rem">{% for k, n in COND_NOMES.items() %}<span style="--c:{{ COND_CORES[k] }}">{{ n }}</span>{% endfor %}</div>
+</section>
+<section class="vg-box">
+  <header><h3>Apurações registradas</h3></header>
+  <table class="pr-tabela">
+    <thead><tr><th>Mês</th><th>Produto</th><th class="num">Cotas</th><th class="num">Cotistas</th><th class="num">Rendimentos</th><th>Calculada em</th><th></th></tr></thead>
+    <tbody>
+    {% for mm in meses %}{% for a in mm.itens %}
+      <tr class="clic" onclick="location.href='{{ url_for('financas.cond_apuracao_detalhe', slug=empresa.slug, calc_id=a.id) }}'"><td>{{ '%02d/%d'|format(a.calculation_month, a.calculation_year) }}</td><td>{{ COND_NOMES.get(a.code, 'Todos') }}</td>
+        <td class="num">{{ a.itens }}</td><td class="num">{{ a.clientes }}</td><td class="num"><b>{{ reais(a.total) }}</b></td>
+        <td>{{ data_br(a.calculated_at[:10]) }} {{ a.calculated_at[11:16] }}</td><td class="num"><a class="fin-link" href="{{ url_for('financas.cond_apuracao_detalhe', slug=empresa.slug, calc_id=a.id) }}">detalhe</a></td></tr>
+    {% endfor %}{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Clientes — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">👤</div>
+  <div class="page-header-title">Clientes</div>
+  <div class="page-header-sub">Gestão de cotistas — Grupo Capuzzo</div>
+</div>
+
+<!-- KPIs -->
+<div class="metrics-grid" style="grid-template-columns: repeat(4,1fr);">
+  <div class="metric-card">
+    <div class="metric-value">{{ resumo.total }}</div>
+    <div class="metric-label">Total de Clientes</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#4ade80;">{{ resumo.ativos }}</div>
+    <div class="metric-label">Ativos</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#555;">{{ resumo.inativos }}</div>
+    <div class="metric-label">Inativos</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">{{ resumo.com_cotas }}</div>
+    <div class="metric-label">Com Cotas</div>
+  </div>
+</div>
+
+<!-- Toolbar -->
+<form method="get" class="toolbar">
+  <div class="toolbar-left">
+    <div class="search-wrap">
+      <input type="text" name="q" value="{{ q }}"
+             placeholder="Buscar por nome ou CPF/CNPJ…"
+             class="form-control" style="width:260px;">
+    </div>
+    <select name="status" class="form-control form-control-sm" style="width:160px;">
+      <option value="">Todos os status</option>
+      <option value="ativo"   {% if status_filtro == 'ativo' %}selected{% endif %}>Ativos</option>
+      <option value="inativo" {% if status_filtro == 'inativo' %}selected{% endif %}>Inativos</option>
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+    {% if q or status_filtro %}
+      <a href="{{ url_for('clientes_lista') }}" class="btn btn-secondary btn-sm">Limpar</a>
+    {% endif %}
+  </div>
+  <div class="toolbar-right" style="gap:8px;">
+    <a href="{{ url_for('clientes_novo') }}" class="btn btn-primary">
+      + Novo Cliente
+    </a>
+    <a href="{{ url_for('clientes_importar') }}" class="btn btn-secondary">
+      📥 Importar Clientes
+    </a>
+    <a href="{{ url_for('clientes_modelo_importacao') }}" class="btn btn-secondary">
+      ⬇ Baixar Modelo
+    </a>
+  </div>
+</form>
+
+<!-- Tabela -->
+{% if clientes %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>CPF/CNPJ</th>
+        <th>E-mail</th>
+        <th>Telefone</th>
+        <th>Chave PIX</th>
+        <th>Status</th>
+        <th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clientes %}
+      <tr>
+        <td>
+          <a href="{{ url_for('clientes_detalhe', cid=c.id) }}"
+             style="color:#F5F5F5;font-weight:500;">{{ c.full_name }}</a>
+        </td>
+        <td class="text-mono text-dim">{{ c.cpf }}</td>
+        <td class="text-dim">{{ c.email or '—' }}</td>
+        <td class="text-dim">{{ c.phone or '—' }}</td>
+        <td class="text-dim">{{ c.pix_key or '—' }}</td>
+        <td>
+          {% if c.status == 'ativo' %}
+            <span class="badge badge-active">● Ativo</span>
+          {% else %}
+            <span class="badge badge-inactive">● Inativo</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right;white-space:nowrap;">
+          <a href="{{ url_for('clientes_detalhe', cid=c.id) }}"
+             class="btn btn-secondary btn-sm">Ver</a>
+          <a href="{{ url_for('clientes_editar', cid=c.id) }}"
+             class="btn btn-secondary btn-sm">Editar</a>
+          <form method="post" action="{{ url_for('clientes_excluir', cid=c.id) }}"
+                style="display:inline;"
+                onsubmit="return confirm('Excluir o cliente {{ c.full_name }}?\nEsta ação é permanente e só é possível se o cliente não tiver cotas.');">
+            <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="text-dim" style="font-size:12px;margin-top:10px;text-align:right;">
+  {{ clientes | length }} cliente(s) encontrado(s)
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">👤</div>
+  <div class="empty-state-title">Nenhum cliente encontrado</div>
+  <div class="empty-state-sub">
+    {% if q or status_filtro %}
+      Tente ajustar os filtros de busca.
+    {% else %}
+      Cadastre o primeiro cliente para começar.
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Categorias{% endblock %}
+{% block fin_conteudo %}
+{% set c = editar or {} %}
+{% set nat_atual = (GRUPOS_DRE | selectattr(0, 'equalto', c.grupo_dre) | map(attribute=2) | first) if editar else 'despesa' %}
+<div class="fin-head"><div><div class="eyebrow-line">Cadastros</div><h1>Plano de categorias</h1>
+  <p>Receitas e despesas organizadas pelos grupos da DRE. Ao digitar uma nova categoria, o sistema sugere o grupo certo.</p></div>
+  <div class="fin-acoes"><label class="search">{{ ic('search') }}<input type="search" id="cat-busca" placeholder="Filtrar categorias"></label></div>
+</div>
+
+<div class="cat-grid">
+  {% for natureza, titulo in [('receita', 'Receitas'), ('despesa', 'Despesas')] %}
+  <section class="cat-col {{ natureza }}">
+    {% set grupos = por_grupo | selectattr(2, 'equalto', natureza) | list %}
+    <header class="cat-col-topo"><h2>{{ titulo }}</h2>
+      <span>{{ grupos | map(attribute=3) | map('length') | sum }} categorias · {{ grupos | length }} grupos</span></header>
+    {% for chave, nome, nat, cats in grupos %}
+    <div class="cat-grupo" data-grupo="{{ chave }}">
+      <div class="cat-g-topo"><b>{{ nome }}</b><small>{{ cats | length }}</small></div>
+      <ul>
+        {% for x in cats %}
+          <li class="{{ 'inativa' if not x.ativo }} {{ 'sel' if editar and editar.id == x.id }}" data-nome="{{ x.nome | lower }}">
+            <a href="{{ url_for('financas.cad_categorias', slug=empresa.slug, editar=x.id) }}" title="{{ x.nome }}">{{ x.nome }}</a>
+            <span class="uso {{ 'zero' if not uso.get(x.id) }}">{{ uso.get(x.id, 0) }}</span>
+          </li>
+        {% else %}<li class="vazio">Nenhuma categoria.</li>{% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  <section class="fin-box cat-form">
+    <header><h3>{{ 'Editar categoria' if editar else 'Nova categoria' }}</h3>{% if editar %}<a class="fin-link" href="{{ url_for('financas.cad_categorias', slug=empresa.slug) }}">+ nova</a>{% endif %}</header>
+    <form method="post" class="fin-form" id="f-cat" autocomplete="off">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ c.id or '' }}">
+      <label class="lbl">Natureza</label>
+      <div class="cat-nat">
+        <label><input type="radio" name="natureza" value="receita" {{ 'checked' if nat_atual == 'receita' }}><span>{{ fic('receber') }} Receita</span></label>
+        <label><input type="radio" name="natureza" value="despesa" {{ 'checked' if nat_atual == 'despesa' }}><span>{{ fic('pagar') }} Despesa</span></label>
+      </div>
+      <label class="lbl">Nome</label><input class="inp" name="nome" id="cat-nome" required maxlength="80" value="{{ c.nome or '' }}" placeholder="Ex.: Tarifa PIX, Google Ads, Pró-labore">
+      <div class="cat-sug" id="cat-sug" hidden></div>
+      <label class="lbl">Grupo da DRE</label>
+      <select class="inp" name="grupo_dre" id="cat-grupo" required>
+        {% for k, n, nat in GRUPOS_DRE %}<option value="{{ k }}" data-nat="{{ nat }}" {{ 'selected' if c.grupo_dre == k }}>{{ n }}</option>{% endfor %}
+      </select>
+      {% if editar %}
+        <p class="fin-sub">{{ uso.get(c.id, 0) }} lançamento(s) usam esta categoria. Mudar o grupo altera a DRE desses lançamentos.</p>
+        <label class="fin-check"><input type="hidden" name="ativo" value="0"><input type="checkbox" name="ativo" value="1" {{ 'checked' if c.ativo }}> Categoria ativa</label>
+      {% endif %}
+      <button class="btn-pill fin-btn" type="submit" style="margin-top:.7rem">Salvar</button>
+    </form>
+  </section>
+</div>
+{% endblock %}
+
+{% block fin_scripts %}
+<script>
+(function () {
+  var f = document.getElementById('f-cat'), nome = document.getElementById('cat-nome'), grupo = document.getElementById('cat-grupo'),
+      sug = document.getElementById('cat-sug'), editando = !!f.querySelector('[name=id]').value, manual = editando, t;
+  function nat() { return (f.querySelector('[name=natureza]:checked') || {}).value; }
+  function filtrarGrupos() {
+    var n = nat();
+    [].forEach.call(grupo.options, function (o) { o.hidden = o.dataset.nat !== n; });
+    if (grupo.selectedOptions[0] && grupo.selectedOptions[0].hidden) {
+      var p = [].find.call(grupo.options, function (o) { return !o.hidden; }); if (p) grupo.value = p.value;
+    }
+  }
+  function marcar(nt) { var r = f.querySelector('[name=natureza][value=' + nt + ']'); if (r && !r.checked) { r.checked = true; filtrarGrupos(); } }
+  function sugerir(semNatureza) {
+    var v = nome.value.trim(); if (v.length < 3) { sug.hidden = true; return; }
+    var url = '{{ url_for("financas.cad_categorias_sugerir", slug=empresa.slug) }}?nome=' + encodeURIComponent(v) + (semNatureza ? '' : '&natureza=' + nat());
+    fetch(url, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.grupo) { sug.hidden = true; return; }
+      // sem pista na natureza escolhida? tenta sem natureza (ex.: "Rendimento CDB" digitado com Despesa marcada)
+      if (j.confianca === 'baixa' && !semNatureza) { return sugerir(true); }
+      sug.hidden = false; sug.className = 'cat-sug ' + j.confianca;
+      var aplicar = !manual;
+      sug.innerHTML = '✨ Sugestão: <b>' + j.grupo_nome + '</b> <span>' + j.motivo + '</span>' +
+        (aplicar || grupo.value === j.grupo ? '' : ' <button type="button" class="fin-link" id="cat-usar">usar</button>');
+      if (aplicar) { marcar(j.natureza); grupo.value = j.grupo; }
+      var u = document.getElementById('cat-usar');
+      if (u) u.onclick = function () { marcar(j.natureza); grupo.value = j.grupo; manual = false; sug.querySelector('button').remove(); };
+    }).catch(function () {});
+  }
+  nome.addEventListener('input', function () { clearTimeout(t); t = setTimeout(function () { sugerir(false); }, 250); });
+  grupo.addEventListener('change', function () { manual = true; });
+  f.querySelectorAll('[name=natureza]').forEach(function (r) { r.addEventListener('change', function () { filtrarGrupos(); sugerir(false); }); });
+  filtrarGrupos();
+  if (editando) sugerir(false);
+
+  // filtro da lista
+  var busca = document.getElementById('cat-busca');
+  busca.addEventListener('input', function () {
+    var q = busca.value.trim().toLowerCase();
+    document.querySelectorAll('.cat-grupo').forEach(function (g) {
+      var vis = 0;
+      g.querySelectorAll('li[data-nome]').forEach(function (li) { var ok = !q || li.dataset.nome.indexOf(q) >= 0; li.hidden = !ok; if (ok) vis++; });
+      g.hidden = q && !vis;
+    });
+  });
+})();
+</script>
+{% endblock %}

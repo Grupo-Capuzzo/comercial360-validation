@@ -1,0 +1,40 @@
+{# Macros compartilhados — tela Validação Sistema e seu parcial de detalhe #}
+
+{% macro cond_badge(code, name) %}
+  {% if code == 'civil' %}<span class="badge badge-civil">🏗️ {{ name or 'Construção Civil' }}</span>
+  {% elif code == 'agro' %}<span class="badge badge-agro">🌾 {{ name or 'Agronegócio' }}</span>
+  {% elif code == 'saude' %}<span class="badge badge-saude">🏥 {{ name or 'Saúde' }}</span>
+  {% else %}<span class="badge">{{ name or code }}</span>{% endif %}
+{% endmacro %}
+
+{% macro proj_badge(chave, agro_label) %}
+  {% if chave == 'normal' %}
+    <span class="badge" style="background:rgba(255,255,255,.05);color:#9ca3af;border:1px solid rgba(255,255,255,.1);">Normal</span>
+  {% elif chave == 'venc_civil' %}
+    <span class="badge badge-warning">🏗️ Vencimento Civil</span>
+  {% elif chave == 'venc_agro' %}
+    <span class="badge badge-warning">🌾 Vencimento Agro {{ agro_label or '3,5%' }}</span>
+  {% elif chave == 'venc_saude' %}
+    <span class="badge badge-warning">🏥 Vencimento Saúde</span>
+  {% elif chave == 'mes_extra' %}
+    <span class="badge badge-retirada">📤 Mês extra retirada</span>
+  {% elif chave == 'sem_vencimento' %}
+    <span class="badge badge-extended">⚠️ Sem vencimento</span>
+  {% elif chave == 'fora' %}
+    <span class="badge badge-danger">⛔ Fora da base</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro data_br(iso) %}{{ formatar_data(iso) if iso else '—' }}{% endmacro %}
+
+{% macro cond_icon(code) %}{% if code == 'civil' %}🏗️{% elif code == 'agro' %}🌾{% elif code == 'saude' %}🏥{% else %}📄{% endif %}{% endmacro %}
+
+{% macro cond_class(code) %}{% if code == 'civil' %}badge-civil{% elif code == 'agro' %}badge-agro{% elif code == 'saude' %}badge-saude{% else %}badge-warning{% endif %}{% endmacro %}
+
+{# Badge de uma cota que vence no mês — usado no detalhamento mensal do cliente #}
+{% macro cota_venc_badge(c) %}
+  <span class="badge {{ cond_class(c.condominium_code) }}" style="margin:2px 3px 2px 0;">
+    {{ cond_icon(c.condominium_code) }} nº {{ c.share_number }} ·
+    {{ formatar_moeda(c.share_value) }} · vence {{ formatar_data(c.maturity_date) }}
+  </span>
+{% endmacro %}

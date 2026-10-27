@@ -1,0 +1,512 @@
+{% extends "financas/_layout.html" %}
+{% set receber = tipo == 'receber' %}
+{% set novo = not l %}
+{% block fin_titulo %}{{ ('Nova conta a receber' if receber else 'Nova conta a pagar') if novo else l.descricao }}{% endblock %}
+{% block fin_conteudo %}
+{% set rot_pessoa = 'Cliente' if receber else 'Fornecedor' %}
+{% set rot_prev = 'Previsão de recebimento' if receber else 'Previsão de pagamento' %}
+{% set pessoa_atual = (pessoas | selectattr('id', 'equalto', l.pessoa_id) | first) if l else none %}
+
+<form method="post" id="f-lanc" enctype="multipart/form-data" autocomplete="off"
+      action="{{ url_for('financas.lancamento_novo', slug=empresa.slug, tipo=tipo) if novo else url_for('financas.lancamento', slug=empresa.slug, lid=l.id) }}">
+<input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+<div class="lf-cab {{ tipo }}">
+  <a class="fin-voltar" href="{{ voltar }}">{{ ic('arrow_back') }} {{ 'Contas a receber' if receber else 'Contas a pagar' }}</a>
+  <div class="lf-cab-linha">
+    <div>
+      <h1>{% if novo %}{{ 'Nova conta a receber' if receber else 'Nova conta a pagar' }}{% else %}{{ l.descricao }}{% endif %}</h1>
+      {% if not novo %}
+      <div class="fin-meta">
+        <span class="fin-sit {{ l.situacao }}">{{ SITUACOES[l.situacao] }}</span>
+        {% if l.parcelas > 1 %}<span class="fin-chip">{{ 'Parcela' if l.repeticao != 'recorrente' else 'Repetição' }} {{ l.parcela }} de {{ l.parcelas }}</span>{% endif %}
+        {% if l.natureza_custo %}<span class="fin-chip">{{ NATUREZAS_CUSTO[l.natureza_custo] }}</span>{% endif %}
+        {% if l.n_anexos %}<span class="fin-chip">📎 {{ l.n_anexos }}</span>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% if not novo %}
+    <div class="lf-stats">
+      <div><small>Valor</small><b>{{ moeda(l.valor) }}</b></div>
+      <div><small>{{ 'Recebido' if receber else 'Pago' }}</small><b class="pos">{{ moeda(l.pago) }}</b></div>
+      <div><small>Saldo</small><b class="{{ 'neg' if l.situacao == 'vencido' }}">{{ moeda(l.saldo) }}</b></div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── 1. Informações ── #}
+<section class="lf-sec">
+  <h2><span>1</span> Informações</h2>
+  <div class="lf-row">
+    <div class="lf-f lf-w2">
+      <div class="lf-lbl-linha"><label class="lbl" for="lf-pessoa-txt">{{ rot_pessoa }}</label></div>
+      <div class="lf-pessoa">
+        <div class="lf-combo" id="lf-combo">
+          <input class="inp" id="lf-pessoa-txt" placeholder="Digite parte do nome, fantasia ou CPF/CNPJ e tecle Enter" value="{{ pessoa_atual.nome if pessoa_atual else '' }}"
+                 role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="lf-sugs">
+          <span class="lf-ok" id="lf-pessoa-ok" {{ 'hidden' if not pessoa_atual }}>✓</span>
+          <ul class="lf-sugs" id="lf-sugs" role="listbox" hidden></ul>
+        </div>
+        <a class="btn-pill outline fin-btn lf-novo" id="lf-novo" target="_blank" title="Cadastrar novo {{ rot_pessoa|lower }} (abre em outra aba)"
+           href="{{ url_for('financas.cad_pessoas', slug=empresa.slug, tipo='cliente' if receber else 'fornecedor') }}">{{ fic('add') }} Novo</a>
+      </div>
+      <input type="hidden" name="pessoa_id" id="lf-pessoa-id" value="{{ l.pessoa_id if l and l.pessoa_id else '' }}">
+      <div class="lf-pessoa-info" id="lf-pessoa-info">{% if pessoa_atual and pessoa_atual.documento %}{{ pessoa_atual.documento|doc_fmt }}{% endif %}</div>
+    </div>
+    <div class="lf-f"><label class="lbl">Nº documento / NF</label><input class="inp" name="documento" maxlength="60" value="{{ l.documento if l else '' }}"></div>
+  </div>
+  <div class="lf-row">
+    <div class="lf-f lf-w2"><label class="lbl">Descrição *</label>
+      <input class="inp" name="descricao" required maxlength="200" value="{{ l.descricao if l else '' }}"
+             placeholder="{{ 'Ex.: Honorários de consultoria — outubro' if receber else 'Ex.: Aluguel do escritório' }}"></div>
+    <div class="lf-f"><label class="lbl">Classificação</label>
+      <div class="lf-seg">
+        {% for k, v in NATUREZAS_CUSTO.items() %}
+          <label><input type="radio" name="natureza_custo" value="{{ k }}" {{ 'checked' if (l and l.natureza_custo == k) or (not l and k == 'variavel') }}><span>{{ v }}</span></label>
+        {% endfor %}
+      </div></div>
+  </div>
+  <div class="lf-row">
+    <div class="lf-f"><label class="lbl">Competência</label>
+      <div class="lf-mes"><input class="inp" type="month" name="competencia" id="lf-comp" value="{{ (l.competencia if l else hoje)[:7] }}">
+        <span id="lf-comp-txt"></span></div></div>
+    <div class="lf-f"><label class="lbl">Conta {{ 'de recebimento' if receber else 'de pagamento' }}</label>
+      <select class="inp" name="conta_id" id="lf-conta"><option value="">—</option>
+        {% for c in contas %}<option value="{{ c.id }}" {{ 'selected' if l and c.id == l.conta_id }}>{{ c.nome }}</option>{% endfor %}</select></div>
+    <div class="lf-f"><label class="lbl">Forma de pagamento</label>
+      <select class="inp" name="forma_pagamento"><option value="">—</option>
+        {% for f in FORMAS %}<option {{ 'selected' if l and f == l.forma_pagamento }}>{{ f }}</option>{% endfor %}</select></div>
+  </div>
+</section>
+
+{# ── 2. Valor e categorias ── #}
+<section class="lf-sec">
+  <h2><span>2</span> Valor e categorias</h2>
+  <div class="lf-row">
+    <div class="lf-f"><label class="lbl">{{ 'Valor total' if novo else 'Valor desta ' ~ ('parcela' if l.parcelas > 1 else 'conta') }} *</label>
+      <input class="inp lf-valor" id="lf-total" inputmode="decimal" placeholder="R$ 0,00" value="{{ valor_campo(l.valor) if l else '' }}" required></div>
+    <div class="lf-f lf-w2 lf-dica">Para dividir em mais de uma categoria use “+ Adicionar categoria” — ex.: R$ 1.000,00 = R$ 500,00 Consultoria + R$ 500,00 Honorários.
+      Nas parcelas e repetições a divisão é aplicada proporcionalmente.</div>
+  </div>
+  <table class="lf-rateio" id="lf-rateio">
+    <thead><tr><th>Categoria *</th><th>Centro de custo</th><th class="num">Valor</th><th class="num">%</th><th></th></tr></thead>
+    <tbody>
+    {% for r in (rateio if rateio else [{}]) %}
+      <tr>
+        <td><select class="inp" name="rat_categoria"><option value="">Selecione…</option>
+          {% for c in categorias %}<option value="{{ c.id }}" {{ 'selected' if r.categoria_id == c.id }}>{{ c.nome }} · {{ NOME_GRUPO.get(c.grupo_dre, '') }}</option>{% endfor %}</select></td>
+        <td><select class="inp" name="rat_centro"><option value="">—</option>
+          {% for c in centros %}<option value="{{ c.id }}" {{ 'selected' if r.centro_id == c.id }}>{{ c.nome }}</option>{% endfor %}</select></td>
+        <td><input class="inp num" name="rat_valor" inputmode="decimal" placeholder="R$ 0,00" value="{{ valor_campo(r.valor) if r.valor else '' }}"></td>
+        <td><input class="inp num lf-pct" inputmode="decimal" tabindex="-1"></td>
+        <td><button type="button" class="lf-x" title="Remover">{{ fic('fechar') }}</button></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr>
+      <td colspan="2"><button type="button" class="fin-link" id="lf-add-rat">+ Adicionar categoria</button></td>
+      <td class="num"><b id="lf-rat-soma">R$ 0,00</b></td><td class="num" id="lf-rat-pct"></td><td></td>
+    </tr></tfoot>
+  </table>
+  <div class="lf-alerta" id="lf-rat-aviso" hidden></div>
+</section>
+
+{# ── 3. Datas e condição ── #}
+<section class="lf-sec">
+  <h2><span>3</span> {{ 'Datas e condição' if novo else 'Datas' }}</h2>
+  {% if novo %}
+    <div class="lf-seg lf-cond">
+      <label><input type="radio" name="condicao" value="unico" checked><span>À vista / única</span></label>
+      <label><input type="radio" name="condicao" value="parcelado"><span>Parcelado</span></label>
+      <label><input type="radio" name="condicao" value="recorrente"><span>Recorrente (repetir)</span></label>
+    </div>
+    <div class="lf-row lf-row4" style="margin-top:.6rem">
+      <div class="lf-f"><label class="lbl"><span class="lf-1a" hidden>1ª </span>{{ rot_prev }} *</label><input class="inp" type="date" id="lf-prev1" value="{{ hoje }}"></div>
+      <div class="lf-f"><label class="lbl"><span class="lf-1a" hidden>1º </span>Vencimento *</label><input class="inp" type="date" id="lf-venc1" value="{{ hoje }}">
+        <small class="lf-sub" id="lf-venc-dica">igual à previsão — altere se for diferente</small></div>
+      <div class="lf-f lf-so-rep" hidden><label class="lbl" id="lf-lbl-qtd">Nº de parcelas</label><input class="inp" type="number" id="lf-qtd" min="2" max="360" value="2"></div>
+      <div class="lf-f lf-so-rep" hidden><label class="lbl">Frequência</label>
+        <select class="inp" id="lf-freq">{% for k, v in FREQUENCIAS.items() %}<option value="{{ k }}">{{ v[0] }}</option>{% endfor %}</select></div>
+    </div>
+    <p class="fin-sub lf-so-rep" hidden id="lf-cond-dica"></p>
+    <div class="lf-parcelas" id="lf-parcelas" hidden>
+      <table class="lf-tab-parc">
+        <thead><tr><th>#</th><th>{{ rot_prev }}</th><th>Vencimento</th><th class="num">Valor</th></tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td></td><td colspan="2"><button type="button" class="fin-link" id="lf-recalc">↻ Recalcular parcelas</button></td><td class="num"><b id="lf-parc-soma"></b></td></tr></tfoot>
+      </table>
+      <div class="lf-alerta" id="lf-parc-aviso" hidden></div>
+    </div>
+    <div id="lf-hidden-parc"></div>
+    <div class="lf-japago" id="lf-japago">
+      <label class="fin-check"><input type="checkbox" name="ja_pago" value="1" id="lf-ja"> Já foi {{ 'recebido' if receber else 'pago' }}</label>
+      <div class="lf-row" id="lf-ja-campos" hidden>
+        <div class="lf-f"><label class="lbl">Data do {{ 'recebimento' if receber else 'pagamento' }}</label><input class="inp" type="date" name="pago_data" value="{{ hoje }}"></div>
+        <div class="lf-f"><label class="lbl">Conta</label><select class="inp" name="pago_conta_id"><option value="">Mesma conta acima</option>
+          {% for c in contas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></div>
+      </div>
+    </div>
+  {% else %}
+    <div class="lf-row">
+      <div class="lf-f"><label class="lbl">{{ rot_prev }} *</label><input class="inp" type="date" name="par_prev" id="lf-prev1" value="{{ l.previsao or l.vencimento }}" required></div>
+      <div class="lf-f"><label class="lbl">Vencimento *</label><input class="inp" type="date" name="par_venc" id="lf-venc1" value="{{ l.vencimento }}" required></div>
+      <input type="hidden" name="par_valor" id="lf-par-valor-edit" value="{{ valor_campo(l.valor) }}">
+      {% if l.grupo %}
+      <div class="lf-f"><label class="fin-check" style="margin-top:1.7rem"><input type="checkbox" name="propagar" value="1">
+        Aplicar descrição, {{ rot_pessoa|lower }}, conta e categorias às próximas parcelas em aberto</label></div>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+
+{# ── 4. Anexos e observações ── #}
+<section class="lf-sec">
+  <h2><span>4</span> Anexos e observações</h2>
+  <div class="lf-row lf-row-anx">
+    <div class="lf-f">
+      <label class="lf-drop" id="lf-drop">
+        <input type="file" name="anexos" id="lf-arquivos" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.xml,.txt,.csv,.xls,.xlsx,.doc,.docx,.ofx,.rem,.ret,.zip,.eml,.msg">
+        <span>{{ fic('upload') }} <b>Arraste boletos, notas e documentos</b> ou clique para escolher<small>PDF, imagens, XML, planilhas… até 20 MB cada</small></span>
+      </label>
+      <ul class="lf-arqs" id="lf-arqs"></ul>
+    </div>
+    <div class="lf-f lf-w2"><label class="lbl" style="margin-top:0">Observações</label><textarea class="inp" name="obs" rows="5">{{ l.obs if l else '' }}</textarea></div>
+  </div>
+</section>
+
+{# ── barra de ações fixa no rodapé ── #}
+<div class="lf-barra {{ tipo }}">
+  <div class="lf-barra-res">
+    <div><small>{{ 'Total a receber' if receber else 'Total a pagar' }}</small><b id="lf-res-total">R$ 0,00</b></div>
+    <div><small>Categorias</small><b id="lf-res-cats">1</b></div>
+    <div><small>{{ 'Parcelas' if novo else 'Vencimento' }}</small><b id="lf-res-parc">{{ '1' if novo else data_br(l.vencimento) }}</b></div>
+  </div>
+  <div class="lf-botoes">
+    <a class="btn-pill outline fin-btn" href="{{ voltar }}">Cancelar</a>
+    {% if novo %}<button class="btn-pill outline fin-btn" name="acao" value="novo">Salvar e criar outro</button>{% endif %}
+    <button class="btn-pill fin-btn {{ 'entrada' if receber else 'saida' }}" name="acao" value="salvar">{{ fic('check') }} Salvar</button>
+  </div>
+</div>
+</form>
+
+{# janela de busca quando há mais de um resultado #}
+<dialog class="dlg fin-dlg lf-busca" id="dlg-busca">
+  <div class="dlg-head"><h3>Selecionar {{ rot_pessoa|lower }}</h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+  <label class="search">{{ ic('search') }}<input type="search" id="lf-busca-txt" placeholder="Nome, fantasia ou CPF/CNPJ"></label>
+  <p class="fin-sub" id="lf-busca-n"></p>
+  <ul class="lf-busca-lista" id="lf-busca-lista"></ul>
+</dialog>
+
+{% if not novo %}
+<div class="lf-extra">
+  {% if irmaos|length > 1 %}
+  <section class="lf-sec lf-sec-larga" id="parcelas">
+    <h2>{{ fic('calendario') }} {{ 'Parcelas' if l.repeticao != 'recorrente' else 'Repetições' }} ({{ irmaos|length }})</h2>
+    <form method="post" action="{{ url_for('financas.lancamento_parcelas', slug=empresa.slug, lid=l.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <table class="lf-tab-parc">
+        <thead><tr><th>#</th><th>{{ rot_prev }}</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
+        <tbody>
+        {% for x in irmaos %}
+          {% set editavel = x.situacao in ('aberto', 'vencido') %}
+          <tr class="{{ 'atual' if x.id == l.id }}">
+            <td>{{ x.parcela }}/{{ x.parcelas }}</td>
+            <td>{% if editavel %}<input class="inp" type="date" name="prev_{{ x.id }}" value="{{ x.previsao or x.vencimento }}">{% else %}{{ data_br(x.previsao or x.vencimento) }}{% endif %}</td>
+            <td>{% if editavel %}<input class="inp" type="date" name="venc_{{ x.id }}" value="{{ x.vencimento }}">{% else %}{{ data_br(x.vencimento) }}{% endif %}</td>
+            <td class="num">{% if editavel %}<input class="inp num" data-moeda name="valor_{{ x.id }}" value="{{ valor_campo(x.valor) }}" inputmode="decimal">{% else %}{{ moeda(x.valor) }}{% endif %}</td>
+            <td><span class="fin-sit {{ x.situacao }}">{{ SITUACOES[x.situacao] }}</span></td>
+            <td class="num">{% if x.id != l.id %}<a class="fin-link" href="{{ url_for('financas.lancamento', slug=empresa.slug, lid=x.id) }}">abrir</a>{% else %}<b>atual</b>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot><tr><td></td><td></td><td>Total</td><td class="num"><b>{{ moeda(irmaos|sum(attribute='valor')) }}</b></td><td colspan="2"></td></tr></tfoot>
+      </table>
+      <button class="btn-pill outline fin-btn mini" type="submit" style="margin-top:.7rem">Salvar ajustes das parcelas</button>
+      <span class="fin-sub" style="margin-left:.6rem">Só parcelas em aberto podem ser ajustadas.</span>
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="lf-sec">
+    <h2>{{ fic('check') }} {{ 'Recebimentos' if receber else 'Pagamentos' }}</h2>
+    {% if l.situacao in ('aberto','vencido','parcial') %}
+      <button type="button" class="btn-pill fin-btn {{ 'entrada' if receber else 'saida' }}" data-baixar="{{ l.id }}" data-desc="{{ l.descricao }}" data-saldo="{{ valor_campo(l.saldo) }}" data-conta="{{ l.conta_id or '' }}">{{ 'Registrar recebimento' if receber else 'Registrar pagamento' }}</button>
+    {% endif %}
+    <ul class="fin-lista">
+      {% for b in baixas %}
+        <li><span><b>{{ moeda(b.valor) }}</b> em {{ data_br(b.data) }}<small>{{ b.conta_nome }}{% if b.juros %} · juros {{ moeda(b.juros) }}{% endif %}{% if b.desconto %} · desconto {{ moeda(b.desconto) }}{% endif %}</small></span>
+          <form method="post" action="{{ url_for('financas.baixa_estornar', slug=empresa.slug, bid=b.id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link-risco" type="submit">Estornar</button></form></li>
+      {% else %}<li class="vazio">Nenhum {{ 'recebimento' if receber else 'pagamento' }} registrado.</li>{% endfor %}
+    </ul>
+  </section>
+  <section class="lf-sec">
+    <h2>{{ fic('upload') }} Anexos ({{ anexos|length }})</h2>
+    <ul class="lf-anexos">
+      {% for a in anexos %}
+        <li><a href="{{ url_for('financas.anexo_baixar', slug=empresa.slug, aid=a.id) }}" target="_blank" title="Abrir">{{ a.nome }}</a>
+          <small>{{ (a.tamanho / 1024)|round|int }} KB{% if a.grupo %} · todas as parcelas{% endif %}</small>
+          <a class="fin-link" href="{{ url_for('financas.anexo_baixar', slug=empresa.slug, aid=a.id, baixar=1) }}">baixar</a>
+          <form method="post" action="{{ url_for('financas.anexo_excluir', slug=empresa.slug, aid=a.id) }}" onsubmit="return confirm('Remover o anexo {{ a.nome }}?')">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ request.path }}">
+            <button class="fin-link-risco" type="submit">remover</button></form></li>
+      {% else %}<li class="vazio">Nenhum anexo.</li>{% endfor %}
+    </ul>
+  </section>
+  <section class="lf-sec">
+    <h2>Ações</h2>
+    <div class="lf-acoes">
+      <form method="post" action="{{ url_for('financas.lancamento_acao', slug=empresa.slug, lid=l.id, acao='reativar' if l.cancelado else 'cancelar') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn-pill outline fin-btn mini" type="submit">{{ 'Reativar' if l.cancelado else 'Cancelar lançamento' }}</button></form>
+      {% if not baixas %}<button type="button" class="fin-link-risco" data-abrir="dlg-excluir">Excluir</button>{% endif %}
+    </div>
+  </section>
+</div>
+
+<dialog id="dlg-excluir" class="dlg fin-dlg">
+  <form method="post" action="{{ url_for('financas.lancamento_acao', slug=empresa.slug, lid=l.id, acao='excluir') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="dlg-head"><h3>Excluir lançamento?</h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+    <p class="fin-sub">“{{ l.descricao }}” e seus anexos serão apagados. Para manter no histórico, use “Cancelar lançamento”.</p>
+    <div class="row-btns"><button type="button" class="btn-pill outline" data-fechar>Voltar</button><button class="btn-pill fin-risco" type="submit">Excluir</button></div>
+  </form>
+</dialog>
+{% include "financas/_dlg_baixa.html" %}
+{% endif %}
+{% endblock %}
+
+{% block fin_scripts %}
+<script>
+(function () {
+  var NOVO = {{ 'true' if novo else 'false' }}, FREQ = {{ FREQUENCIAS | tojson }};
+  var MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  var f = document.getElementById('f-lanc'), total = document.getElementById('lf-total');
+  function cent(s) { s = String(s || '').replace(/[^\d,.-]/g, ''); if (!s) return 0; if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); var n = parseFloat(s); return isNaN(n) ? 0 : Math.round(n * 100); }
+  function br(c) { return (c < 0 ? '-' : '') + 'R$ ' + (Math.abs(c) / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+  function aviso(id, t) { var el = document.getElementById(id); el.hidden = !t; el.textContent = t || ''; }
+  function sem(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+
+  // ══ busca de cliente/fornecedor ══
+  var LISTA = [], ptxt = document.getElementById('lf-pessoa-txt'), pid = document.getElementById('lf-pessoa-id'),
+      sugs = document.getElementById('lf-sugs'), ok = document.getElementById('lf-pessoa-ok'), info = document.getElementById('lf-pessoa-info'),
+      dlg = document.getElementById('dlg-busca'), btxt = document.getElementById('lf-busca-txt'), blista = document.getElementById('lf-busca-lista'),
+      foco = -1, escolhido = ptxt.value;
+  var URL_PESSOAS = '{{ url_for("financas.pessoas_json", slug=empresa.slug, tipo="cliente" if receber else "fornecedor") }}';
+  function carregar(depois) { fetch(URL_PESSOAS, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) { LISTA = j; if (depois) depois(); }); }
+  function buscar(q) {
+    q = sem(q).trim(); if (!q) return [];
+    var dig = q.replace(/\D/g, '');
+    var r = LISTA.filter(function (p) {
+      return sem(p.nome).indexOf(q) >= 0 || sem(p.fantasia).indexOf(q) >= 0 || (dig.length >= 3 && p.doc.indexOf(dig) >= 0);
+    });
+    r.sort(function (a, b) {  // quem começa com o texto vem primeiro
+      var pa = sem(a.nome).indexOf(q) === 0 || sem(a.fantasia).indexOf(q) === 0 ? 0 : 1, pb = sem(b.nome).indexOf(q) === 0 || sem(b.fantasia).indexOf(q) === 0 ? 0 : 1;
+      return pa - pb || a.nome.localeCompare(b.nome);
+    });
+    return r;
+  }
+  function fmtDoc(d) { return d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : d.length === 11 ? d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : d; }
+  function detalhe(p) { return [p.fantasia && p.fantasia !== p.nome ? p.fantasia : '', p.doc ? fmtDoc(p.doc) : '', p.cidade ? p.cidade + (p.uf ? '/' + p.uf : '') : ''].filter(Boolean).join(' · '); }
+  function escolher(p) {
+    pid.value = p.id; ptxt.value = p.nome; escolhido = p.nome; ok.hidden = false; info.textContent = detalhe(p); info.classList.remove('erro');
+    fechaSugs(); if (dlg.open) dlg.close();
+  }
+  function limpa() { pid.value = ''; ok.hidden = true; info.textContent = ''; info.classList.remove('erro'); }
+  function itemHTML(p, i) { return '<li role="option" data-i="' + i + '"><b>' + esc(p.nome) + '</b><small>' + esc(detalhe(p)) + '</small></li>'; }
+  function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
+  var atuais = [];
+  function abreSugs() {
+    atuais = buscar(ptxt.value).slice(0, 8); foco = -1;
+    if (!atuais.length) { fechaSugs(); return; }
+    sugs.innerHTML = atuais.map(itemHTML).join(''); sugs.hidden = false; ptxt.setAttribute('aria-expanded', 'true');
+  }
+  function fechaSugs() { sugs.hidden = true; ptxt.setAttribute('aria-expanded', 'false'); }
+  function marcaFoco() { [].forEach.call(sugs.children, function (li, i) { li.classList.toggle('on', i === foco); }); }
+  function confirmar() {
+    var t = ptxt.value.trim();
+    if (!t) { limpa(); info.textContent = ''; return true; }
+    if (pid.value && t === escolhido) return true;
+    var r = buscar(t);
+    var exato = r.filter(function (p) { return sem(p.nome) === sem(t) || sem(p.fantasia) === sem(t); });
+    if (r.length === 1 || exato.length === 1) { escolher(exato.length === 1 ? exato[0] : r[0]); return true; }
+    limpa();
+    if (!r.length) { info.innerHTML = 'Nenhum {{ rot_pessoa|lower }} encontrado com “' + esc(t) + '”. <a href="#" id="lf-cad-rapido">Cadastrar agora</a>'; info.classList.add('erro');
+      document.getElementById('lf-cad-rapido').onclick = function (e) { e.preventDefault(); abrirNovo(t); }; return true; }
+    abrirBusca(t); return false;
+  }
+  function abrirBusca(t) {
+    fechaSugs(); btxt.value = t; listaBusca(); dlg.showModal(); btxt.focus(); btxt.select();
+  }
+  function listaBusca() {
+    var r = btxt.value.trim() ? buscar(btxt.value) : LISTA.slice().sort(function (a, b) { return a.nome.localeCompare(b.nome); });
+    document.getElementById('lf-busca-n').textContent = r.length + ' resultado(s) — clique para escolher';
+    blista.innerHTML = r.slice(0, 200).map(itemHTML).join('') || '<li class="vazio">Nada encontrado.</li>';
+    blista._r = r;
+  }
+  ptxt.addEventListener('input', function () { if (ptxt.value !== escolhido) limpa(); abreSugs(); });
+  ptxt.addEventListener('focus', function () { if (!LISTA.length) carregar(); });
+  ptxt.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown' && !sugs.hidden) { e.preventDefault(); foco = Math.min(foco + 1, atuais.length - 1); marcaFoco(); }
+    else if (e.key === 'ArrowUp' && !sugs.hidden) { e.preventDefault(); foco = Math.max(foco - 1, 0); marcaFoco(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (foco >= 0 && atuais[foco]) escolher(atuais[foco]); else confirmar(); }
+    else if (e.key === 'Tab') { if (foco >= 0 && atuais[foco]) { escolher(atuais[foco]); } else if (!confirmar()) e.preventDefault(); }
+    else if (e.key === 'Escape') fechaSugs();
+  });
+  ptxt.addEventListener('blur', function () { setTimeout(function () { if (!dlg.open && document.activeElement !== ptxt) { fechaSugs(); confirmar(); } }, 150); });
+  sugs.addEventListener('mousedown', function (e) { var li = e.target.closest('li[data-i]'); if (li) { e.preventDefault(); escolher(atuais[+li.dataset.i]); } });
+  btxt.addEventListener('input', listaBusca);
+  btxt.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (blista._r && blista._r.length === 1) escolher(blista._r[0]); } });
+  blista.addEventListener('click', function (e) { var li = e.target.closest('li[data-i]'); if (li) escolher(blista._r[+li.dataset.i]); });
+  dlg.querySelector('[data-fechar]').addEventListener('click', function () { dlg.close(); });
+  function abrirNovo(nome) {
+    var a = document.getElementById('lf-novo'); window.open(a.href + (nome ? '&nome=' + encodeURIComponent(nome) : ''), '_blank');
+  }
+  document.getElementById('lf-novo').addEventListener('click', function (e) { e.preventDefault(); abrirNovo(pid.value ? '' : ptxt.value.trim()); });
+  // ao voltar da aba de cadastro, atualiza a lista e tenta achar o que foi digitado
+  window.addEventListener('focus', function () { carregar(function () { if (!pid.value && ptxt.value.trim()) { var r = buscar(ptxt.value); if (r.length === 1) escolher(r[0]); } }); });
+  carregar();
+
+  // ══ competência por extenso ══
+  var comp = document.getElementById('lf-comp'), compTxt = document.getElementById('lf-comp-txt');
+  function compExt() { var v = comp.value; var m = v ? MESES[+v.slice(5, 7) - 1] : ''; compTxt.textContent = v ? m.charAt(0).toUpperCase() + m.slice(1) + ' de ' + v.slice(0, 4) : ''; }
+  comp.addEventListener('change', compExt); compExt();
+
+  // ══ previsão → vencimento ══
+  var prev1 = document.getElementById('lf-prev1'), venc1 = document.getElementById('lf-venc1'), vencManual = !NOVO && prev1.value !== venc1.value;
+  prev1.addEventListener('change', function () { if (!vencManual) venc1.value = prev1.value; if (NOVO) gerar(); });
+  venc1.addEventListener('change', function () { vencManual = venc1.value !== prev1.value; var d = document.getElementById('lf-venc-dica'); if (d) d.textContent = vencManual ? 'diferente da previsão' : 'igual à previsão — altere se for diferente'; if (NOVO) gerar(); });
+
+  // ══ rateio ══
+  var tb = document.querySelector('#lf-rateio tbody'), modelo = tb.rows[0].cloneNode(true);
+  function linhas() { return [].slice.call(tb.rows); }
+  function sync(origem) {
+    var t = cent(total.value), ls = linhas();
+    if (ls.length === 1) { ls[0].querySelector('[name=rat_valor]').value = t ? br(t) : ''; }
+    var soma = 0;
+    ls.forEach(function (tr) {
+      var v = cent(tr.querySelector('[name=rat_valor]').value); soma += v;
+      if (origem !== tr) tr.querySelector('.lf-pct').value = t ? (100 * v / t).toFixed(1).replace('.', ',') + '%' : '';
+      tr.querySelector('.lf-x').style.visibility = ls.length > 1 ? 'visible' : 'hidden';
+    });
+    document.getElementById('lf-rat-soma').textContent = br(soma);
+    document.getElementById('lf-rat-pct').textContent = t ? Math.round(100 * soma / t) + '%' : '';
+    aviso('lf-rat-aviso', t && soma !== t ? 'A soma das categorias (' + br(soma) + ') está diferente do valor total (' + br(t) + '). Diferença: ' + br(t - soma) + '.' : '');
+    document.getElementById('lf-res-cats').textContent = ls.length;
+    resumo();
+  }
+  tb.addEventListener('input', function (e) {
+    var tr = e.target.closest('tr');
+    if (e.target.classList.contains('lf-pct')) { var p = parseFloat(e.target.value.replace('%', '').replace(',', '.')) || 0;
+      tr.querySelector('[name=rat_valor]').value = br(Math.round(cent(total.value) * p / 100)); sync(tr); return; }
+    sync();
+  });
+  tb.addEventListener('blur', function (e) { if (e.target.name === 'rat_valor' && e.target.value) e.target.value = br(cent(e.target.value)); }, true);
+  tb.addEventListener('click', function (e) { var x = e.target.closest('.lf-x'); if (x && linhas().length > 1) { x.closest('tr').remove(); sync(); } });
+  document.getElementById('lf-add-rat').addEventListener('click', function () {
+    var n = modelo.cloneNode(true); n.querySelectorAll('input').forEach(function (i) { i.value = ''; }); n.querySelectorAll('select').forEach(function (s) { s.selectedIndex = 0; });
+    var falta = cent(total.value) - linhas().reduce(function (a, tr) { return a + cent(tr.querySelector('[name=rat_valor]').value); }, 0);
+    if (falta > 0) n.querySelector('[name=rat_valor]').value = br(falta);
+    tb.appendChild(n); sync(); n.querySelector('select').focus();
+  });
+  total.addEventListener('input', function () { sync(); if (NOVO) gerar(); else document.getElementById('lf-par-valor-edit').value = total.value; });
+  total.addEventListener('blur', function () { if (total.value) total.value = br(cent(total.value)); });
+
+  // ══ condição / parcelas (novo) ══
+  var tbp, hidden = document.getElementById('lf-hidden-parc');
+  function cond() { var r = f.querySelector('[name=condicao]:checked'); return r ? r.value : 'unico'; }
+  function addData(iso, i, freq) {
+    if (!iso) return '';
+    var p = iso.split('-').map(Number), m = FREQ[freq][1], dd = FREQ[freq][2], d;
+    if (m) { d = new Date(p[0], p[1] - 1 + m * i, 1); var ult = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); d.setDate(Math.min(p[2], ult)); }
+    else { d = new Date(p[0], p[1] - 1, p[2] + dd * i); }
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function gerar() {
+    if (!NOVO) return;
+    var c = cond(), t = cent(total.value);
+    document.querySelectorAll('.lf-so-rep').forEach(function (x) { x.hidden = c === 'unico'; });
+    document.querySelectorAll('.lf-1a').forEach(function (x) { x.hidden = c === 'unico'; });
+    document.getElementById('lf-parcelas').hidden = c === 'unico';
+    document.getElementById('lf-japago').hidden = c !== 'unico';
+    document.getElementById('lf-lbl-qtd').textContent = c === 'parcelado' ? 'Nº de parcelas' : 'Quantas vezes repetir';
+    var n = c === 'unico' ? 1 : Math.max(2, Math.min(360, parseInt(document.getElementById('lf-qtd').value) || 2)), fq = document.getElementById('lf-freq').value;
+    document.getElementById('lf-cond-dica').textContent = c === 'parcelado'
+      ? 'O valor total é dividido em ' + n + ' parcelas. Ajuste datas e valores na tabela se precisar.'
+      : 'O valor é repetido ' + n + ' vezes (' + FREQ[fq][0].toLowerCase() + '). Ajuste datas e valores na tabela se precisar.';
+    tbp = document.querySelector('#lf-parcelas tbody'); tbp.innerHTML = '';
+    var base = c === 'parcelado' ? Math.floor(t / n) : t;
+    for (var i = 0; i < n; i++) {
+      var val = c === 'parcelado' ? base + (i === 0 ? t - base * n : 0) : t;
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + (i + 1) + '/' + n + '</td><td><input class="inp" type="date" data-p value="' + addData(prev1.value, i, fq) + '"></td>' +
+        '<td><input class="inp" type="date" data-v value="' + addData(venc1.value, i, fq) + '"></td>' +
+        '<td class="num"><input class="inp num" data-x inputmode="decimal" placeholder="R$ 0,00" value="' + (t ? br(val) : '') + '"></td>';
+      tbp.appendChild(tr);
+    }
+    somaParc();
+  }
+  function somaParc() {
+    if (!tbp) return; var s = 0, n = tbp.rows.length;
+    [].forEach.call(tbp.rows, function (tr) { s += cent(tr.querySelector('[data-x]').value); });
+    document.getElementById('lf-parc-soma').textContent = br(s);
+    var t = cent(total.value);
+    aviso('lf-parc-aviso', cond() === 'parcelado' && t && s !== t ? 'A soma das parcelas (' + br(s) + ') difere do total (' + br(t) + ').' : '');
+    document.getElementById('lf-res-parc').textContent = cond() === 'unico' ? '1' : n + 'x';
+    resumo();
+  }
+  function resumo() {
+    var t = cent(total.value), tot = t;
+    if (NOVO && cond() !== 'unico' && tbp) tot = [].reduce.call(tbp.rows, function (a, tr) { return a + cent(tr.querySelector('[data-x]').value); }, 0);
+    document.getElementById('lf-res-total').textContent = br(tot);
+  }
+  if (NOVO) {
+    f.querySelectorAll('[name=condicao]').forEach(function (r) { r.addEventListener('change', gerar); });
+    ['lf-qtd', 'lf-freq'].forEach(function (id) { document.getElementById(id).addEventListener('change', gerar); });
+    document.getElementById('lf-qtd').addEventListener('input', gerar);
+    document.getElementById('lf-recalc').addEventListener('click', gerar);
+    var tabp = document.getElementById('lf-parcelas');
+    tabp.addEventListener('input', somaParc);
+    tabp.addEventListener('change', function (e) {  // previsão da parcela → vencimento igual, se ainda não foi mexido
+      if (e.target.dataset.p !== undefined) { var v = e.target.closest('tr').querySelector('[data-v]'); if (!v.dataset.manual) v.value = e.target.value; }
+      if (e.target.dataset.v !== undefined) e.target.dataset.manual = '1';
+    });
+    tabp.addEventListener('blur', function (e) { if (e.target.dataset.x !== undefined && e.target.value) e.target.value = br(cent(e.target.value)); }, true);
+    document.getElementById('lf-ja').addEventListener('change', function (e) { document.getElementById('lf-ja-campos').hidden = !e.target.checked; });
+  }
+
+  // ══ anexos ══
+  var drop = document.getElementById('lf-drop'), inp = document.getElementById('lf-arquivos'), ul = document.getElementById('lf-arqs');
+  function listar() { ul.innerHTML = ''; [].forEach.call(inp.files, function (fl) { var li = document.createElement('li'); li.textContent = fl.name + ' · ' + Math.ceil(fl.size / 1024) + ' KB'; ul.appendChild(li); }); }
+  inp.addEventListener('change', listar);
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('on'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('on'); }); });
+  drop.addEventListener('drop', function (e) {
+    var dt = new DataTransfer(); [].forEach.call(inp.files, function (x) { dt.items.add(x); }); [].forEach.call(e.dataTransfer.files, function (x) { dt.items.add(x); });
+    inp.files = dt.files; listar();
+  });
+
+  // ══ envio ══
+  f.addEventListener('submit', function (e) {
+    if (ptxt.value.trim() && !pid.value) { e.preventDefault(); confirmar(); return; }
+    var t = cent(total.value);
+    if (!t) { e.preventDefault(); alert('Informe o valor.'); total.focus(); return; }
+    if (!linhas().some(function (tr) { return tr.querySelector('[name=rat_categoria]').value; })) { e.preventDefault(); alert('Escolha ao menos uma categoria.'); return; }
+    var soma = linhas().reduce(function (a, tr) { return a + cent(tr.querySelector('[name=rat_valor]').value); }, 0);
+    if (soma !== t && !confirm('A soma das categorias (' + br(soma) + ') é diferente do total (' + br(t) + '). O sistema vai ajustar proporcionalmente. Continuar?')) { e.preventDefault(); return; }
+    if (NOVO) {
+      hidden.innerHTML = '';
+      var rows = cond() === 'unico' ? [[prev1.value, venc1.value, br(t)]]
+        : [].map.call(tbp.rows, function (tr) { return [tr.querySelector('[data-p]').value, tr.querySelector('[data-v]').value, tr.querySelector('[data-x]').value]; });
+      if (rows.some(function (r) { return !r[1]; })) { e.preventDefault(); alert('Preencha os vencimentos.'); return; }
+      rows.forEach(function (r) {
+        hidden.insertAdjacentHTML('beforeend', '<input type="hidden" name="par_prev" value="' + (r[0] || r[1]) + '"><input type="hidden" name="par_venc" value="' + r[1] + '"><input type="hidden" name="par_valor" value="' + r[2] + '">');
+      });
+    }
+  });
+  sync(); gerar();
+  if (NOVO) ptxt.focus();
+})();
+</script>
+{% endblock %}

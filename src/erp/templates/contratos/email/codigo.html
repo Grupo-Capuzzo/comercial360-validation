@@ -1,0 +1,7 @@
+{% extends "contratos/email/_base.html" %}
+{% block corpo %}
+<p style="margin:0 0 14px;">Olá, <b>{{ nome }}</b>.</p>
+<p style="margin:0 0 14px;">Use o código abaixo para confirmar sua assinatura eletrônica:</p>
+<p style="text-align:center;margin:0 0 18px;"><span style="display:inline-block;font:bold 32px/1 'Courier New',monospace;letter-spacing:8px;background:#faf8f2;border:1px solid #ece5cf;border-radius:6px;padding:14px 22px;">{{ codigo }}</span></p>
+<p style="margin:0 0 10px;font-size:13px;color:#555;">O código vale por {{ validade }} minutos. Se você não pediu este código, ignore este e-mail.</p>
+{% endblock %}

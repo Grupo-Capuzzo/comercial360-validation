@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Amortizações — Títulos Privados{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">📉</div>
+  <div class="page-header-title">Amortizações</div>
+  <div class="page-header-sub">Todas as amortizações/antecipações registradas nos empréstimos privados.</div>
+</div>
+
+{% if amortizacoes %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th><th>Empréstimo</th><th>Parcela</th><th>Data</th>
+        <th style="text-align:right;">Valor</th><th>Tipo</th>
+        <th style="text-align:right;">Desconto</th><th>Aplicado em</th><th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in amortizacoes %}
+      <tr>
+        <td>{{ a.client_name }}</td>
+        <td class="text-mono">{{ a.loan_number or ('#' ~ a.loan_id) }}</td>
+        <td class="text-dim">
+          {% if a.target_installment_number %}Parcela {{ a.target_installment_number }}
+          {% elif a.target_mode == 'proximas_parcelas' %}Próximas parcelas
+          {% elif a.target_mode == 'saldo_devedor' %}Saldo devedor
+          {% else %}—{% endif %}
+        </td>
+        <td class="text-dim">{{ formatar_data(a.payment_date) }}</td>
+        <td style="text-align:right;font-weight:600;">{{ formatar_moeda(a.amount) }}</td>
+        <td>
+          {% if a.price_action == 'quitar_parcela_antecipada' %}⚡ Quitação Antecipada de Parcela
+          {% else %}{{ {'antecipacao_parcela':'Antecipação de Parcela','reducao_saldo':'Redução de Saldo','liquidacao_parcial':'Liquidação Parcial','liquidacao_total':'Liquidação Total'}.get(a.amortization_type, a.amortization_type) }}
+          {% endif %}
+        </td>
+        <td style="text-align:right;" class="text-dim">
+          {% if a.price_action == 'quitar_parcela_antecipada' and a.amount_before is not none %}
+            {{ formatar_moeda(a.amount_before - a.amount) }}
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ {'principal':'Principal','interest':'Juros','mixed':'Misto'}.get(a.applied_to, a.applied_to) }}</td>
+        <td style="text-align:right;">
+          <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=a.loan_id) }}" class="btn btn-secondary btn-sm">Ver Empréstimo</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="text-dim" style="font-size:12px;margin-top:10px;text-align:right;">
+  {{ amortizacoes | length }} amortização(ões) encontrada(s)
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">📉</div>
+  <div class="empty-state-title">Nenhuma amortização registrada ainda</div>
+</div>
+{% endif %}
+
+{% endblock %}

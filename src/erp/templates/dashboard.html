@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-title">🏛️ &nbsp;Painel de Gestão — Condomínios de Investimento</div>
+  <div class="hero-sub">Visão executiva de cotas, clientes e produtos · Grupo Capuzzo</div>
+</div>
+
+<!-- KPIs Linha 1 -->
+<div class="metrics-grid">
+  <div class="metric-card">
+    <div class="metric-icon">💰</div>
+    <div class="metric-value">{{ formatar_moeda(s_res.valor_total) }}</div>
+    <div class="metric-label">Patrimônio em Cotas</div>
+    <div class="metric-sub">total investido ativo</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">👤</div>
+    <div class="metric-value">{{ resumo.total_clients }}</div>
+    <div class="metric-label">Clientes Ativos</div>
+    <div class="metric-sub">cotistas cadastrados</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">📄</div>
+    <div class="metric-value">{{ s_res.ativas }}</div>
+    <div class="metric-label">Cotas Ativas</div>
+    <div class="metric-sub">{{ s_res.pendentes }} pendentes</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">🏛️</div>
+    <div class="metric-value">{{ conds | selectattr('active') | list | length }}</div>
+    <div class="metric-label">Produtos Ativos</div>
+    <div class="metric-sub">condomínios em operação</div>
+  </div>
+</div>
+
+<!-- KPIs Linha 2 -->
+<div class="metrics-grid" style="margin-top:-8px;">
+  <div class="metric-card">
+    <div class="metric-icon">📊</div>
+    <div class="metric-value">{{ s_res.total }}</div>
+    <div class="metric-label">Total de Cotas</div>
+    <div class="metric-sub">todas as situações</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">⏳</div>
+    <div class="metric-value">{{ s_res.pendentes }}</div>
+    <div class="metric-label">Pendentes</div>
+    <div class="metric-sub">aguardando ativação</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">🔒</div>
+    <div class="metric-value">{{ s_res.inativas }}</div>
+    <div class="metric-label">Inativas</div>
+    <div class="metric-sub">encerradas</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">📐</div>
+    <div class="metric-value">{{ ultima_apuracao }}</div>
+    <div class="metric-label">Última Apuração</div>
+    <div class="metric-sub">mês calculado</div>
+  </div>
+</div>
+
+<hr class="divider-gold">
+
+<!-- Produtos -->
+<div class="section-label">🏛️ &nbsp;Produtos de Investimento</div>
+
+<div class="cards-grid">
+  {% for cond in conds %}
+  {% set prod = por_prod.get(cond.code, {}) %}
+  {% set page_map = {'civil': 'produto_civil', 'agro': 'produto_agro', 'saude': 'produto_saude'} %}
+  <div class="product-card">
+    <div class="product-card-header">
+      <div>
+        <div class="product-card-name">{{ cond.name }}</div>
+        <div class="product-card-code">{{ cond.code.upper() }}</div>
+      </div>
+      {% if cond.active %}
+        <span class="product-badge-active">● Ativo</span>
+      {% else %}
+        <span class="badge badge-inactive">● Inativo</span>
+      {% endif %}
+    </div>
+
+    <div class="product-stat">
+      <span class="product-stat-label">Taxa mensal</span>
+      <span class="product-stat-value">{{ formatar_percentual(cond.default_monthly_rate) }}</span>
+    </div>
+    <div class="product-stat">
+      <span class="product-stat-label">Dia de pagamento</span>
+      <span class="product-stat-value">Dia {{ cond.payment_day }}</span>
+    </div>
+    <div class="product-stat">
+      <span class="product-stat-label">Cotas ativas</span>
+      <span class="product-stat-value">{{ prod.get('qty', 0) }}</span>
+    </div>
+
+    {% if cond.code == 'agro' %}
+    <div class="note-box" style="margin-top:10px;">
+      <span style="color:#fbbf24;font-weight:600;">Taxa especial vencimento: </span>
+      <span>3,5% a 4,5%</span>
+    </div>
+    {% endif %}
+
+    <div class="product-value">
+      <div class="product-value-label">Patrimônio ativo</div>
+      <div class="product-value-amount">{{ formatar_moeda(prod.get('total_value', 0)) }}</div>
+    </div>
+
+    <a href="{{ url_for('condominio', code=cond.code) }}" class="btn btn-primary btn-full">
+      Abrir {{ cond.name }} →
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
+<hr class="divider-gold">
+
+<!-- Acesso Rápido -->
+<div class="section-label">⚡ &nbsp;Acesso Rápido</div>
+<div class="quick-grid">
+  <a href="{{ url_for('clientes_lista') }}" class="quick-card">👤 &nbsp;Gestão de Clientes</a>
+  <a href="{{ url_for('cotas_lista') }}" class="quick-card">📄 &nbsp;Todas as Cotas</a>
+  <a href="{{ url_for('apuracao') }}" class="quick-card">📐 &nbsp;Apuração Geral</a>
+  <a href="{{ url_for('backup_page') }}" class="quick-card">💾 &nbsp;Backup</a>
+</div>
+
+{% endblock %}

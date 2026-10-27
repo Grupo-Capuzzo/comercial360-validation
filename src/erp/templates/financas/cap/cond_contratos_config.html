@@ -1,0 +1,40 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Configurações dos contratos{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Configurações dos contratos', 'Valem para os próximos contratos. Os já gerados não mudam (ficam protegidos pelo hash).', 'Contratos e assinaturas') %}
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_contratos', slug=empresa.slug) }}">{{ ic('arrow_back') }} Contratos</a>
+{% endcall %}
+<form method="post" class="fin-form co-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <div class="co-grid">
+    <section class="fin-box">
+      <div class="pe-sec">Link de assinatura</div>
+      <label class="lbl">Endereço público do app</label><input class="inp" type="url" name="url_publica" value="{{ cfg.url_publica }}" placeholder="https://assinar.capuzzo.com.br">
+      <p class="co-dica">Começo do link que vai no e-mail do cliente ({{ cfg.url_publica }}/contratos/assinar/…). Enquanto for 127.0.0.1 o link só abre neste computador.</p>
+      <div class="pe-sec">Empresa (contratada)</div>
+      <div class="fin-2col"><div><label class="lbl">Razão social</label><input class="inp" name="empresa_nome" value="{{ cfg.empresa_nome }}"></div>
+        <div><label class="lbl">CNPJ</label><input class="inp" name="empresa_cnpj" value="{{ cfg.empresa_cnpj }}"></div></div>
+      <label class="lbl">Sede</label><input class="inp" name="empresa_endereco" value="{{ cfg.empresa_endereco }}">
+      <div class="pe-3col"><div><label class="lbl">Assina pela empresa</label><input class="inp" name="empresa_assinante" value="{{ cfg.empresa_assinante }}"></div>
+        <div><label class="lbl">E-mail do signatário</label><input class="inp" name="empresa_email" value="{{ cfg.empresa_email }}"></div>
+        <div><label class="lbl">Local da assinatura</label><input class="inp" name="cidade_assinatura" value="{{ cfg.cidade_assinatura }}"></div></div>
+    </section>
+    <section class="fin-box">
+      <div class="pe-sec">Testemunhas</div>
+      {% for i in (1, 2) %}<div class="fin-2col"><div><label class="lbl">Testemunha {{ i }} — nome</label><input class="inp" name="testemunha{{ i }}_nome" value="{{ cfg['testemunha%d_nome' % i] }}"></div>
+        <div><label class="lbl">CPF</label><input class="inp" name="testemunha{{ i }}_cpf" value="{{ cfg['testemunha%d_cpf' % i] }}"></div></div>{% endfor %}
+      <div class="pe-sec">Comunicação com o cliente</div>
+      <label class="lbl">E-mail de atendimento / cópia dos comprovantes</label><input class="inp" name="email_copia" value="{{ cfg.email_copia }}">
+      <label class="lbl">Dados para depósito (aparecem para o cliente depois que ele assina)</label>
+      <textarea class="inp" name="instrucoes_deposito" rows="4">{{ cfg.instrucoes_deposito }}</textarea>
+      <label class="lbl">Termos de renovação e retirada</label>
+      <select class="inp" name="envio_automatico">
+        <option value="0" {{ 'selected' if cfg.envio_automatico != '1' }}>Gerar e esperar eu conferir e clicar em Enviar (fase de testes)</option>
+        <option value="1" {{ 'selected' if cfg.envio_automatico == '1' }}>Enviar automaticamente ao cliente assim que for gerado</option>
+      </select>
+    </section>
+  </div>
+  <div class="lf-barra co-barra"><span class="co-barra-info"></span><button class="btn-pill fin-btn">{{ ic('check') }} Salvar</button></div>
+</form>
+{% endblock %}

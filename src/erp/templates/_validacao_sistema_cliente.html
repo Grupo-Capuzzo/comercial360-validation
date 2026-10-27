@@ -1,0 +1,144 @@
+{# ═══════════════════════════════════════════════════════════════
+   NÍVEL 2 — DETALHAMENTO DE UM CLIENTE
+   Parcial carregado sob demanda ao clicar no cliente.
+   Mostra primeiro a previsão mês a mês consolidada (com os vencimentos
+   identificados) e depois a quebra por condomínio.
+   Recebe: cli, codes_cliente, meses, inicio_label, agro_special_label
+   ═══════════════════════════════════════════════════════════════ #}
+{% import "_validacao_sistema_macros.html" as vsm with context %}
+
+<div style="padding:16px 18px 20px;">
+
+  {# ── 2.1 · Previsão mês a mês consolidada do cliente ── #}
+  <div class="section-label" style="margin-bottom:8px;">
+    Previsão mês a mês — {{ cli.client_name }}
+    <span style="color:#888;font-weight:400;text-transform:none;letter-spacing:0;">
+      · {{ meses }} meses a partir de {{ inicio_label }} ·
+    </span>
+    <span style="color:#4ade80;font-weight:700;">
+      total no horizonte {{ formatar_moeda(cli.yield_horizon) }}
+    </span>
+  </div>
+
+  <div style="font-size:11px;color:#666;margin-bottom:10px;">
+    Simulação assumindo retirada de cada cota no vencimento. As linhas destacadas
+    em <span style="color:#f0ad4e;">âmbar</span> têm cota vencendo no mês.
+  </div>
+
+  <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:24px;">
+    <thead>
+      <tr style="border-bottom:1px solid rgba(255,255,255,.12);">
+        <th style="padding:7px 8px;text-align:left;color:#777;font-weight:500;">Mês/Ano</th>
+        <th style="padding:7px 8px;text-align:right;color:#777;font-weight:500;">Valor base</th>
+        {% for code in codes_cliente %}
+        <th style="padding:7px 8px;text-align:right;color:#777;font-weight:500;">
+          {{ vsm.cond_icon(code) }}
+          {% if code == 'civil' %}Civil{% elif code == 'agro' %}Agro{% elif code == 'saude' %}Saúde{% else %}{{ code }}{% endif %}
+        </th>
+        {% endfor %}
+        <th style="padding:7px 8px;text-align:right;color:#d4af37;font-weight:600;">Rendimento total</th>
+        <th style="padding:7px 8px;text-align:center;color:#777;font-weight:500;">Cotas ativas</th>
+        <th style="padding:7px 8px;text-align:left;color:#777;font-weight:500;">Vencimentos no mês</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in cli.monthly_totals %}
+      <tr style="border-bottom:1px solid rgba(255,255,255,.05);
+                 {% if m.shares_included == 0 %}opacity:.45;{% endif %}
+                 {% if m.maturing_shares %}background:rgba(240,173,78,.07);{% endif %}">
+
+        <td style="padding:7px 8px;font-weight:700;color:#F5F5F5;">{{ m.month_label }}</td>
+
+        <td style="padding:7px 8px;text-align:right;color:#ccc;">{{ formatar_moeda(m.base_amount) }}</td>
+
+        {% for code in codes_cliente %}
+        {% set v = m.by_condominium.get(code) %}
+        <td style="padding:7px 8px;text-align:right;color:{{ '#ddd' if v else '#3a3a3a' }};">
+          {{ formatar_moeda(v) if v else '—' }}
+        </td>
+        {% endfor %}
+
+        <td style="padding:7px 8px;text-align:right;font-weight:700;font-size:13.5px;
+                   color:{{ '#4ade80' if m.yield_amount > 0 else '#555' }};">
+          {{ formatar_moeda(m.yield_amount) }}
+        </td>
+
+        <td style="padding:7px 8px;text-align:center;color:#aaa;">{{ m.shares_included }}</td>
+
+        <td style="padding:7px 8px;">
+          {% if m.maturing_shares %}
+            {% for c in m.maturing_shares %}{{ vsm.cota_venc_badge(c) }}{% endfor %}
+          {% elif m.shares_included == 0 %}
+            <span class="badge badge-danger">⛔ Fora da base</span>
+          {% else %}
+            <span style="color:#555;">—</span>
+          {% endif %}
+
+          {% if m.ending_shares %}
+            <div style="font-size:10px;color:#f0ad4e;margin-top:3px;line-height:1.5;">
+              ↳ último rendimento da(s) cota(s)
+              {{ m.ending_shares | map(attribute='share_number') | join(', ') }}
+              — sai(em) da base no mês seguinte
+            </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# ── 2.2 · Quebra por condomínio (abre o nível 3) ── #}
+  <div class="section-label" style="margin-bottom:10px;">
+    Condomínios de {{ cli.client_name }} — clique para ver cotas e projeção do condomínio
+  </div>
+
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <thead>
+      <tr style="border-bottom:1px solid rgba(255,255,255,.1);">
+        <th style="padding:7px 8px;width:30px;"></th>
+        <th style="padding:7px 8px;text-align:left;color:#888;font-weight:500;">Condomínio</th>
+        <th style="padding:7px 8px;text-align:right;color:#888;font-weight:500;">Total investido</th>
+        <th style="padding:7px 8px;text-align:center;color:#888;font-weight:500;">Cotas</th>
+        <th style="padding:7px 8px;text-align:center;color:#888;font-weight:500;">Taxa normal</th>
+        <th style="padding:7px 8px;text-align:right;color:#888;font-weight:500;">Rend. mensal atual</th>
+        <th style="padding:7px 8px;text-align:center;color:#888;font-weight:500;">Próx. vencimento</th>
+        <th style="padding:7px 8px;text-align:center;color:#888;font-weight:500;">Último mês c/ rend.</th>
+        <th style="padding:7px 8px;text-align:right;color:#888;font-weight:500;">Rend. 12 meses</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in cli.condominiums %}
+      {% set bid = 'c' ~ cli.client_id ~ '-k' ~ b.condominium_id %}
+      <tr onclick="vsToggle('{{ bid }}')" style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);">
+        <td style="padding:8px;text-align:center;">
+          <span id="arrow-{{ bid }}" style="color:#d4af37;font-size:10px;">▶</span>
+        </td>
+        <td style="padding:8px;">{{ vsm.cond_badge(b.condominium_code, b.condominium_name) }}</td>
+        <td style="padding:8px;text-align:right;font-weight:700;color:#d4af37;">{{ formatar_moeda(b.total_invested) }}</td>
+        <td style="padding:8px;text-align:center;color:#888;">{{ b.shares_count }}</td>
+        <td style="padding:8px;text-align:center;color:#ccc;">{{ b.normal_rate_label }}</td>
+        <td style="padding:8px;text-align:right;color:#4ade80;font-weight:600;">{{ formatar_moeda(b.current_month_yield) }}</td>
+        <td style="padding:8px;text-align:center;color:{{ '#f87171' if b.next_maturity_overdue else '#ccc' }};">
+          {{ vsm.data_br(b.next_maturity_date) }}
+        </td>
+        <td style="padding:8px;text-align:center;color:#a78bfa;">{{ b.last_yield_month_label }}</td>
+        <td style="padding:8px;text-align:right;color:#4ade80;">{{ formatar_moeda(b.yield_12m) }}</td>
+      </tr>
+
+      {# ═══ NÍVEL 3 — carregado sob demanda ═══ #}
+      <tr id="det-{{ bid }}" style="display:none;background:rgba(212,175,55,0.035);">
+        <td colspan="9" style="padding:0;">
+          <div class="vs-lazy" id="lazy-{{ bid }}"
+               data-client-id="{{ cli.client_id }}"
+               data-condominium-id="{{ b.condominium_id }}"
+               data-loaded="0"
+               style="padding:18px;color:#666;font-size:12px;">
+            Carregando detalhamento do condomínio…
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>

@@ -1,0 +1,752 @@
+{% extends "base.html" %}
+{% block title %}Vencimentos e Retiradas — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">⏰</div>
+  <div class="page-header-title">Vencimentos e Retiradas</div>
+  <div class="page-header-sub">Cotas vencendo, vencidas, em retirada e prontas para inativar</div>
+</div>
+
+<!-- KPIs -->
+<div class="metrics-grid" style="grid-template-columns: repeat(4,1fr);">
+  <div class="metric-card">
+    <div class="metric-value" style="color:#fbbf24;">{{ vencendo_mes | length }}</div>
+    <div class="metric-label">Vencendo em {{ '%02d' % mes }}/{{ ano }}</div>
+    <div style="font-size:12px;color:#d4af37;font-weight:600;margin-top:2px;">
+      {{ formatar_moeda(total_vencendo) }} · {{ vencendo_por_cliente | length }} cliente(s)
+    </div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#f87171;">{{ vencidas_ativas | length }}</div>
+    <div class="metric-label">Vencidas ainda ativas</div>
+    <div style="font-size:12px;color:#d4af37;font-weight:600;margin-top:2px;">
+      {{ formatar_moeda(total_vencidas) }} · {{ vencidas_por_cliente | length }} cliente(s)
+    </div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#60a5fa;">{{ em_retirada | length }}</div>
+    <div class="metric-label">Em retirada</div>
+    <div style="font-size:12px;color:#d4af37;font-weight:600;margin-top:2px;">
+      {{ formatar_moeda(total_retirada) }}
+    </div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#a78bfa;">{{ prontas_inativar | length }}</div>
+    <div class="metric-label">Prontas para inativar</div>
+  </div>
+</div>
+
+<!-- Filtros -->
+<form method="get" class="toolbar">
+  <div class="toolbar-left">
+    <div class="search-wrap">
+      <input type="text" name="q" value="{{ q }}"
+             placeholder="Buscar por cliente, CPF/CNPJ ou nº da cota…"
+             class="form-control" style="width:280px;">
+    </div>
+    <select name="produto" class="form-control form-control-sm" style="width:160px;">
+      <option value="">Todos os produtos</option>
+      {% for c in conds %}
+      <option value="{{ c.code }}" {{ 'selected' if produto_filtro == c.code else '' }}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="mes" class="form-control form-control-sm" style="width:110px;">
+      {% for m in range(1, 13) %}
+      <option value="{{ m }}" {{ 'selected' if mes == m else '' }}>{{ '%02d' % m }}</option>
+      {% endfor %}
+    </select>
+    <select name="ano" class="form-control form-control-sm" style="width:110px;">
+      {% for a in range(ano - 3, ano + 4) %}
+      <option value="{{ a }}" {{ 'selected' if ano == a else '' }}>{{ a }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+    {% if q or produto_filtro %}
+      <a href="{{ url_for('condominios_vencimentos') }}" class="btn btn-secondary btn-sm">Limpar</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- ═══ Barra de ações em lote ═══ -->
+<div class="bulk-toolbar" id="bulk-toolbar">
+  <label class="bulk-toolbar-select-all">
+    <input type="checkbox" id="select-all-cotas" class="select-all">
+    <span>Selecionar todos</span>
+  </label>
+  <span class="bulk-toolbar-count" id="bulk-selected-count">0 cota(s) selecionada(s)</span>
+  <div class="bulk-toolbar-actions">
+    <button type="button" class="btn btn-primary btn-sm" id="btn-renovar-lote" disabled
+            onclick="openRenovarLoteModal()">🔄 Renovar selecionadas</button>
+    <button type="button" class="btn btn-danger btn-sm" id="btn-retirada-lote" disabled
+            onclick="openRetiradaLoteModal()">📤 Marcar retirada selecionadas</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="btn-email-lote" disabled
+            onclick="openEmailPreviewModal()">✉️ Preparar e-mail de renovação</button>
+  </div>
+</div>
+
+{% macro produto_badge(cota) %}
+  {% if cota.condominium_code == 'civil' %}
+    <span class="badge badge-civil">🏗️ Civil</span>
+  {% elif cota.condominium_code == 'agro' %}
+    <span class="badge badge-agro">🌾 Agro</span>
+  {% else %}
+    <span class="badge badge-saude">🏥 Saúde</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro btn_renovar(cota) %}
+  <button type="button" class="btn btn-secondary btn-sm"
+          title="Renovar escolhendo as datas manualmente"
+          onclick="openRenovarModal(this)"
+          data-share-id="{{ cota.id }}"
+          data-share-num="{{ cota.share_number | e }}"
+          data-client-name="{{ cota.client_name | e }}"
+          data-maturity-date="{{ cota.maturity_parsed or '' }}"
+          data-acquisition-date="{{ cota.acquisition_date or '' }}">
+    ✏️
+  </button>
+{% endmacro %}
+
+{% macro btn_retirada(cota) %}
+  <button type="button" class="btn btn-secondary btn-sm"
+          title="Marcar retirada escolhendo as datas manualmente"
+          onclick="openRetiradaModal(this)"
+          data-share-id="{{ cota.id }}"
+          data-share-num="{{ cota.share_number | e }}"
+          data-client-name="{{ cota.client_name | e }}"
+          data-cond-code="{{ cota.condominium_code }}"
+          data-maturity-date="{{ cota.maturity_parsed or '' }}">
+    ✏️
+  </button>
+{% endmacro %}
+
+{# ── Ação direta: "Vai renovar" — já grava vencimento e última renovação ── #}
+{% macro btn_vai_renovar(cota) %}
+  <form method="post" action="{{ url_for('cotas_renovar_rapido', sid=cota.id) }}" style="display:inline;">
+    <input type="hidden" name="referrer" value="{{ request.url }}">
+    <button type="submit" class="btn btn-primary btn-sm"
+            data-confirm="Renovar agora a cota {{ cota.share_number | e }} — {{ cota.client_name | e }}?&#10;&#10;Última renovação: {{ cota.sug_renovacao_data }}&#10;Novo vencimento: {{ cota.sug_novo_vencimento }}&#10;&#10;A base da cota será atualizada e o log de auditoria registrado.">
+      🔄 Vai renovar
+    </button>
+  </form>
+{% endmacro %}
+
+{# ── Ação direta: "Vai retirar" — marca a retirada com o prazo do produto ── #}
+{% macro btn_vai_retirar(cota) %}
+  <form method="post" action="{{ url_for('cotas_retirar_rapido', sid=cota.id) }}" style="display:inline;">
+    <input type="hidden" name="referrer" value="{{ request.url }}">
+    <button type="submit" class="btn btn-danger btn-sm"
+            data-confirm="Marcar retirada da cota {{ cota.share_number | e }} — {{ cota.client_name | e }}?&#10;&#10;Pedido: {{ cota.sug_retirada_pedido }}&#10;Retirada efetiva: {{ cota.sug_retirada_efetiva }} (vencimento + {{ cota.sug_retirada_dias }} dias)&#10;&#10;A cota continua ativa e entra na apuração até a data efetiva.">
+      📤 Vai retirar
+    </button>
+  </form>
+{% endmacro %}
+
+{# ═══ Bloco consolidado por cliente, com detalhamento por cota ═══ #}
+{% macro bloco_por_cliente(grupos, prefix, cor, total) %}
+<div class="table-wrap" style="margin-bottom:8px;">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:36px;"></th>
+        <th>Cliente</th>
+        <th>Produto</th>
+        <th>CPF/CNPJ</th>
+        <th style="text-align:center;">Cotas</th>
+        <th style="text-align:right;">Valor total</th>
+        <th style="text-align:center;">Detalhes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in grupos %}
+      {% set gid = prefix ~ '-' ~ loop.index0 %}
+      <tr>
+        <td>
+          <input type="checkbox" class="group-select-all" data-group="{{ gid }}"
+                 title="Selecionar todas as cotas deste cliente">
+        </td>
+        <td>
+          <a href="{{ url_for('clientes_detalhe', cid=g.client_id) }}"
+             style="color:#F5F5F5;font-weight:600;">{{ g.client_name }}</a>
+        </td>
+        <td>{{ produto_badge(g) }}</td>
+        <td class="text-mono text-dim">{{ g.client_cpf }}</td>
+        <td style="text-align:center;color:#888;">{{ g.qty_cotas }}</td>
+        <td style="text-align:right;font-weight:700;color:#d4af37;font-size:16px;">
+          {{ formatar_moeda(g.total_value) }}
+        </td>
+        <td style="text-align:center;">
+          <button type="button" class="btn btn-secondary btn-sm"
+                  id="btn-{{ gid }}" onclick="toggleCotasCliente('{{ gid }}')">▶ Ver cotas</button>
+        </td>
+      </tr>
+      <tr id="detalhe-{{ gid }}" style="display:none;background:rgba(0,0,0,0.25);">
+        <td colspan="7" style="padding:0;">
+          <div style="padding:12px 16px 16px;" data-group-body="{{ gid }}">
+            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">
+              Cotas de {{ g.client_name }} · {{ g.condominium_name }}
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+                  <th style="padding:6px 8px;width:32px;"></th>
+                  <th style="padding:6px 8px;text-align:left;color:#888;font-weight:500;">Nº Cota</th>
+                  <th style="padding:6px 8px;text-align:right;color:#888;font-weight:500;">Valor</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Aquisição</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Vencimento</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Ú. Renovação</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Se renovar</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Se retirar</th>
+                  <th style="padding:6px 8px;text-align:right;color:#888;font-weight:500;">Decisão</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c in g.cotas %}
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                  <td style="padding:6px 8px;">
+                    <input type="checkbox" class="row-select" data-group="{{ gid }}"
+                           data-share-id="{{ c.id }}"
+                           data-cond-code="{{ c.condominium_code }}"
+                           data-client-name="{{ c.client_name | e }}">
+                  </td>
+                  <td style="padding:6px 8px;font-weight:700;color:#d4af37;font-size:15px;">{{ c.share_number }}</td>
+                  <td style="padding:6px 8px;text-align:right;color:#ccc;font-weight:600;">{{ formatar_moeda(c.share_value) }}</td>
+                  <td style="padding:6px 8px;color:#888;">{{ c.acquisition_date or '—' }}</td>
+                  <td style="padding:6px 8px;color:{{ cor }};font-weight:600;">{{ c.maturity_date or '—' }}</td>
+                  <td style="padding:6px 8px;color:#888;">{{ c.last_renewal_date or '—' }}</td>
+                  <td style="padding:6px 8px;color:#4ade80;font-size:12px;">
+                    novo venc.<br>{{ c.sug_novo_vencimento }}
+                  </td>
+                  <td style="padding:6px 8px;color:#60a5fa;font-size:12px;">
+                    efetiva<br>{{ c.sug_retirada_efetiva }}
+                  </td>
+                  <td style="padding:6px 8px;text-align:right;white-space:nowrap;">
+                    {{ btn_vai_renovar(c) }}{{ btn_renovar(c) }}
+                    <span style="display:inline-block;width:6px;"></span>
+                    {{ btn_vai_retirar(c) }}{{ btn_retirada(c) }}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr style="border-top:1px solid rgba(212,175,55,0.3);">
+                  <td colspan="2" style="padding:8px;color:#888;font-weight:600;">Total {{ g.client_name }}</td>
+                  <td style="padding:8px;text-align:right;font-weight:700;color:#d4af37;">{{ formatar_moeda(g.total_value) }}</td>
+                  <td colspan="6"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="border-top:2px solid rgba(212,175,55,0.3);">
+        <td colspan="4" style="padding:10px 12px;font-weight:600;color:#d4af37;">TOTAL</td>
+        <td style="padding:10px 12px;text-align:center;color:#aaa;font-weight:600;">
+          {{ grupos | sum(attribute='qty_cotas') }}
+        </td>
+        <td style="padding:10px 12px;text-align:right;font-weight:700;color:#d4af37;font-size:17px;">
+          {{ formatar_moeda(total) }}
+        </td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+<div style="font-size:11px;color:#555;margin-bottom:24px;text-align:right;">
+  {{ grupos | length }} cliente(s) · {{ grupos | sum(attribute='qty_cotas') }} cota(s)
+</div>
+{% endmacro %}
+
+<!-- ═══ Vencendo neste mês — consolidado por cliente ═══ -->
+<div class="section-label" style="color:#fbbf24;">
+  ⏰ Vencendo em {{ '%02d' % mes }}/{{ ano }} —
+  {{ vencendo_por_cliente | length }} cliente(s) · {{ vencendo_mes | length }} cota(s) ·
+  <span style="color:#d4af37;">{{ formatar_moeda(total_vencendo) }}</span>
+</div>
+{% if vencendo_por_cliente %}
+<div class="note-box" style="margin-bottom:12px;">
+  <span style="color:#fbbf24;font-weight:600;">ℹ️ </span>
+  Clique em <strong>Ver cotas</strong> para abrir o detalhamento do cliente e decidir cota por cota.
+  <strong>🔄 Vai renovar</strong> já grava a nova data de vencimento e a última renovação da cota.
+  <strong>📤 Vai retirar</strong> registra o pedido de retirada (a cota segue ativa até a data efetiva).
+  Use <strong>✏️</strong> para informar datas diferentes das sugeridas.
+</div>
+{{ bloco_por_cliente(vencendo_por_cliente, 'venc', '#fbbf24', total_vencendo) }}
+{% else %}
+<div class="text-dim" style="font-size:13px;margin-bottom:24px;">Nenhuma cota vencendo no mês selecionado.</div>
+{% endif %}
+
+<!-- ═══ Vencidas ainda ativas — consolidado por cliente ═══ -->
+<div class="section-label" style="color:#f87171;">
+  ⚠️ Vencidas ainda ativas —
+  {{ vencidas_por_cliente | length }} cliente(s) · {{ vencidas_ativas | length }} cota(s) ·
+  <span style="color:#d4af37;">{{ formatar_moeda(total_vencidas) }}</span>
+</div>
+{% if vencidas_por_cliente %}
+{{ bloco_por_cliente(vencidas_por_cliente, 'venci', '#f87171', total_vencidas) }}
+{% else %}
+<div class="text-dim" style="font-size:13px;margin-bottom:24px;">Nenhuma cota vencida ainda ativa.</div>
+{% endif %}
+
+<!-- ═══ Em retirada ═══ -->
+<div class="section-label" style="color:#60a5fa;">📤 Em retirada ({{ em_retirada | length }})</div>
+{% if em_retirada %}
+<div class="note-box" style="margin-bottom:12px;">
+  <span style="color:#60a5fa;font-weight:600;">ℹ️ </span>
+  Cotas em retirada continuam <strong>ativas</strong> e entram na apuração até a data efetiva.
+</div>
+<div class="table-wrap" style="margin-bottom:24px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Nº</th><th>Produto</th><th>Cotista</th>
+        <th>Valor</th><th>Vencimento</th><th>Pedido</th><th>Retirada efetiva</th>
+        <th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cota in em_retirada %}
+      <tr>
+        <td style="font-size:18px;font-weight:700;color:#d4af37;">
+          {{ cota.share_number }}
+          <span class="badge badge-retirada" style="font-size:10px;vertical-align:middle;">📤 Em retirada</span>
+        </td>
+        <td>{{ produto_badge(cota) }}</td>
+        <td><a href="{{ url_for('clientes_detalhe', cid=cota.client_id) }}" style="color:#F5F5F5;">{{ cota.client_name }}</a></td>
+        <td style="font-weight:600;">{{ formatar_moeda(cota.share_value) }}</td>
+        <td class="text-dim">{{ cota.maturity_date or '—' }}</td>
+        <td class="text-dim">{{ cota.withdrawal_request_date or '—' }}</td>
+        <td style="color:#60a5fa;font-weight:600;">{{ cota.withdrawal_effective_date or '—' }}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <button type="button" class="btn btn-secondary btn-sm"
+                  onclick="openEditarDataModal(this)"
+                  data-share-id="{{ cota.id }}"
+                  data-share-num="{{ cota.share_number | e }}"
+                  data-effective-date="{{ cota.withdrawal_effective_date or '' }}">
+            ✏️ Data
+          </button>
+          <form method="post" action="{{ url_for('cotas_cancelar_retirada', sid=cota.id) }}" style="display:inline;">
+            <input type="hidden" name="referrer" value="{{ request.url }}">
+            <button type="submit" class="btn btn-secondary btn-sm"
+                    data-confirm="Cancelar o pedido de retirada da cota {{ cota.share_number }}?">
+              Cancelar retirada
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="text-dim" style="font-size:13px;margin-bottom:24px;">Nenhuma cota em retirada.</div>
+{% endif %}
+
+<!-- ═══ Prontas para inativar ═══ -->
+<div class="section-label" style="color:#a78bfa;">✅ Prontas para inativar ({{ prontas_inativar | length }})</div>
+{% if prontas_inativar %}
+<div class="note-box" style="margin-bottom:12px;">
+  <span style="color:#a78bfa;font-weight:600;">ℹ️ </span>
+  Cotas com retirada solicitada e data efetiva até hoje ({{ hoje }}).
+  Ao inativar, a data de retirada da cota será a data efetiva.
+</div>
+<div class="table-wrap" style="margin-bottom:24px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Nº</th><th>Produto</th><th>Cotista</th>
+        <th>Valor</th><th>Pedido</th><th>Retirada efetiva</th>
+        <th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cota in prontas_inativar %}
+      <tr>
+        <td style="font-size:18px;font-weight:700;color:#d4af37;">{{ cota.share_number }}</td>
+        <td>{{ produto_badge(cota) }}</td>
+        <td><a href="{{ url_for('clientes_detalhe', cid=cota.client_id) }}" style="color:#F5F5F5;">{{ cota.client_name }}</a></td>
+        <td style="font-weight:600;">{{ formatar_moeda(cota.share_value) }}</td>
+        <td class="text-dim">{{ cota.withdrawal_request_date or '—' }}</td>
+        <td style="color:#a78bfa;font-weight:600;">{{ cota.withdrawal_effective_date or '—' }}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <form method="post" action="{{ url_for('cotas_inativar_retirada', sid=cota.id) }}" style="display:inline;">
+            <input type="hidden" name="referrer" value="{{ request.url }}">
+            <button type="submit" class="btn btn-danger btn-sm"
+                    data-confirm="Inativar a cota {{ cota.share_number }} com retirada em {{ cota.withdrawal_effective_date }}?">
+              ⏸️ Inativar retirada
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="text-dim" style="font-size:13px;margin-bottom:24px;">Nenhuma cota pronta para inativar.</div>
+{% endif %}
+
+<!-- ═══ Resumo para comunicação aos investidores ═══ -->
+<div class="section-label" style="color:#d4af37;">✉️ Resumo para comunicação aos investidores</div>
+<div class="card" style="margin-bottom:24px;">
+  <div class="note-box" style="margin-bottom:14px;">
+    <span style="color:#d4af37;font-weight:600;">ℹ️ </span>
+    Consolidado <strong>por cliente</strong> (não por cota) das cotas vencendo em
+    {{ '%02d' % mes }}/{{ ano }}{{ ' — ' + produto_filtro if produto_filtro else '' }}.
+    Preparado para o futuro envio via Gmail — <strong>nenhum e-mail é enviado aqui</strong>.
+  </div>
+  {% if resumo_comunicacao %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Cliente</th><th>E-mail</th><th>Condomínio</th>
+          <th>Quantidade de cotas</th><th>Valor total vencendo</th>
+          <th>Datas de vencimento</th><th>Status</th>
+          <th style="text-align:right;">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in resumo_comunicacao %}
+        <tr>
+          <td><a href="{{ url_for('clientes_detalhe', cid=item.client_id) }}" style="color:#F5F5F5;">{{ item.client_name }}</a></td>
+          <td class="text-mono text-dim">{{ item.email or '—' }}</td>
+          <td>{{ item.condominium_name }}</td>
+          <td>{{ item.total_shares }}</td>
+          <td style="font-weight:600;">{{ formatar_moeda(item.total_value) }}</td>
+          <td class="text-dim">{{ item.maturity_dates | join(', ') }}</td>
+          <td>
+            {% if item.status_email == 'pronto' %}
+              <span class="badge badge-active">✓ Pronto</span>
+            {% else %}
+              <span class="badge badge-inactive">✗ Sem e-mail</span>
+            {% endif %}
+          </td>
+          <td style="text-align:right;white-space:nowrap;">
+            <button type="button" class="btn btn-secondary btn-sm"
+                    onclick='openEmailPreviewModal({{ item.share_ids | tojson }})'>
+              ✉️ Ver rascunho
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-dim" style="font-size:13px;">Nenhuma cota vencendo no mês selecionado para comunicação.</div>
+  {% endif %}
+</div>
+
+<!-- Modal: Renovar Cota -->
+<div class="modal-overlay" id="modal-renovar-cota" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="color:#4ade80;">🔄 Renovar Cota</div>
+    <div style="margin-bottom:16px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.8;">
+        <tr>
+          <td style="color:#888;width:130px;">Cota nº</td>
+          <td style="color:#d4af37;font-weight:700;font-size:16px;" id="modal-renovar-share-num"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Cliente</td>
+          <td style="color:#ccc;" id="modal-renovar-client"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Vencimento atual</td>
+          <td style="color:#ccc;" id="modal-renovar-mat"></td>
+        </tr>
+      </table>
+    </div>
+    <form id="modal-renovar-form" method="post" action="">
+      <input type="hidden" name="referrer" id="modal-renovar-referrer" value="">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Data da renovação <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="renewal_date" id="modal-renovar-renewal-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Novo vencimento <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="new_maturity_date" id="modal-renovar-maturity-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:20px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Observação <span style="color:#666;">(opcional)</span>
+        </label>
+        <input type="text" name="user_note" id="modal-renovar-user-note"
+               class="form-control" placeholder="Motivo/detalhes da renovação…" maxlength="200">
+      </div>
+      <div class="page-actions" style="margin-top:0;padding-top:0;">
+        <button type="button" onclick="closeModal('modal-renovar-cota')"
+                class="btn btn-secondary">Cancelar</button>
+        <button type="submit" class="btn btn-primary">🔄 Confirmar renovação</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Marcar Retirada -->
+<div class="modal-overlay" id="modal-retirada-cota" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="color:#60a5fa;">📤 Marcar Retirada</div>
+    <div style="margin-bottom:12px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.8;">
+        <tr>
+          <td style="color:#888;width:130px;">Cota nº</td>
+          <td style="color:#d4af37;font-weight:700;font-size:16px;" id="modal-retirada-share-num"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Cliente</td>
+          <td style="color:#ccc;" id="modal-retirada-client"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Vencimento</td>
+          <td style="color:#ccc;" id="modal-retirada-mat"></td>
+        </tr>
+      </table>
+    </div>
+    <div class="note-box" style="margin-bottom:14px;">
+      <span style="color:#60a5fa;font-weight:600;">ℹ️ </span>
+      A cota permanece <strong>ativa</strong> e entra na apuração até a data efetiva da retirada.
+      <span id="modal-retirada-sugestao-txt" style="display:block;color:#888;margin-top:4px;"></span>
+    </div>
+    <form id="modal-retirada-form" method="post" action="">
+      <input type="hidden" name="referrer" id="modal-retirada-referrer" value="">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Data do pedido <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="withdrawal_request_date" id="modal-retirada-request-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Data efetiva da retirada <span style="color:#f87171;">*</span>
+          <span style="color:#666;font-weight:400;">(sugerida — pode editar)</span>
+        </label>
+        <input type="date" name="withdrawal_effective_date" id="modal-retirada-effective-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:20px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Observação <span style="color:#666;">(opcional)</span>
+        </label>
+        <input type="text" name="withdrawal_notes" id="modal-retirada-notes"
+               class="form-control" placeholder="Detalhes do pedido de retirada…" maxlength="200">
+      </div>
+      <div class="page-actions" style="margin-top:0;padding-top:0;">
+        <button type="button" onclick="closeModal('modal-retirada-cota')"
+                class="btn btn-secondary">Cancelar</button>
+        <button type="submit" class="btn btn-danger">📤 Confirmar retirada</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Editar data efetiva da retirada -->
+<div class="modal-overlay" id="modal-editar-data-retirada" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="color:#60a5fa;">✏️ Alterar data efetiva</div>
+    <p style="color:#ccc;margin-bottom:14px;">
+      Cota <strong id="modal-editar-data-share-num" style="color:#d4af37;"></strong>
+    </p>
+    <form id="modal-editar-data-form" method="post" action="">
+      <input type="hidden" name="referrer" id="modal-editar-data-referrer" value="">
+      <div class="form-group" style="margin-bottom:20px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Nova data efetiva <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="withdrawal_effective_date" id="modal-editar-data-input"
+               class="form-control" required>
+      </div>
+      <div class="page-actions" style="margin-top:0;padding-top:0;">
+        <button type="button" onclick="closeModal('modal-editar-data-retirada')"
+                class="btn btn-secondary">Cancelar</button>
+        <button type="submit" class="btn btn-primary">✓ Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Renovar em lote -->
+<div class="modal-overlay" id="modal-renovar-lote" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="color:#4ade80;">🔄 Renovar cotas selecionadas</div>
+    <p class="text-dim" style="font-size:13px;margin-bottom:16px;">
+      <strong id="lote-renovar-count">0</strong> cota(s) selecionada(s) serão renovadas com os
+      mesmos dados abaixo.
+    </p>
+    <form id="modal-renovar-lote-form" method="post" action="{{ url_for('cotas_renovar_lote') }}">
+      <input type="hidden" name="referrer" value="{{ request.url }}">
+      <div id="lote-renovar-share-ids"></div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Nova data de renovação <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="renewal_date" id="lote-renovar-renewal-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Nova data de vencimento <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="new_maturity_date" id="lote-renovar-maturity-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:20px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Observação <span style="color:#666;">(opcional)</span>
+        </label>
+        <input type="text" name="notes" id="lote-renovar-notes"
+               class="form-control" placeholder="Motivo/detalhes da renovação em lote…" maxlength="200">
+      </div>
+      <div class="page-actions" style="margin-top:0;padding-top:0;">
+        <button type="button" onclick="closeModal('modal-renovar-lote')"
+                class="btn btn-secondary">Cancelar</button>
+        <button type="submit" class="btn btn-primary">🔄 Confirmar renovação em lote</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Marcar retirada em lote -->
+<div class="modal-overlay" id="modal-retirada-lote" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="color:#60a5fa;">📤 Marcar retirada em lote</div>
+    <p class="text-dim" style="font-size:13px;margin-bottom:12px;">
+      <strong id="lote-retirada-count">0</strong> cota(s) selecionada(s).
+    </p>
+    <div class="note-box" id="lote-retirada-warning" style="display:none;margin-bottom:14px;color:#fbbf24;border-color:rgba(251,191,36,0.25);">
+      ⚠️ Você selecionou cotas de produtos diferentes. A data efetiva será aplicada manualmente para todas.
+    </div>
+    <form id="modal-retirada-lote-form" method="post" action="{{ url_for('cotas_marcar_retirada_lote') }}">
+      <input type="hidden" name="referrer" value="{{ request.url }}">
+      <div id="lote-retirada-share-ids"></div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Data do pedido <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="request_date" id="lote-retirada-request-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Data efetiva da retirada (única para todas) <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="effective_date" id="lote-retirada-effective-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:20px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Observação <span style="color:#666;">(opcional)</span>
+        </label>
+        <input type="text" name="notes" id="lote-retirada-notes"
+               class="form-control" placeholder="Detalhes do pedido de retirada em lote…" maxlength="200">
+      </div>
+      <div class="page-actions" style="margin-top:0;padding-top:0;">
+        <button type="button" onclick="closeModal('modal-retirada-lote')"
+                class="btn btn-secondary">Cancelar</button>
+        <button type="submit" class="btn btn-danger">📤 Confirmar retirada em lote</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Preview de e-mail de renovação (por cliente) -->
+<div class="modal-overlay" id="modal-email-preview" style="display:none;">
+  <div class="modal modal-wide">
+    <div class="modal-title" style="color:#d4af37;">✉️ Preparar e-mail de renovação</div>
+    <div class="note-box" style="margin-bottom:14px;">
+      <span style="color:#d4af37;font-weight:600;">ℹ️ </span>
+      Por cliente, há duas opções: <strong>"Criar rascunho no Gmail"</strong> (padrão, mais seguro —
+      salva o rascunho na sua própria caixa de e-mail para revisão; o envio continua manual, pelo Gmail)
+      ou <strong>"Enviar e-mail agora"</strong> (envia imediatamente, com confirmação obrigatória antes
+      do envio). Se o Gmail ainda não estiver autenticado, configure
+      em <a href="{{ url_for('configuracoes') }}" style="color:#d4af37;">Configurações</a>.
+    </div>
+    <div id="email-preview-loading" class="text-dim" style="font-size:13px;">Carregando…</div>
+    <div id="email-preview-list"></div>
+    <div class="page-actions" style="margin-top:16px;padding-top:16px;">
+      <button type="button" onclick="closeModal('modal-email-preview')"
+              class="btn btn-secondary">Fechar</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* Dias sugeridos por produto (Civil +3 · Agro/Saúde +30) */
+  window.WITHDRAWAL_SUGGESTION_DAYS = {{ withdrawal_days | tojson }};
+  window.HOJE_ISO = "{{ hoje }}";
+  window.REF_MES = {{ mes | tojson }};
+  window.REF_ANO = {{ ano | tojson }};
+
+  /* ── Abrir/fechar o detalhamento de cotas de um cliente ── */
+  function toggleCotasCliente(gid) {
+    var row = document.getElementById('detalhe-' + gid);
+    var btn = document.getElementById('btn-' + gid);
+    if (!row) return;
+    var abrir = (row.style.display === 'none' || row.style.display === '');
+    row.style.display = abrir ? 'table-row' : 'none';
+    if (btn) btn.textContent = abrir ? '▼ Ocultar cotas' : '▶ Ver cotas';
+  }
+  window.toggleCotasCliente = toggleCotasCliente;
+
+  /* ── Checkbox do cliente marca/desmarca as cotas dele ── */
+  (function () {
+    function cotasDoGrupo(gid) {
+      return Array.from(document.querySelectorAll('.row-select[data-group="' + gid + '"]'));
+    }
+
+    document.addEventListener('change', function (e) {
+      var el = e.target;
+      if (!el || !el.classList) return;
+
+      /* Master do cliente → replica nas cotas */
+      if (el.classList.contains('group-select-all')) {
+        var gid = el.dataset.group;
+        cotasDoGrupo(gid).forEach(function (c) {
+          if (c.checked !== el.checked) {
+            c.checked = el.checked;
+            c.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+        return;
+      }
+
+      /* Cota → atualiza o master do cliente */
+      if (el.classList.contains('row-select') && el.dataset.group) {
+        var master = document.querySelector('.group-select-all[data-group="' + el.dataset.group + '"]');
+        if (!master) return;
+        var cotas = cotasDoGrupo(el.dataset.group);
+        var marcadas = cotas.filter(function (c) { return c.checked; }).length;
+        master.checked = marcadas === cotas.length && cotas.length > 0;
+        master.indeterminate = marcadas > 0 && marcadas < cotas.length;
+      }
+    });
+
+    /* "Selecionar todos" da barra de ações → sincroniza os masters de cliente */
+    var geral = document.getElementById('select-all-cotas');
+    if (geral) {
+      geral.addEventListener('change', function () {
+        document.querySelectorAll('.group-select-all').forEach(function (m) {
+          m.checked = geral.checked;
+          m.indeterminate = false;
+        });
+      });
+    }
+  })();
+</script>
+{% endblock %}

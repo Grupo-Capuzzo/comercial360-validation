@@ -1,0 +1,83 @@
+{% extends "operacao/_layout.html" %}
+{% block title %}Chamados · {{ empresa.nome }}{% endblock %}
+{% block op_content %}
+<div class="op-head">
+  <div>
+    <div class="eyebrow-line">Central de chamados</div>
+    <h1>Chamados</h1>
+    <p>Solicitações feitas à {{ empresa.nome }}, por número, setor e situação.</p>
+  </div>
+  <button class="btn-pill" type="button" onclick="document.getElementById('dlg-chamado').showModal()">{{ oic('add') }} Novo chamado</button>
+</div>
+
+<div class="op-kpis">
+  <div class="op-kpi {{ 'risco' if totais.get('aberto') }}"><b>{{ totais.get('aberto', 0) }}</b><span>Em aberto</span></div>
+  <div class="op-kpi"><b>{{ totais.get('atendimento', 0) }}</b><span>Em atendimento</span></div>
+  <div class="op-kpi"><b>{{ totais.get('concluido', 0) }}</b><span>Concluídos</span></div>
+  <div class="op-kpi dark"><b>{{ totais.values()|sum }}</b><span>Total</span></div>
+</div>
+
+<form class="op-toolbar" method="get">
+  <input type="hidden" name="status" value="{{ st }}">
+  <div class="chips">
+    {% for k, rot in [('abertos','Pendentes'),('aberto','Em aberto'),('atendimento','Em atendimento'),('concluido','Concluídos'),('todos','Todos')] %}
+      <a class="chip {{ 'on' if st == k }}" href="{{ url_for('operacao.chamados', slug=empresa.slug, status=k, setor=setor or None, q=busca or None) }}">{{ rot }}</a>
+    {% endfor %}
+  </div>
+  <div class="op-filtros">
+    <select class="inp" name="setor" onchange="this.form.submit()" aria-label="Setor">
+      <option value="">Todos os setores</option>
+      {% for s in SETORES %}<option {{ 'selected' if setor == s }}>{{ s }}</option>{% endfor %}
+    </select>
+    <label class="search">{{ ic('search') }}<input type="search" name="q" value="{{ busca }}" placeholder="Nº, assunto ou solicitante…"></label>
+  </div>
+</form>
+
+<div class="op-tabela-wrap">
+  <table class="op-tabela">
+    <thead><tr>
+      <th>Nº</th><th>Abertura</th><th>Setor</th><th>Assunto</th><th>Status</th><th>Última movimentação</th>
+    </tr></thead>
+    <tbody>
+    {% for c in lista %}
+      <tr onclick="location.href='{{ url_for('operacao.chamado', slug=empresa.slug, cid=c.id) }}'">
+        <td class="op-num"><a href="{{ url_for('operacao.chamado', slug=empresa.slug, cid=c.id) }}">{{ numero_chamado(c.id) }}</a></td>
+        <td data-rot="Abertura">{{ data_hora_br(c.aberto_em) }}</td>
+        <td data-rot="Setor">{{ c.setor }}</td>
+        <td data-rot="Assunto" class="op-assunto"><b>{{ c.assunto }}</b><small>{{ c.solicitante }}{% if c.resp_nome %} · com {{ c.resp_nome }}{% endif %}</small></td>
+        <td data-rot="Status"><span class="op-status st-{{ c.status }}">{{ STATUS_CHAMADO[c.status] }}</span></td>
+        <td data-rot="Últ. movimentação">{{ data_hora_br(c.ultima_mov_em) }}</td>
+      </tr>
+    {% else %}
+      <tr class="op-sem"><td colspan="6">Nenhum chamado {{ 'pendente' if st == 'abertos' else 'encontrado' }}.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<dialog id="dlg-chamado" class="dlg op-dlg">
+  <form method="post" action="{{ url_for('operacao.chamado_novo', slug=empresa.slug) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="dlg-head"><h3>Novo chamado</h3>
+      <button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
+    <div class="op-2col">
+      <div>
+        <label class="lbl" for="c-setor">Setor responsável</label>
+        <select class="inp" id="c-setor" name="setor" required>
+          <option value="">Escolha…</option>
+          {% for s in SETORES %}<option>{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="lbl" for="c-sol">Solicitante</label>
+        <input class="inp" id="c-sol" name="solicitante" maxlength="160" placeholder="{{ portal_user.nome }}">
+      </div>
+    </div>
+    <label class="lbl" for="c-assunto">Assunto</label>
+    <input class="inp" id="c-assunto" name="assunto" maxlength="200" required placeholder="Resumo da solicitação">
+    <label class="lbl" for="c-desc">Descrição</label>
+    <textarea class="inp" id="c-desc" name="descricao" rows="4" placeholder="Explique o que precisa"></textarea>
+    <button class="btn-pill" type="submit">Abrir chamado</button>
+  </form>
+</dialog>
+{% endblock %}

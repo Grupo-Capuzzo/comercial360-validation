@@ -1,0 +1,123 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}{{ 'Novo cotista' if modo == 'novo' else 'Editar cotista' }}{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Novo cotista' if modo == 'novo' else cli.full_name, 'Dados usados nas cotas, nos contratos e nos pagamentos (Pix / remessa bancária).') %}
+  <a class="btn-pill outline fin-btn" href="{{ voltar or (url_for('financas.cond_cotista', slug=empresa.slug, cid=cli.id) if cli.id else url_for('financas.cond_cotistas', slug=empresa.slug)) }}">{{ ic('arrow_back') }} Voltar</a>
+{% endcall %}
+
+<form method="post" class="fin-form co-form" id="f-cli" autocomplete="off">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ voltar }}">
+  <div class="co-grid">
+    <section class="fin-box">
+      <div class="pe-sec">Identificação</div>
+      <div class="pe-doc">
+        <div><label class="lbl">CPF / CNPJ *</label>
+          <input class="inp" name="cpf" id="co-doc" maxlength="18" required value="{{ cli.cpf or '' }}" placeholder="Digite e o sistema busca os dados" inputmode="numeric"></div>
+        <button type="button" class="btn-pill fin-btn mini" id="co-buscar">{{ ic('search') }} Buscar</button>
+      </div>
+      <div class="pe-msg" id="co-msg" hidden></div>
+      <label class="lbl">Nome completo *</label>
+      <input class="inp" name="full_name" data-campo="nome" required maxlength="160" value="{{ cli.full_name or '' }}">
+      <div class="fin-2col">
+        <div><label class="lbl">E-mail</label><input class="inp" type="email" name="email" data-campo="email" value="{{ cli.email or '' }}"></div>
+        <div><label class="lbl">Telefone</label><input class="inp" name="phone" data-campo="telefone" value="{{ cli.phone or '' }}" placeholder="(00) 00000-0000"></div>
+      </div>
+      <div class="pe-3col">
+        <div><label class="lbl">Nacionalidade</label><input class="inp" name="nationality" value="{{ cli.nationality or '' }}" placeholder="brasileira"></div>
+        <div><label class="lbl">Estado civil</label>
+          <select class="inp" name="marital_status"><option value="">—</option>
+            {% for x in ['Solteiro(a)', 'Casado(a)', 'União estável', 'Divorciado(a)', 'Separado(a)', 'Viúvo(a)'] %}<option {{ 'selected' if cli.marital_status == x }}>{{ x }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Profissão</label><input class="inp" name="profession" value="{{ cli.profession or '' }}"></div>
+      </div>
+      <label class="lbl">Situação</label>
+      <select class="inp" name="status" style="max-width:200px"><option value="ativo" {{ 'selected' if cli.status != 'inativo' }}>Ativo</option><option value="inativo" {{ 'selected' if cli.status == 'inativo' }}>Inativo</option></select>
+
+      <div class="pe-sec">Endereço <small>usado no contrato</small></div>
+      <div class="pe-3col">
+        <div><label class="lbl">CEP</label><input class="inp" name="address_zip" id="co-cep" data-campo="cep" maxlength="9" inputmode="numeric" value="{{ cli.address_zip or '' }}"></div>
+        <div style="grid-column:span 2"><label class="lbl">Logradouro, número e complemento</label><input class="inp" name="address_street" data-campo="logradouro" value="{{ cli.address_street or '' }}"></div>
+      </div>
+      <div class="pe-3col">
+        <div><label class="lbl">Bairro</label><input class="inp" name="address_district" data-campo="bairro" value="{{ cli.address_district or '' }}"></div>
+        <div><label class="lbl">Cidade</label><input class="inp" name="address_city" data-campo="cidade" value="{{ cli.address_city or '' }}"></div>
+        <div><label class="lbl">UF</label><input class="inp" name="address_state" data-campo="uf" maxlength="2" style="text-transform:uppercase" value="{{ cli.address_state or '' }}"></div>
+      </div>
+    </section>
+
+    <section class="fin-box">
+      <div class="pe-sec">Pagamento dos rendimentos</div>
+      <label class="lbl">Chave Pix <small class="co-dica">Construção Civil e Saúde pagam por Pix</small></label>
+      <input class="inp" name="pix_key" data-campo="pix_chave" value="{{ cli.pix_key or '' }}" placeholder="CPF, e-mail, telefone ou chave aleatória">
+      <div class="pe-sec">Dados bancários <small>Agronegócio paga por TED (Itaú)</small></div>
+      <label class="lbl">Banco</label><input class="inp" name="bank_name" data-campo="banco_nome" value="{{ cli.bank_name or '' }}" placeholder="Ex.: 341 - Itaú">
+      <div class="pe-3col">
+        <div><label class="lbl">Agência</label><input class="inp" name="bank_agency" data-campo="agencia" value="{{ cli.bank_agency or '' }}"></div>
+        <div><label class="lbl">Conta</label><input class="inp" name="bank_account" data-campo="conta" value="{{ cli.bank_account or '' }}"></div>
+        <div><label class="lbl">Dígito</label><input class="inp" name="bank_account_digit" data-campo="conta_dv" maxlength="2" value="{{ cli.bank_account_digit or '' }}"></div>
+      </div>
+      <label class="lbl">Tipo de conta</label>
+      <select class="inp" name="bank_account_type"><option value="">—</option>{% for x in ['Corrente', 'Poupança'] %}<option {{ 'selected' if cli.bank_account_type == x }}>{{ x }}</option>{% endfor %}</select>
+      <div class="fin-2col">
+        <div><label class="lbl">Titular (se diferente)</label><input class="inp" name="bank_holder_name" value="{{ cli.bank_holder_name or '' }}"></div>
+        <div><label class="lbl">CPF/CNPJ do titular</label><input class="inp" name="bank_holder_document" value="{{ cli.bank_holder_document or '' }}"></div>
+      </div>
+      <label class="lbl">Observações bancárias</label><input class="inp" name="bank_notes" value="{{ cli.bank_notes or '' }}">
+      <div class="pe-sec">Observações</div>
+      <textarea class="inp" name="notes" rows="3" placeholder="Anotações internas (opcional)">{{ cli.notes or '' }}</textarea>
+    </section>
+  </div>
+  <div class="lf-barra co-barra">
+    <span class="co-barra-info">{{ 'Cadastro novo' if modo == 'novo' else 'Alterações ficam registradas no log de auditoria.' }}</span>
+    <a class="btn-pill outline fin-btn" href="{{ voltar or url_for('financas.cond_cotistas', slug=empresa.slug) }}">Cancelar</a>
+    <button class="btn-pill fin-btn" type="submit">{{ ic('check') }} {{ 'Cadastrar cotista' if modo == 'novo' else 'Salvar alterações' }}</button>
+  </div>
+</form>
+
+<script>
+(function () {
+  var f = document.getElementById('f-cli'), doc = document.getElementById('co-doc'), msg = document.getElementById('co-msg'), ultimo = '';
+  var novo = {{ 'true' if modo == 'novo' else 'false' }};
+  function dig(s) { return String(s || '').replace(/\D/g, ''); }
+  function aviso(t, tipo) { msg.hidden = false; msg.className = 'pe-msg ' + (tipo || ''); msg.innerHTML = t; }
+  function mascara() {
+    var d = dig(doc.value).slice(0, 14);
+    doc.value = d.length <= 11 ? d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+      : d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  function preencher(dados, sobrescrever) {
+    var n = 0;
+    Object.keys(dados).forEach(function (k) {
+      var v = dados[k]; if (!v) return;
+      var el = f.querySelector('[data-campo="' + k + '"]'); if (!el) return;
+      if (k === 'banco_nome' && dados.banco_codigo) v = dados.banco_codigo + ' - ' + v;
+      if (sobrescrever || !el.value) { el.value = v; el.classList.add('pe-auto'); n++; }
+    });
+    return n;
+  }
+  function buscar() {
+    var d = dig(doc.value);
+    if ((d.length !== 11 && d.length !== 14) || d === ultimo) return; ultimo = d;
+    aviso(d.length === 14 ? 'Consultando a Receita Federal…' : 'Verificando CPF…', 'carregando');
+    fetch('{{ url_for("financas.cad_pessoas_consulta", slug=empresa.slug) }}?doc=' + d, {credentials: 'same-origin'})
+      .then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.ok) { aviso(j.msg, 'erro'); return; }
+        if (j.cpf_sem_dados) { aviso(j.msg, ''); return; }
+        var n = preencher(j.dados || {}, novo);
+        aviso('✓ ' + n + ' campo(s) preenchido(s) com dados de ' + j.fonte + '.', 'ok');
+      }).catch(function () { ultimo = ''; aviso('Falha na consulta. Verifique a internet e tente de novo.', 'erro'); });
+  }
+  doc.addEventListener('input', function () { mascara(); var d = dig(doc.value); if (d.length === 14 || (d.length === 11 && novo)) buscar(); });
+  doc.addEventListener('blur', buscar);
+  document.getElementById('co-buscar').addEventListener('click', function () { ultimo = ''; buscar(); });
+  var cep = document.getElementById('co-cep');
+  cep.addEventListener('input', function () { var d = dig(cep.value).slice(0, 8); cep.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d; });
+  cep.addEventListener('blur', function () {
+    var d = dig(cep.value); if (d.length !== 8) return;
+    fetch('https://viacep.com.br/ws/' + d + '/json/').then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.erro) preencher({logradouro: j.logradouro, bairro: j.bairro, cidade: j.localidade, uf: j.uf}, false);
+    }).catch(function () {});
+  });
+})();
+</script>
+{% endblock %}

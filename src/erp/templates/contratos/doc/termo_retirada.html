@@ -1,0 +1,37 @@
+{# Termo de Retirada de Investimento — modelos Civil e Agronegócio (D4Sign 2026); Saúde segue o Agronegócio.
+   Assinado só pelo investidor. #}
+<section class="folha termo">
+  <img class="cab-termo" src="{{ cab }}" alt="Capuzzo">
+  <h1 class="t-titulo">Termo de Retirada<br>de Investimento</h1>
+
+  <p class="t-abre">Por meio deste instrumento,</p>
+
+  <p class="t-just"><b>{{ d.investidor.nome }}</b>, {{ d.investidor.nacionalidade }}, portador(a) do
+    {{ d.investidor.documento_tipo }} nº {{ d.investidor.documento }}, residente e domiciliado(a) na
+    {{ d.investidor.endereco }}, CEP: {{ d.investidor.cep }}, (“<b>Investidor(a) Retirante</b>”), formaliza a retirada
+    de montante aplicado no <b>{{ p.condominio }}</b>, administrado por <b>{{ d.empresa.empresa_nome }}</b>, inscrita
+    no CNPJ: {{ d.empresa.empresa_cnpj }}, com sede na {{ d.empresa.empresa_endereco }}, e declara que:</p>
+
+  <ol class="t-lista">
+    <li>Formaliza a retirada do montante de <b>{{ moeda(d.retirada.valor) }} ({{ d.retirada.valor_extenso }})</b>,
+      referente {{ 'à cota' if d.qtd == 1 else 'às cotas' }} nº {{ d.faixa }}, da carteira de títulos, ativos
+      financeiros, valores mobiliários e numerários do {{ p.condominio_curto }} administrado pela
+      {{ d.empresa.empresa_nome }}.</li>
+    <li>Reconhece que a contratada prestou os serviços de forma discricionária, observando as limitações impostas pela
+      regulamentação em vigor e os princípios da boa técnica de investimentos, visando a proteção do patrimônio do
+      Investidor e a obtenção de ganhos reais, em função das operações realizadas;</li>
+    <li>Afirma que a contratada colocou à disposição do Investidor toda a documentação das transações efetivas com a
+      carteira, forneceu todas as demais informações sobre a carteira que venham a ser solicitadas pelo Investidor;</li>
+    <li>A contratada utilizou na prestação dos serviços sistemas apropriados para o processamento, registro, controle,
+      segurança e comunicação das atividades prestadas, utilizando-se de política de confidencialidade. Geriu a
+      carteira em conformidade com a Política de Investimento constante do Termo de Adesão a este Contrato,
+      estabelecida entre as partes. Apresentou mensalmente e sempre que o Investidor solicitou, extrato com
+      informações sobre os investimentos realizados.</li>
+  </ol>
+
+  <p class="t-just">Neste termo, o Investidor Retirante atesta ciência e concordância que receberá o valor de
+    <b>{{ moeda(d.retirada.valor) }} ({{ d.retirada.valor_extenso }})</b>, referente à retirada do montante investido e
+    supramencionado, o qual será creditado {{ p.prazo_credito }} a contar da assinatura deste instrumento.</p>
+
+  <p class="t-data">{{ d.local_data }}.</p>
+</section>

@@ -1,0 +1,129 @@
+{% extends "operacao/_layout.html" %}
+{% block title %}{{ tarefa.titulo }} · Demandas{% endblock %}
+{% block op_content %}
+<a class="op-voltar" href="{{ url_for('operacao.demandas', slug=empresa.slug) }}">{{ ic('arrow_back') }} Demandas</a>
+
+<section class="op-detalhe sit-{{ tarefa.situacao }}">
+  <header class="op-detalhe-head">
+    <div>
+      <div class="op-meta">
+        <span class="op-tag {{ 'ok' if tarefa.status == 'concluida' else ('andamento' if tarefa.status == 'andamento') }}">{{ STATUS_TAREFA[tarefa.status] }}</span>
+        {% if tarefa.tipo == 'recorrente' %}<span class="op-tag">{{ oic('repeat') }}Recorrente · {{ RECORRENCIAS.get(tarefa.recorrencia, '') }}</span>{% else %}<span class="op-tag">Pontual</span>{% endif %}
+        {% if tarefa.prioridade != 'normal' %}<span class="op-tag {{ 'risco' if tarefa.prioridade == 'alta' }}">Prioridade {{ PRIORIDADES[tarefa.prioridade]|lower }}</span>{% endif %}
+        {% if chamado %}<a class="op-tag" href="{{ url_for('operacao.chamado', slug=empresa.slug, cid=chamado.id) }}">Chamado nº {{ numero_chamado(chamado.id) }}</a>{% endif %}
+      </div>
+      <h1>{{ tarefa.titulo }}</h1>
+      <p class="op-info">
+        Responsável: <b>{{ resp_nome }}</b> ·
+        {% if tarefa.status == 'concluida' %}Concluída em <b>{{ data_hora_br(tarefa.concluida_em) }}</b>
+        {% elif tarefa.vencimento %}Vencimento: <b class="{{ 'risco' if tarefa.situacao == 'atrasada' }}">{{ data_br(tarefa.vencimento) }}</b>{% if tarefa.situacao == 'atrasada' %} (atrasada){% elif tarefa.situacao == 'hoje' %} (hoje){% endif %}
+        {% else %}Sem vencimento{% endif %}
+        · Lançada por {{ criador }} em {{ data_br(tarefa.criado_em) }}
+      </p>
+    </div>
+    <div class="op-relogio {{ 'rodando' if rodando }}">
+      <small>Tempo nesta demanda</small>
+      <b {% if rodando %}data-op-tarefa-tempo="{{ tarefa.id }}"{% endif %}>{{ hhmmss(total) }}</b>
+      {% if tarefa.status != 'concluida' and tarefa.responsavel_id == portal_user.id %}
+      <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=tarefa.id) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        {% if rodando %}
+          <button class="btn-pill outline op-btn" name="acao" value="parar">{{ oic('pause') }} Pausar</button>
+        {% else %}
+          <button class="btn-pill op-btn" name="acao" value="iniciar">{{ oic('play') }} Iniciar</button>
+        {% endif %}
+      </form>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if tarefa.descricao %}<div class="op-desc">{{ tarefa.descricao }}</div>{% endif %}
+
+  <div class="op-acoes">
+    <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=tarefa.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      {% if tarefa.status == 'concluida' %}
+        <button class="btn-pill outline op-btn" name="acao" value="reabrir">{{ oic('reabrir') }} Reabrir</button>
+      {% else %}
+        <button class="btn-pill op-btn" name="acao" value="concluir">{{ oic('check') }} Marcar como concluída</button>
+      {% endif %}
+    </form>
+    <button class="btn-pill outline op-btn" type="button" onclick="document.getElementById('dlg-editar').showModal()">{{ oic('edit') }} Editar</button>
+    {% if portal_user.admin or tarefa.criado_por == portal_user.id %}
+    <button class="op-link-risco" type="button" onclick="document.getElementById('dlg-excluir').showModal()">{{ oic('delete') }} Excluir</button>
+    {% endif %}
+  </div>
+</section>
+
+<div class="op-cols">
+  <section class="op-card">
+    <h3>Acompanhamento</h3>
+    <p class="op-sub">Anotações e histórico do que foi feito</p>
+    <form class="op-nota-form" method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=tarefa.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="acao" value="nota">
+      <textarea class="inp" name="texto" rows="3" required placeholder="Escreva o que foi feito, uma pendência, um contato…"></textarea>
+      <button class="btn-pill op-btn" type="submit">{{ oic('nota') }} Adicionar anotação</button>
+    </form>
+    <ol class="op-timeline">
+      {% for n in notas %}
+        <li class="{{ 'evento' if n.tipo == 'evento' }}">
+          <span class="op-quando">{{ data_hora_br(n.criado_em) }} · {{ n.autor }}</span>
+          <span class="op-texto">{{ n.texto }}</span>
+        </li>
+      {% else %}
+        <li class="evento"><span class="op-texto">Nenhuma anotação ainda.</span></li>
+      {% endfor %}
+    </ol>
+  </section>
+  <aside class="op-resumo">
+    <section class="op-card">
+      <h3>Tempo registrado</h3>
+      <p class="op-sub">Total: <b>{{ hhmm(total) }}</b></p>
+      <ul class="op-sessoes">
+        {% for x in tempos %}
+          <li><span>{{ data_br(x.inicio) }} · {{ x.inicio[11:16] }}–{{ x.fim[11:16] if x.fim else 'agora' }}{% if portal_user.admin %} · {{ x.autor }}{% endif %}</span><b>{{ hhmm(x.segundos) }}</b></li>
+        {% else %}
+          <li><span>Nenhum tempo registrado. Use “Iniciar”.</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% if serie|length > 1 %}
+    <section class="op-card">
+      <h3>Ocorrências desta rotina</h3>
+      <ul class="op-sessoes">
+        {% for s in serie %}
+          <li><a href="{{ url_for('operacao.demanda', slug=empresa.slug, tid=s.id) }}">{{ data_br(s.vencimento) or 'sem data' }}{% if s.id == tarefa.id %} (esta){% endif %}</a>
+            <b class="{{ 'ok' if s.status == 'concluida' }}">{{ STATUS_TAREFA[s.status] }}</b></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+
+<dialog id="dlg-editar" class="dlg op-dlg">
+  <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=tarefa.id) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="acao" value="editar">
+    <div class="dlg-head"><h3>Editar demanda</h3>
+      <button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
+    {% with d=tarefa %}{% include "operacao/_form_demanda.html" %}{% endwith %}
+    <button class="btn-pill" type="submit">Salvar alterações</button>
+  </form>
+</dialog>
+<dialog id="dlg-excluir" class="dlg op-dlg">
+  <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=tarefa.id) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="acao" value="excluir">
+    <div class="dlg-head"><h3>Excluir demanda?</h3>
+      <button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
+    <p>“{{ tarefa.titulo }}” será apagada junto com as anotações e o tempo registrado nela. Isso não pode ser desfeito.</p>
+    <div class="row-btns">
+      <button class="btn-pill outline" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
+      <button class="btn-pill op-risco" type="submit">Excluir</button>
+    </div>
+  </form>
+</dialog>
+{% include "operacao/_js_form.html" %}
+{% endblock %}

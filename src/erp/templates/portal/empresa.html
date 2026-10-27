@@ -1,0 +1,42 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ empresa.nome }} · Portal Grupo Capuzzo{% endblock %}
+{% block brand %}
+  <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt=""></span>
+  <span class="tb-name"><b>{{ empresa.nome }}</b><small>Grupo Capuzzo</small></span>
+{% endblock %}
+{% block tb_links %}
+  <a class="tb-btn" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span class="lbl">Empresas</span></a>
+  {% include "operacao/_barra_empresa.html" ignore missing %}
+{% endblock %}
+{% block content %}
+<section class="emp-head">
+  <span class="logo-square"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt="{{ empresa.nome }}"></span>
+  <div>
+    <div class="eyebrow-line">Módulos</div>
+    <h1>{{ empresa.nome }}</h1>
+    <p>{{ 'Selecione o módulo que deseja acessar.' if modulos else 'Os módulos desta empresa aparecerão aqui conforme forem liberados.' }}</p>
+  </div>
+</section>
+
+{% if not modulos %}
+<div class="empty">
+  <div class="empty-ic">{{ ic('grid_view') }}</div>
+  <h3>Nenhum módulo disponível ainda</h3>
+  <p>Assim que o primeiro módulo da {{ empresa.nome }} for publicado, ele aparecerá aqui com o botão de acesso.</p>
+</div>
+{% else %}
+<div class="mods">
+  {% for m in modulos %}
+  <article class="mod {{ 'mod-on' if m.status == 'ativo' }}">
+    <div class="mod-ic">{{ ic(m.icone) }}</div>
+    <h3>{{ m.nome }}</h3>
+    <p>{{ m.desc }}</p>
+    <div class="mod-foot">
+      {% if m.status == 'ativo' %}<span class="tag tag-on">Disponível</span>{% else %}<span class="tag">Em construção</span>{% endif %}
+      <a class="btn-pill" href="{{ url_for('portal_modulo', slug=empresa.slug, modulo_id=m.id) }}">Acessar</a>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

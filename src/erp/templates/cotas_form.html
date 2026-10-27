@@ -1,0 +1,642 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Nova Cota' if modo == 'nova' else 'Editar Cota' }} — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('cotas_lista') }}" class="back-link">← Voltar para Cotas</a>
+
+<div class="page-header">
+  <div class="page-header-icon">{{ '➕' if modo == 'nova' else '✏️' }}</div>
+  <div class="page-header-title">{{ 'Nova Cota' if modo == 'nova' else 'Editar Cota' }}</div>
+  <div class="page-header-sub">
+    {{ 'Cadastre uma ou mais cotas de investimento de uma só vez.' if modo == 'nova' else 'Atualize os dados da cota.' }}
+  </div>
+</div>
+
+{# ══ CSS do combobox de cliente ══════════════════════════════════════════════ #}
+<style>
+.client-combobox { position:relative; }
+.client-combobox .cb-input {
+  width:100%; padding:9px 12px; font-size:14px;
+  background:#1a1a1a; color:#F5F5F5;
+  border:1px solid #333; border-radius:6px;
+  outline:none; box-sizing:border-box;
+  transition:border-color .15s;
+}
+.client-combobox .cb-input:focus { border-color:#d4af37; }
+.client-combobox .cb-input::placeholder { color:#555; }
+.cb-dropdown {
+  display:none; position:absolute; z-index:999;
+  top:calc(100% + 4px); left:0; right:0;
+  background:#141414; border:1px solid #333;
+  border-radius:6px; max-height:272px; overflow-y:auto;
+  box-shadow:0 8px 24px rgba(0,0,0,.6);
+}
+.cb-dropdown.open { display:block; }
+.cb-option {
+  display:block; width:100%; text-align:left;
+  padding:9px 14px; background:none; border:none;
+  cursor:pointer; border-bottom:1px solid rgba(255,255,255,.05);
+  transition:background .1s;
+}
+.cb-option:last-child { border-bottom:none; }
+.cb-option:hover, .cb-option.focused {
+  background:rgba(212,175,55,.12);
+}
+.cb-option .cb-name { display:block; font-weight:600; color:#F5F5F5; font-size:14px; }
+.cb-option .cb-meta { display:block; font-size:11px; color:#666; margin-top:2px; }
+.cb-option .cb-inactive { display:inline-block; font-size:10px; color:#888;
+  border:1px solid #444; border-radius:3px; padding:0 4px; margin-left:6px;
+  vertical-align:middle; font-style:italic; }
+.cb-empty { padding:12px 14px; color:#555; font-size:13px; font-style:italic; }
+.cb-selected-display {
+  display:none; font-size:12px; color:#888; margin-top:5px;
+}
+.cb-selected-display.visible { display:block; }
+.pending-date-note {
+  display:none; margin-top:8px; padding:8px 12px;
+  background:rgba(212,175,55,.07); border-left:3px solid rgba(212,175,55,.4);
+  border-radius:0 4px 4px 0; font-size:12px; color:#aaa;
+}
+.pending-date-note.visible { display:block; }
+.hist-dup-box {
+  display:flex; align-items:flex-start; gap:10px;
+  padding:10px 14px; margin-top:0;
+  background:rgba(255,170,0,.05);
+  border:1px solid rgba(255,170,0,.18);
+  border-radius:6px;
+}
+.hist-dup-box input[type=checkbox] {
+  width:16px; height:16px; flex-shrink:0; margin-top:2px;
+  accent-color:#d4af37; cursor:pointer;
+}
+.hist-dup-box .hist-label { cursor:pointer; }
+.hist-dup-box .hist-label strong { color:#d4af37; font-size:13px; }
+.hist-dup-box .hist-label small { display:block; color:#666; font-size:11px; margin-top:2px; }
+</style>
+
+{% if modo == 'nova' %}
+{# ══════════════════════════════════════════════════════
+   MODO NOVA — formulário de múltiplas cotas
+   ══════════════════════════════════════════════════════ #}
+
+{# Dados dos clientes para o combobox (JSON embutido) #}
+<script id="clientes-json" type="application/json">
+{{ clientes | tojson }}
+</script>
+
+<div class="card-gold">
+  <form method="post" id="multi-share-form" novalidate>
+
+    {# — Produto e Cotista ———————————————————— #}
+    <div class="form-section">
+      <div class="form-section-title">Produto e Cotista</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Produto *</label>
+          <select name="condominium_id" id="condominium_id" class="form-control" required>
+            <option value="">Selecione o produto…</option>
+            {% for c in conds %}
+            <option value="{{ c.id }}"
+              data-default-value="{{ cond_default_values.get(c.code, 0) }}"
+              {{ 'selected' if cota.get('condominium_id')|string == c.id|string else '' }}>
+              {{ c.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Cliente *</label>
+          <div class="client-combobox" id="cb-nova">
+            <input type="text" class="cb-input" id="cb-nova-input"
+                   autocomplete="off" placeholder="🔍 Buscar por nome, CPF/CNPJ ou Pix…">
+            <input type="hidden" name="client_id" id="cb-nova-value"
+                   value="{{ cota.get('client_id', '') }}">
+            <div class="cb-dropdown" id="cb-nova-dropdown"></div>
+            <div class="cb-selected-display" id="cb-nova-selected"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# — Quantidade e Valor ——————————————————— #}
+    <div class="form-section">
+      <div class="form-section-title">Cotas</div>
+      <div class="form-row">
+
+        <div class="form-group" style="max-width:200px;">
+          <label>Quantidade de cotas *</label>
+          <input type="number" id="quantidade" name="quantidade"
+                 value="{{ (cota.get('share_numbers') or [''])|length }}"
+                 min="1" max="200" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label>Valor unitário (R$) *</label>
+          <input type="text" id="share_value" name="share_value"
+                 value="{{ '%.2f'|format(cota.get('share_value', 0)|float) }}"
+                 class="form-control" data-mask="currency"
+                 placeholder="10.000,00" readonly>
+          <label class="checkbox-label" style="margin-top:10px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="valor_diferente"
+              style="width:16px;height:16px;accent-color:#d4af37;cursor:pointer;">
+            <span style="color:#aaa;font-size:13px;">Usar valor diferente do padrão</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" id="status-nova" class="form-control">
+            <option value="ativa"    {{ 'selected' if (cota.get('status','ativa') == 'ativa')    else '' }}>Ativa</option>
+            <option value="pendente" {{ 'selected' if (cota.get('status') == 'pendente') else '' }}>Pendente</option>
+            <option value="inativa"  {{ 'selected' if (cota.get('status') == 'inativa')  else '' }}>Inativa</option>
+          </select>
+        </div>
+
+      </div>
+    </div>
+
+    {# — Datas padrão ————————————————————————— #}
+    <div class="form-section">
+      <div class="form-section-title">Datas Padrão</div>
+      <div class="pending-date-note" id="pending-note-nova">
+        ⏳ Para cotas pendentes, as datas podem ser preenchidas depois da efetivação da compra.
+      </div>
+      <p style="color:#888;font-size:13px;margin:0 0 12px;">
+        Preencha as datas padrão e clique em <strong style="color:#d4af37;">Aplicar nas linhas</strong>
+        para copiar para todas as cotas. Você pode editar cada linha individualmente depois.
+      </p>
+      <div class="form-row" style="align-items:flex-end;">
+        <div class="form-group">
+          <label id="lbl-acq-nova">Aquisição padrão <span id="acq-req-nova" style="color:#d4af37;">*</span></label>
+          <input type="date" id="default-acq" class="form-control"
+                 value="{{ cota.get('acquisition_date','') }}">
+        </div>
+        <div class="form-group">
+          <label>Última Renovação padrão</label>
+          <input type="date" id="default-lrd" class="form-control"
+                 value="{{ cota.get('last_renewal_date','') }}">
+        </div>
+        <div class="form-group">
+          <label>Vencimento padrão</label>
+          <input type="date" id="default-mat" class="form-control"
+                 value="{{ cota.get('maturity_date','') }}">
+        </div>
+        <div class="form-group" style="flex:0 0 auto;padding-top:4px;">
+          <label style="visibility:hidden;">&#8203;</label>
+          <button type="button" id="btn-apply-dates" class="btn btn-secondary btn-sm"
+                  style="white-space:nowrap;">
+            ↓ Aplicar nas linhas
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {# — Grade de cotas ———————————————————————— #}
+    <div class="form-section">
+      <div class="form-section-title">Cotas — Número, Valor e Datas individuais</div>
+      <p style="color:#888;font-size:13px;margin:0 0 16px;">
+        Cada linha representa uma cota. Edite número, valor e datas individualmente.
+      </p>
+
+      <div style="overflow-x:auto;">
+        <!-- Cabeçalho fixo das colunas -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;min-width:860px;
+                    padding:0 0 6px;border-bottom:1px solid #2a2a2a;margin-bottom:4px;">
+          <span style="min-width:52px;flex-shrink:0;"></span>
+          <span style="width:120px;flex-shrink:0;font-size:11px;color:#666;text-align:center;">Número</span>
+          <span style="width:130px;flex-shrink:0;font-size:11px;color:#666;text-align:center;">Valor R$</span>
+          <span style="width:148px;flex-shrink:0;font-size:11px;color:#d4af37;text-align:center;">📅 Aquisição</span>
+          <span style="width:148px;flex-shrink:0;font-size:11px;color:#888;text-align:center;">🔄 Última Renovação</span>
+          <span style="width:148px;flex-shrink:0;font-size:11px;color:#888;text-align:center;">⏳ Vencimento</span>
+        </div>
+        <div id="share-numbers-list" style="display:flex;flex-direction:column;gap:8px;min-width:860px;">
+          <noscript>
+            {% for num in (cota.get('share_numbers') or ['']) %}
+            <div class="form-row" style="align-items:center;gap:10px;">
+              <span style="color:#aaa;min-width:58px;font-size:13px;">Cota {{ loop.index }}</span>
+              <input type="text" name="share_numbers" value="{{ num }}" class="form-control"
+                     style="max-width:130px;" placeholder="Número">
+              <input type="text" name="share_values" value="" class="form-control"
+                     style="max-width:130px;" placeholder="Valor">
+              <input type="date" name="acquisition_dates" class="form-control" style="max-width:145px;">
+              <input type="date" name="last_renewal_dates" class="form-control" style="max-width:145px;">
+              <input type="date" name="maturity_dates" class="form-control" style="max-width:145px;">
+            </div>
+            {% endfor %}
+          </noscript>
+        </div>
+      </div>
+
+      <script id="multi-share-config" type="application/json">
+      {
+        "initialNumbers":      {{ (cota.get('share_numbers') or [''])|tojson }},
+        "initialValue":        {{ cota.get('share_value', 0)|float }},
+        "condId":              {{ cota.get('condominium_id', 0)|int }},
+        "initialAcqDates":     {{ (cota.get('acquisition_dates') or [])|tojson }},
+        "initialMatDates":     {{ (cota.get('maturity_dates') or [])|tojson }},
+        "initialLrdDates":     {{ (cota.get('last_renewal_dates') or [])|tojson }}
+      }
+      </script>
+
+      {# — Lançamento histórico ——————————————— #}
+      <div class="hist-dup-box" style="margin-top:16px;">
+        <input type="checkbox" name="allow_duplicate_share_number"
+               id="allow-dup-nova" value="on">
+        <label class="hist-label" for="allow-dup-nova">
+          <strong>Lançamento histórico: permitir número repetido</strong>
+          <small>Use apenas para importar histórico com inconsistência de numeração. Cadastros normais devem manter números únicos.</small>
+        </label>
+      </div>
+    </div>
+
+    {# — Contrato e assinatura (módulo contratos) ——————————— #}
+    <div class="form-section" id="secao-gerar-contrato">
+      <div class="form-section-title">Contrato e Assinatura</div>
+      <div class="hist-dup-box" style="background:rgba(212,175,55,.06);border-color:rgba(212,175,55,.25);">
+        <input type="checkbox" name="gerar_contrato" id="gerar-contrato" value="on"
+               {{ 'checked' if cota.get('gerar_contrato', True) else '' }}>
+        <label class="hist-label" for="gerar-contrato">
+          <strong>Gerar Termo de Aquisição + Regulamento e preparar para assinatura</strong>
+          <small id="gerar-contrato-info">O contrato é preenchido com os dados do cliente e já sai assinado pela empresa.
+            As cotas ficam <b>Pendentes</b> até o cliente assinar e o depósito ser confirmado.</small>
+        </label>
+      </div>
+    </div>
+    <script>
+    (function(){
+      var MODELOS = {{ {'civil': True} | tojson }};   /* produtos com modelo de contrato pronto */
+      var CODIGOS = { {% for c in conds %}"{{ c.id }}": "{{ c.code }}"{{ ',' if not loop.last }}{% endfor %} };
+      var chk = document.getElementById('gerar-contrato'), info = document.getElementById('gerar-contrato-info');
+      var cond = document.getElementById('condominium_id'), st = document.getElementById('status-nova');
+      if(!chk || !cond || !st) return;
+      var txt = info.innerHTML;
+      function sync(){
+        var temModelo = !!MODELOS[CODIGOS[cond.value]];
+        if(cond.value && !temModelo){
+          chk.checked = false; chk.disabled = true;
+          info.innerHTML = 'Modelo de contrato deste produto ainda não cadastrado (por enquanto: Construção Civil).';
+        } else { chk.disabled = false; info.innerHTML = txt; }
+        if(chk.checked && st.value !== 'pendente'){ st.value = 'pendente'; st.dispatchEvent(new Event('change')); }
+        st.style.pointerEvents = chk.checked ? 'none' : '';
+        st.style.opacity = chk.checked ? '.6' : '';
+      }
+      chk.addEventListener('change', sync); cond.addEventListener('change', sync);
+      document.addEventListener('DOMContentLoaded', sync); sync();
+    })();
+    </script>
+
+    {# — Observações ———————————————————————— #}
+    <div class="form-section">
+      <div class="form-section-title">Observações</div>
+      <div class="form-group">
+        <textarea name="notes" class="form-control" rows="3"
+                  placeholder="Anotações internas (opcional)">{{ cota.get('notes','') }}</textarea>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a href="{{ url_for('cotas_lista') }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary" id="btn-cadastrar">
+        ✓ Cadastrar Cotas
+      </button>
+    </div>
+
+  </form>
+</div>
+
+{% else %}
+{# ══════════════════════════════════════════════════════
+   MODO EDITAR — formulário simples
+   ══════════════════════════════════════════════════════ #}
+
+<script id="clientes-json" type="application/json">
+{{ clientes | tojson }}
+</script>
+
+<div class="card-gold">
+  <form method="post" id="edit-share-form" novalidate>
+
+    <div class="form-section">
+      <div class="form-section-title">Produto e Cotista</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Produto *</label>
+          <select name="condominium_id" id="condominium_id" class="form-control" required>
+            <option value="">Selecione o produto…</option>
+            {% for c in conds %}
+            <option value="{{ c.id }}"
+              {{ 'selected' if cota.get('condominium_id')|string == c.id|string else '' }}>
+              {{ c.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Cliente *</label>
+          <div class="client-combobox" id="cb-editar">
+            <input type="text" class="cb-input" id="cb-editar-input"
+                   autocomplete="off" placeholder="🔍 Buscar por nome, CPF/CNPJ ou Pix…">
+            <input type="hidden" name="client_id" id="cb-editar-value"
+                   value="{{ cota.get('client_id', '') }}">
+            <div class="cb-dropdown" id="cb-editar-dropdown"></div>
+            <div class="cb-selected-display" id="cb-editar-selected"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Dados da Cota</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Número da Cota *</label>
+          <input type="text" name="share_number" id="share_number"
+                 value="{{ cota.get('share_number','') }}"
+                 class="form-control" required placeholder="Ex: 1, 1.12, A1">
+        </div>
+        <div class="form-group">
+          <label>Valor (R$) *</label>
+          <input type="text" name="share_value"
+                 value="{{ '%.2f'|format(cota.get('share_value', 0)|float) }}"
+                 class="form-control" data-mask="currency"
+                 placeholder="0,00">
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" id="status-editar" class="form-control">
+            <option value="ativa"    {{ 'selected' if cota.get('status','ativa') == 'ativa'    else '' }}>Ativa</option>
+            <option value="pendente" {{ 'selected' if cota.get('status') == 'pendente' else '' }}>Pendente</option>
+            <option value="inativa"  {{ 'selected' if cota.get('status') == 'inativa'  else '' }}>Inativa</option>
+          </select>
+        </div>
+      </div>
+
+      {# — Lançamento histórico ——————————————— #}
+      <div class="hist-dup-box" style="margin-bottom:16px;">
+        <input type="checkbox" name="allow_duplicate_share_number"
+               id="allow-dup-editar" value="on">
+        <label class="hist-label" for="allow-dup-editar">
+          <strong>Lançamento histórico: permitir número repetido</strong>
+          <small>Use apenas para importar histórico com inconsistência de numeração. Cadastros normais devem manter números únicos.</small>
+        </label>
+      </div>
+
+      <div class="pending-date-note" id="pending-note-editar">
+        ⏳ Para cotas pendentes, as datas podem ser preenchidas depois da efetivação da compra.
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data de Aquisição <span id="acq-req-editar" style="color:#d4af37;">*</span></label>
+          <input type="date" name="acquisition_date" id="acq-editar"
+                 value="{{ cota.get('acquisition_date','') }}"
+                 class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>Data de Vencimento</label>
+          <input type="date" name="maturity_date"
+                 value="{{ cota.get('maturity_date','') }}"
+                 class="form-control">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Última Renovação</label>
+          <input type="date" name="last_renewal_date"
+                 value="{{ cota.get('last_renewal_date','') }}"
+                 class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Data de Retirada</label>
+          <input type="date" name="withdrawal_date"
+                 value="{{ cota.get('withdrawal_date','') }}"
+                 class="form-control">
+        </div>
+      </div>
+
+      {# — Exceção: proporcional até a retirada ——————————— #}
+      <div style="margin-top:6px;padding:12px 14px;border:1px solid #6b4f12;
+                  border-radius:6px;background:rgba(251,191,36,0.07);">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0;">
+          <input type="checkbox" name="accrual_until_withdrawal"
+                 id="accrual-ate-retirada" value="on"
+                 {{ 'checked' if (cota.get('accrual_until_withdrawal') or 0)|int == 1 else '' }}>
+          <span style="font-size:13px;line-height:1.5;">
+            <strong style="color:#fbbf24;">Retirada fora do período — considerar proporcional até a retirada</strong><br>
+            <small style="color:#999;">
+              Ligado: mesmo inativa, esta cota entra na apuração e rende até o
+              <em>dia anterior</em> à Data de Retirada acima (o dia da retirada não rende).
+              Exige Data de Retirada preenchida.<br>
+              <strong style="color:#888;">Desligado = regra padrão do condomínio:</strong>
+              cota inativada não rende nada no período.
+            </small>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Observações</div>
+      <div class="form-group">
+        <textarea name="notes" class="form-control" rows="3"
+                  placeholder="Anotações internas (opcional)">{{ cota.get('notes','') }}</textarea>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a href="{{ url_for('cotas_lista') }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">✓ Salvar Alterações</button>
+    </div>
+
+  </form>
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+
+  /* ── 1. Dados dos clientes ─────────────────────────────────────────── */
+  var clientesEl = document.getElementById('clientes-json');
+  var CLIENTES = clientesEl ? JSON.parse(clientesEl.textContent) : [];
+
+  /* ── 2. Combobox factory ───────────────────────────────────────────── */
+  function initCombobox(inputId, hiddenId, dropdownId, selectedId, preselectedId) {
+    var inp   = document.getElementById(inputId);
+    var hid   = document.getElementById(hiddenId);
+    var drop  = document.getElementById(dropdownId);
+    var selEl = document.getElementById(selectedId);
+    if (!inp || !hid || !drop) return;
+
+    var focusIdx = -1;
+
+    /* Pré-preencher se vier de edição */
+    if (preselectedId && hid.value) {
+      var pre = CLIENTES.find(function(c){ return String(c.id) === String(hid.value); });
+      if (pre) {
+        inp.value = pre.display_name || pre.full_name;
+        if (selEl) {
+          selEl.textContent = pre.full_name + (pre.status === 'inativo' ? ' (inativo)' : '');
+          selEl.className = 'cb-selected-display visible';
+        }
+      }
+    }
+
+    function buildItems(q) {
+      q = (q || '').toLowerCase().trim();
+      var results = CLIENTES.filter(function(c) {
+        if (!q) return true;
+        return (c.full_name || '').toLowerCase().includes(q)
+            || (c.cpf || '').toLowerCase().includes(q)
+            || (c.pix_key || '').toLowerCase().includes(q);
+      });
+      return results.slice(0, 40);  /* máx 40 resultados */
+    }
+
+    function renderDrop(q) {
+      var items = buildItems(q);
+      focusIdx = -1;
+      if (!items.length) {
+        drop.innerHTML = '<div class="cb-empty">Nenhum cliente encontrado</div>';
+      } else {
+        drop.innerHTML = items.map(function(c, i) {
+          var meta = c.cpf;
+          if (c.pix_key) meta += ' · Pix: ' + c.pix_key;
+          var badge = c.status === 'inativo'
+            ? '<span class="cb-inactive">inativo</span>' : '';
+          return '<button type="button" class="cb-option"'
+            + ' data-id="' + c.id + '"'
+            + ' data-name="' + (c.display_name || c.full_name).replace(/"/g, '&quot;') + '">'
+            + '<span class="cb-name">' + escHtml(c.full_name) + badge + '</span>'
+            + '<span class="cb-meta">' + escHtml(meta) + '</span>'
+            + '</button>';
+        }).join('');
+        /* eventos de clique */
+        drop.querySelectorAll('.cb-option').forEach(function(btn) {
+          btn.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            selectClient(btn.dataset.id, btn.dataset.name);
+          });
+        });
+      }
+      drop.classList.add('open');
+    }
+
+    function selectClient(id, name) {
+      hid.value  = id;
+      inp.value  = name;
+      if (selEl) {
+        selEl.textContent = name;
+        selEl.className = 'cb-selected-display visible';
+      }
+      drop.classList.remove('open');
+      drop.innerHTML = '';
+    }
+
+    function closeDropdown() {
+      drop.classList.remove('open');
+    }
+
+    inp.addEventListener('input', function() {
+      var q = inp.value.trim();
+      if (!q) {
+        hid.value = '';
+        if (selEl) selEl.className = 'cb-selected-display';
+      }
+      if (q.length >= 1 || CLIENTES.length < 30) {
+        renderDrop(q);
+      } else {
+        closeDropdown();
+      }
+    });
+
+    inp.addEventListener('focus', function() {
+      if (!inp.value || CLIENTES.length < 30) renderDrop(inp.value);
+    });
+
+    inp.addEventListener('keydown', function(e) {
+      var btns = drop.querySelectorAll('.cb-option');
+      if (!btns.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusIdx = Math.min(focusIdx + 1, btns.length - 1);
+        btns.forEach(function(b, i){ b.classList.toggle('focused', i === focusIdx); });
+        if (btns[focusIdx]) btns[focusIdx].scrollIntoView({block:'nearest'});
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusIdx = Math.max(focusIdx - 1, 0);
+        btns.forEach(function(b, i){ b.classList.toggle('focused', i === focusIdx); });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusIdx >= 0 && btns[focusIdx]) {
+          var btn = btns[focusIdx];
+          selectClient(btn.dataset.id, btn.dataset.name);
+        }
+      } else if (e.key === 'Escape') {
+        closeDropdown();
+      }
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!inp.closest('.client-combobox').contains(e.target)) closeDropdown();
+    });
+  }
+
+  /* ── 3. Inicializar comboboxes ─────────────────────────────────────── */
+  initCombobox('cb-nova-input',   'cb-nova-value',   'cb-nova-dropdown',   'cb-nova-selected',   true);
+  initCombobox('cb-editar-input', 'cb-editar-value', 'cb-editar-dropdown', 'cb-editar-selected', true);
+
+  /* ── 4. Validação de client_id no submit ───────────────────────────── */
+  ['multi-share-form', 'edit-share-form'].forEach(function(fid) {
+    var form = document.getElementById(fid);
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+      var hid = form.querySelector('input[name="client_id"]');
+      if (hid && !hid.value) {
+        e.preventDefault();
+        var inp = form.querySelector('.cb-input');
+        if (inp) {
+          inp.style.borderColor = '#ef4444';
+          inp.placeholder = '⚠ Selecione um cliente antes de salvar';
+          inp.focus();
+          setTimeout(function(){ inp.style.borderColor = ''; }, 3000);
+        }
+      }
+    });
+  });
+
+  /* ── 5. Toggle obrigatoriedade de datas por status ─────────────────── */
+  function setupStatusDateToggle(selectId, acqId, reqId, noteId) {
+    var sel  = document.getElementById(selectId);
+    var acq  = document.getElementById(acqId);
+    var req  = document.getElementById(reqId);
+    var note = document.getElementById(noteId);
+    if (!sel || !acq) return;
+
+    function update() {
+      var pendente = sel.value === 'pendente';
+      acq.required = !pendente;
+      if (req)  req.style.display = pendente ? 'none' : '';
+      if (note) note.classList.toggle('visible', pendente);
+    }
+    sel.addEventListener('change', update);
+    update(); /* estado inicial */
+  }
+
+  setupStatusDateToggle('status-nova',   'acq-nova',   'acq-req-nova',   'pending-note-nova');
+  setupStatusDateToggle('status-editar', 'acq-editar', 'acq-req-editar', 'pending-note-editar');
+
+  /* ── helpers ────────────────────────────────────────────────────────── */
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+})();
+</script>
+{% endblock %}

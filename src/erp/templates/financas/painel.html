@@ -1,0 +1,179 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Visão geral{% endblock %}
+{% block fin_conteudo %}
+{% set CORES = ['#C7A955', '#2F6B1A', '#3B6EA8', '#8E4FA0', '#B3261E', '#5F7A86', '#C77B2B'] %}
+<div class="fin-head">
+  <div>
+    <div class="eyebrow-line">Finanças · {{ data_br(hoje_iso) }}</div>
+    <h1>Visão geral</h1>
+    <p>Resumo da empresa: saldos, o que entra, o que sai, atrasos{% if produtos %} e os produtos{% endif %}.</p>
+  </div>
+</div>
+
+{% if sem_contas %}
+<div class="fin-onboarding">
+  <h3>Primeiros passos</h3>
+  <ol>
+    <li><a href="{{ url_for('financas.cad_contas', slug=empresa.slug) }}">Cadastre as contas bancárias</a> com o saldo inicial.</li>
+    <li>Revise o <a href="{{ url_for('financas.cad_categorias', slug=empresa.slug) }}">plano de categorias</a> (já vem um modelo pronto).</li>
+    <li>Cadastre <a href="{{ url_for('financas.cad_pessoas', slug=empresa.slug) }}">clientes e fornecedores</a>.</li>
+    <li>Lance contas a receber e a pagar, ou importe o extrato OFX na <a href="{{ url_for('financas.conciliacao', slug=empresa.slug) }}">conciliação</a>.</li>
+  </ol>
+</div>
+{% endif %}
+
+{# ── Indicadores principais ── #}
+<div class="vg-kpis">
+  <a class="vg-kpi escuro" href="{{ url_for('financas.extrato', slug=empresa.slug) }}">
+    <small>{{ fic('banco') }} Saldo em contas</small>
+    <b class="{{ 'neg' if saldo_atual < 0 }}">{{ moeda(saldo_atual) }}</b>
+    <em>{{ contas|length }} conta(s) corrente(s) e aplicação(ões)</em>
+  </a>
+  <a class="vg-kpi" href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo='receber', situacao='abertos', de='2000-01-01', ate='2100-12-31') }}">
+    <small>{{ fic('receber') }} A receber</small>
+    <b class="pos">{{ moeda(ind.receber.valor) }}</b>
+    <em>{{ ind.receber.n }} título(s) em aberto</em>
+  </a>
+  <a class="vg-kpi" href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo='pagar', situacao='abertos', de='2000-01-01', ate='2100-12-31') }}">
+    <small>{{ fic('pagar') }} A pagar</small>
+    <b class="neg">{{ moeda(ind.pagar.valor) }}</b>
+    <em>{{ ind.pagar.n }} título(s) em aberto</em>
+  </a>
+  <div class="vg-kpi {{ 'alerta' if ind.atraso }}">
+    <small>{{ fic('relogio') }} Em atraso</small>
+    <b class="{{ 'neg' if ind.atraso }}">{{ moeda(ind.atraso) }}</b>
+    <em>Receber {{ moeda(ind.receber_venc.valor) }} · Pagar {{ moeda(ind.pagar_venc.valor) }}</em>
+  </div>
+  <a class="vg-kpi" href="{{ url_for('financas.rel_fluxo', slug=empresa.slug) }}">
+    <small>{{ fic('fluxo') }} Resultado do mês</small>
+    <b class="{{ 'neg' if mes.entradas - mes.saidas < 0 else 'pos' }}">{{ moeda(mes.entradas - mes.saidas) }}</b>
+    <em>Entrou {{ moeda(mes.entradas) }} · saiu {{ moeda(mes.saidas) }}</em>
+  </a>
+  <div class="vg-kpi">
+    <small>{{ fic('calendario') }} Saldo em 30 dias</small>
+    <b class="{{ 'neg' if proj[-1].saldo < 0 }}">{{ moeda(proj[-1].saldo) }}</b>
+    <em>Menor saldo previsto {{ moeda(proj|map(attribute='saldo')|min) }}</em>
+  </div>
+</div>
+
+{# ── Contas, receber e pagar ── #}
+<div class="vg-grade">
+  <section class="vg-box">
+    <header><h3>Saldo por conta</h3><a href="{{ url_for('financas.cad_contas', slug=empresa.slug) }}">Contas bancárias</a></header>
+    <div class="vg-contas-rol"><ul class="vg-contas">
+      {% for c in contas|sort(attribute='saldo', reverse=True) %}
+        {% set cor = CORES[loop.index0 % CORES|length] if (not c.cor or c.cor|upper == '#C9A45C') else c.cor %}
+        <li>
+          <span class="cor" style="background:{{ cor }}"></span>
+          <span class="nm"><b>{{ c.nome }}</b><small>{{ c.banco or TIPOS_CONTA.get(c.tipo, '') }}</small></span>
+          <span class="vl {{ 'neg' if c.saldo < 0 }}" style="{{ 'color:var(--fin-neg)' if c.saldo < 0 }}">{{ moeda(c.saldo) }}</span>
+          <span class="barra"><i style="width:{{ (100 * (c.saldo|abs) / maior)|round(1) }}%;background:{{ 'var(--fin-neg)' if c.saldo < 0 else cor }}"></i></span>
+        </li>
+      {% else %}
+        <li><span></span><span class="nm"><b>Nenhuma conta cadastrada</b></span><span></span></li>
+      {% endfor %}
+    </ul></div>
+    <ul class="vg-contas">
+      <li class="total"><span></span><span class="nm"><b>Total</b></span>
+        <span class="vl" style="{{ 'color:var(--fin-neg)' if saldo_atual < 0 }}">{{ moeda(saldo_atual) }}</span></li>
+    </ul>
+    <div class="vg-ind">
+      <div title="Quanto do total a receber já está vencido"><small>Inadimplência</small><b style="{{ 'color:var(--fin-neg)' if ind.inadimplencia > 10 }}">{{ '%.1f'|format(ind.inadimplencia) }}%</b></div>
+      <div title="Saldo atual dividido pelo que vence a pagar nos próximos 30 dias"><small>Cobertura de caixa</small><b>{{ ('%.1fx'|format(ind.cobertura)) if ind.cobertura is not none else '—' }}</b></div>
+      <div title="Saldo + a receber − a pagar (vencidos e próximos 30 dias)"><small>Líquido 30 dias</small><b style="{{ 'color:var(--fin-neg)' if ind.liquido_30 < 0 }}">{{ moeda(ind.liquido_30) }}</b></div>
+    </div>
+  </section>
+
+  {% for tp, rot, chave in [('receber', 'Contas a receber', 'receber'), ('pagar', 'Contas a pagar', 'pagar')] %}
+  <section class="vg-box">
+    <header><h3>{{ fic(tp) }} {{ rot }}</h3><a href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo=tp) }}">Abrir</a></header>
+    <div class="vg-linhas">
+      <a class="risco" href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo=tp, situacao='vencido', de='2000-01-01', ate=hoje_iso) }}">
+        <span>Vencido ({{ ind[chave ~ '_venc'].n }})</span><b>{{ moeda(ind[chave ~ '_venc'].valor) }}</b></a>
+      <a href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo=tp, situacao='abertos', de=hoje_iso, ate=hoje_iso) }}">
+        <span>Vence hoje</span><b>{{ moeda(cards[chave ~ '_hoje']) }}</b></a>
+      <a href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo=tp, situacao='abertos') }}">
+        <span>Próximos 7 dias</span><b>{{ moeda(cards[chave ~ '_7']) }}</b></a>
+      <a href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo=tp, situacao='abertos', de=hoje_iso) }}">
+        <span>Próximos 30 dias ({{ ind[chave ~ '_30'].n }})</span><b>{{ moeda(ind[chave ~ '_30'].valor) }}</b></a>
+      <div class="total"><span>Total em aberto</span><b>{{ moeda(ind[chave].valor) }}</b></div>
+    </div>
+  </section>
+  {% endfor %}
+</div>
+
+{# ── Projeção e agenda ── #}
+<div class="vg-cols">
+  <section class="vg-box">
+    <header><h3>Saldo projetado — próximos 30 dias</h3><span>saldo atual + a receber − a pagar</span></header>
+    {% set vals = proj|map(attribute='saldo')|list %}
+    {% set mx = [vals|max, 0]|max %}{% set mn = [vals|min, 0]|min %}{% set amp = (mx - mn) or 1 %}
+    <svg class="fin-graf" viewBox="0 0 620 190" preserveAspectRatio="none" role="img" aria-label="Saldo projetado">
+      {% set y0 = 10 + (mx - 0) * 150 / amp %}
+      <line x1="10" x2="610" y1="{{ y0 }}" y2="{{ y0 }}" class="zero"/>
+      <polyline class="linha" fill="none" points="{% for p in proj %}{{ 10 + loop.index0 * 20 }},{{ 10 + (mx - p.saldo) * 150 / amp }} {% endfor %}"/>
+      {% for p in proj %}{% if loop.index0 % 5 == 0 %}
+        <text x="{{ 10 + loop.index0 * 20 }}" y="185" text-anchor="middle">{{ data_br(p.dia)[:5] }}</text>{% endif %}{% endfor %}
+    </svg>
+    <div class="fin-graf-leg"><span>Hoje: <b>{{ moeda(proj[0].saldo) }}</b></span><span>Em 30 dias: <b class="{{ 'neg' if proj[-1].saldo < 0 }}">{{ moeda(proj[-1].saldo) }}</b></span>
+      <span>Menor saldo: <b class="{{ 'neg' if vals|min < 0 }}">{{ moeda(vals|min) }}</b></span></div>
+  </section>
+  <section class="vg-box">
+    <header><h3>Vencidos e próximos 7 dias</h3></header>
+    <ul class="fin-prox">
+      {% for l in proximos %}
+        <li><a href="{{ url_for('financas.lancamento', slug=empresa.slug, lid=l.id) }}">
+          <span class="fin-seta {{ l.tipo }}">{{ fic(l.tipo) }}</span>
+          <span class="txt"><b>{{ l.descricao }}</b><small>{{ l.pessoa_nome or l.categoria_nome or '—' }}</small></span>
+          <span class="dir"><b class="{{ 'neg' if l.tipo == 'pagar' }}">{{ moeda(l.saldo) }}</b>
+            <small class="{{ 'risco' if l.situacao == 'vencido' }}">{{ 'Venceu ' if l.situacao == 'vencido' }}{{ data_br(l.vencimento) }}</small></span>
+        </a></li>
+      {% else %}
+        <li class="vazio">Nada vencido nem vencendo nos próximos 7 dias.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+{# ── Produtos (Capuzzo Assessoria) ── #}
+{% if produtos %}
+{% set pc = produtos.condominios %}{% set pt = produtos.titulos %}{% set pg = produtos.tatica %}
+<div class="vg-secao"><h2>Produtos</h2></div>
+<div class="vg-prods">
+  <section class="vg-box vg-prod">
+    <header><h3>{{ fic('predio') }} Condomínios</h3><a href="{{ url_for('financas.cond_painel', slug=empresa.slug) }}">Abrir</a></header>
+    <div class="vg-big"><small>Patrimônio ativo</small>{{ pc.patrimonio_fmt }}</div>
+    <div class="vg-linhas">
+      <div><span>Cotas ativas · cotistas</span><b>{{ pc.cotas_ativas }} · {{ pc.cotistas }}</b></div>
+      <div><span>Rendimento mensal estimado</span><b>{{ pc.rendimento_fmt }}</b></div>
+      <a href="{{ url_for('financas.cond_vencimentos', slug=empresa.slug) }}"><span>Vencem em 30 dias</span><b>{{ pc.vencem_30 }} cota(s)</b></a>
+      <a href="{{ url_for('financas.cond_vencimentos', slug=empresa.slug, aba='retiradas') }}"><span>Retiradas solicitadas</span><b>{{ pc.retiradas }}</b></a>
+      <a href="{{ url_for('financas.cond_contratos', slug=empresa.slug) }}"><span>Contratos a assinar / aguardando depósito</span><b>{{ pc.contratos_aguardando }} / {{ pc.contratos_deposito }}</b></a>
+    </div>
+  </section>
+  <section class="vg-box vg-prod">
+    <header><h3>{{ fic('titulo') }} Títulos Privados</h3><a href="{{ url_for('financas.titulos_painel', slug=empresa.slug) }}">Abrir</a></header>
+    <div class="vg-big"><small>Carteira a receber</small>{{ pt.a_receber_fmt }}</div>
+    <div class="vg-linhas">
+      <div><span>Empréstimos ativos</span><b>{{ pt.ativos }}</b></div>
+      <div class="{{ 'risco' if pt.vencidas }}"><span>Parcelas vencidas</span><b>{{ pt.vencidas }} · {{ pt.vencido_fmt }}</b></div>
+      <div><span>Próxima parcela</span><b>{{ pt.proxima or '—' }}</b></div>
+    </div>
+  </section>
+  <a class="vg-box vg-prod" href="{{ url_for('financas.tatica_painel', slug=empresa.slug) }}" style="text-decoration:none;color:inherit">
+    <header><h3>{{ fic('tatica') }} Gestão Tática</h3><span>{{ pg.rotulo or '' }}</span></header>
+    {% if pg.uc %}
+    <div class="vg-big"><small>Patrimônio sob gestão</small>{{ pg.saldo_fmt }}</div>
+    <div class="vg-linhas">
+      <div><span>Clientes com banca</span><b>{{ pg.n }}</b></div>
+      <div><span>Resultado bruto · rentabilidade</span><b>{{ pg.bruto_fmt }} · {{ '%.2f'|format((pg.rentab or 0) * 100) }}%</b></div>
+      <div><span>Taxa de gestão + tarifas</span><b>{{ pg.receita_fmt }}</b></div>
+    </div>
+    {% else %}
+    <div class="vg-big"><small>Importe a planilha da GT</small>—</div>
+    {% endif %}
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

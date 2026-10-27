@@ -1,0 +1,34 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ modulo.nome }} · {{ empresa.nome }}{% endblock %}
+{% block brand %}
+  <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt=""></span>
+  <span class="tb-name"><b>{{ empresa.nome }}</b><small>Grupo Capuzzo</small></span>
+{% endblock %}
+{% block tb_links %}
+  <a class="tb-btn" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">{{ ic('grid_view') }}<span class="lbl">Módulos</span></a>
+  <a class="tb-btn" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span class="lbl">Empresas</span></a>
+  {% include "operacao/_barra_empresa.html" ignore missing %}
+{% endblock %}
+{% block content %}
+<div class="mod-layout">
+  <aside class="side">
+    <div class="side-title">Módulos</div>
+    {% for m in modulos %}
+      <a class="side-link {{ 'on' if m.id == modulo.id }}" href="{{ url_for('portal_modulo', slug=empresa.slug, modulo_id=m.id) }}">
+        {{ ic(m.icone) }}{{ m.nome }}</a>
+    {% endfor %}
+    <div class="side-sep"></div>
+    <a class="side-link" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">{{ ic('arrow_back') }}Voltar aos módulos</a>
+  </aside>
+  <section class="mod-main">
+    <div class="banner">
+      <div class="txt"><small>{{ empresa.nome }}</small><h1>{{ modulo.nome }}</h1><p>{{ modulo.desc }}</p></div>
+    </div>
+    <div class="empty">
+      <div class="empty-ic">{{ ic(modulo.icone) }}</div>
+      <h3>Módulo em construção</h3>
+      <p>As informações de {{ modulo.nome|lower }} da {{ empresa.nome }} aparecerão aqui assim que o módulo for publicado.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}

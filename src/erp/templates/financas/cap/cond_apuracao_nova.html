@@ -1,0 +1,56 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Nova apuração{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Apuração mensal', 'Calcule os rendimentos do mês, confira por cotista e salve no histórico.') %}
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_apuracao', slug=empresa.slug) }}">{{ ic('history') }} Histórico</a>
+{% endcall %}
+
+<form method="post" class="fin-box fin-form ap-form" id="f-apur">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <div><label class="lbl">Mês</label><select class="inp" name="mes">{% for i in range(1, 13) %}<option value="{{ i }}" {{ 'selected' if mes == i }}>{{ MESES[i] }}</option>{% endfor %}</select></div>
+  <div><label class="lbl">Ano</label><input class="inp" type="number" name="ano" min="2020" max="2099" value="{{ ano }}"></div>
+  <div><label class="lbl">Produto</label><select class="inp" name="produto" id="ap-prod">
+    <option value="">Todos os produtos</option>{% for c in conds %}<option value="{{ c.code }}" {{ 'selected' if prod == c.code }}>{{ c.name }}</option>{% endfor %}</select></div>
+  <div id="ap-agro"><label class="lbl">Taxa especial Agro (%) <small class="co-dica">3,5 a 4,5 — só se houver cota vencendo</small></label>
+    <input class="inp" name="agro_special_rate" value="{{ agro_txt }}" placeholder="Ex.: 4,0"></div>
+  <div class="ap-btn"><button class="btn-pill fin-btn" type="submit">{{ fic('calculo') }} Calcular</button></div>
+</form>
+
+{% if erro %}<div class="flash flash-error" style="margin:.8rem 0">{{ erro }}</div>{% endif %}
+
+{% if r %}
+<div class="vg-kpis" style="margin-top:1rem">
+  <div class="vg-kpi escuro"><small>Total a pagar · {{ MESES[r.mes] }}/{{ r.ano }}</small><b>{{ reais(r.total_geral) }}</b><em>{{ COND_NOMES.get(r.produto, 'Todos os produtos') }}</em></div>
+  <div class="vg-kpi"><small>Cotistas</small><b>{{ r.consolidado|length }}</b></div>
+  <div class="vg-kpi"><small>Cotas</small><b>{{ r.qty_cotas }}</b></div>
+  <div class="vg-kpi"><small>Capital</small><b>{{ reais(r.capital) }}</b></div>
+  {% for c, v in r.por_produto.items() %}<div class="vg-kpi"><small>{{ COND_NOMES[c] }}</small><b>{{ reais(v) }}</b>{% if c == 'agro' and r.agro_rate %}<em>taxa especial {{ '%.2f'|format(r.agro_rate|float * 100) }}%</em>{% endif %}</div>{% endfor %}
+</div>
+
+{% if r.duplicata %}
+  <div class="flash flash-warning" style="margin:.8rem 0">Já existe apuração salva para {{ MESES[r.mes] }}/{{ r.ano }} — {{ COND_NOMES.get(r.produto, 'todos os produtos') }}.
+    <a href="{{ url_for('financas.cond_apuracao', slug=empresa.slug) }}">Abrir o histórico</a> (para refazer, exclua a anterior).</div>
+{% else %}
+  <form method="post" action="{{ url_for('financas.cond_apuracao_salvar', slug=empresa.slug) }}" class="ap-salvar">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="mes" value="{{ r.mes }}"><input type="hidden" name="ano" value="{{ r.ano }}"><input type="hidden" name="produto" value="{{ r.produto }}">
+    <input type="hidden" name="agro_rate" value="{{ r.agro_rate|float if r.agro_rate else '' }}">
+    <input type="hidden" name="items_json" id="ap-items">
+    <button class="btn-pill fin-btn" type="submit">{{ ic('save') }} Salvar no histórico</button>
+    <span>Um backup do banco é feito antes de salvar. Depois de salva, a apuração gera o Excel e o arquivo do banco.</span>
+  </form>
+  <script>document.getElementById('ap-items').value = JSON.stringify({{ r['items']|tojson }});</script>
+{% endif %}
+
+<section class="vg-box" style="margin-top:1rem">
+  <header><h3>Consolidado por cotista</h3><span>{{ r.consolidado|length }} cotista(s) · {{ r.qty_cotas }} cota(s)</span></header>
+  {% with clientes = r.consolidado, conferir = false %}{% include "financas/cap/_apur_cliente.html" %}{% endwith %}
+</section>
+{% endif %}
+
+<script>
+(function () { var s = document.getElementById('ap-prod'), a = document.getElementById('ap-agro');
+  function t() { a.style.display = (!s.value || s.value === 'agro') ? '' : 'none'; } s.addEventListener('change', t); t(); })();
+</script>
+{% endblock %}

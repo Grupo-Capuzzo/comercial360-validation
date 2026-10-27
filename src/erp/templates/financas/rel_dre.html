@@ -1,0 +1,48 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}DRE {{ ano }}{% endblock %}
+{% block fin_conteudo %}
+<div class="fin-head">
+  <div>
+    <div class="eyebrow-line">Relatórios</div>
+    <h1>DRE gerencial</h1>
+    <p>Resultado por grupo e categoria. Competência: pela data de competência dos lançamentos. Caixa: pela data em que foi pago/recebido.</p>
+  </div>
+  <div class="fin-ano">
+    <div class="chips">
+      <a class="chip {{ 'on' if regime == 'competencia' }}" href="{{ url_for('financas.rel_dre', slug=empresa.slug, ano=ano, regime='competencia') }}">Competência</a>
+      <a class="chip {{ 'on' if regime == 'caixa' }}" href="{{ url_for('financas.rel_dre', slug=empresa.slug, ano=ano, regime='caixa') }}">Caixa</a>
+    </div>
+    <a class="fin-seta-mes" href="{{ url_for('financas.rel_dre', slug=empresa.slug, ano=ano - 1, regime=regime) }}">‹</a><b>{{ ano }}</b>
+    <a class="fin-seta-mes" href="{{ url_for('financas.rel_dre', slug=empresa.slug, ano=ano + 1, regime=regime) }}">›</a>
+  </div>
+</div>
+{% macro linha_total(rot, t, classe='') %}
+  <tr class="fin-dre-total {{ classe }}"><td>{{ rot }}</td>{% for v in t.meses %}<td class="num {{ 'neg' if v < 0 }}">{{ moeda(v) if v else '—' }}</td>{% endfor %}
+    <td class="num {{ 'neg' if t.total < 0 }}"><b>{{ moeda(t.total) }}</b></td></tr>
+{% endmacro %}
+{% set ordem_chaves = r.ordem|map(attribute='chave')|list %}
+<div class="fin-tabela-wrap fin-dre-wrap">
+  <table class="fin-tabela fin-dre">
+    <thead><tr><th>Conta</th>{% for m in MESES[1:] %}<th class="num">{{ m }}</th>{% endfor %}<th class="num">Total</th></tr></thead>
+    <tbody>
+    {% if not r.ordem %}
+      <tr class="vazio"><td colspan="14">Nenhum lançamento em {{ ano }} ({{ regime }}).</td></tr>
+    {% endif %}
+    {% for chave in ['receita_bruta','deducoes','custos','despesas_operacionais','pessoal','receitas_financeiras','despesas_financeiras','outras_receitas','outras_despesas','sem_categoria','impostos_lucro','investimentos'] %}
+      {% if chave in ordem_chaves %}{% set gr = r.grupos[chave] %}
+      <tr class="fin-dre-grupo"><td>{{ gr.nome }}</td>{% for v in gr.meses %}<td class="num {{ 'neg' if v < 0 }}">{{ moeda(v) if v else '—' }}</td>{% endfor %}<td class="num"><b>{{ moeda(gr.total) }}</b></td></tr>
+      {% for c in gr.cats %}
+        <tr class="fin-dre-cat"><td>{{ c.nome }}</td>{% for v in c.meses %}<td class="num">{{ moeda(v) if v else '' }}</td>{% endfor %}<td class="num">{{ moeda(c.total) }}</td></tr>
+      {% endfor %}
+      {% endif %}
+      {% if chave == 'deducoes' %}{{ linha_total('= Receita líquida', r.totais.receita_liquida) }}{% endif %}
+      {% if chave == 'custos' %}{{ linha_total('= Lucro bruto', r.totais.lucro_bruto) }}{% endif %}
+      {% if chave == 'pessoal' %}{{ linha_total('= Resultado operacional (EBITDA)', r.totais.resultado_operacional) }}{% endif %}
+      {% if chave == 'sem_categoria' %}{{ linha_total('= Resultado antes do IR', r.totais.resultado_antes_ir) }}{% endif %}
+      {% if chave == 'impostos_lucro' %}{{ linha_total('= Resultado líquido', r.totais.resultado_liquido, 'final') }}{% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="fin-sub">Investimentos aparecem na DRE para conferência, mas não entram no resultado (como no Conta Azul).</p>
+{% endblock %}

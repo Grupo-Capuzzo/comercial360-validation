@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Novo Cliente' if modo == 'novo' else 'Editar Cliente' }} — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('clientes_lista') }}" class="back-link">← Voltar para Clientes</a>
+
+<div class="page-header">
+  <div class="page-header-icon">{{ '➕' if modo == 'novo' else '✏️' }}</div>
+  <div class="page-header-title">{{ 'Novo Cliente' if modo == 'novo' else 'Editar Cliente' }}</div>
+  <div class="page-header-sub">
+    {{ 'Preencha os dados do novo cotista.' if modo == 'novo' else 'Atualize os dados do cotista.' }}
+  </div>
+</div>
+
+<div class="card-gold">
+  <form method="post">
+
+    <!-- Dados pessoais -->
+    <div class="form-section">
+      <div class="form-section-title">Dados Pessoais</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome Completo *</label>
+          <input type="text" name="full_name" value="{{ cliente.get('full_name','') }}"
+                 class="form-control" required placeholder="Nome do cotista">
+        </div>
+        <div class="form-group">
+          <label>CPF/CNPJ *</label>
+          <input type="text" name="cpf" value="{{ cliente.get('cpf','') }}"
+                 class="form-control" required data-mask="cpfcnpj"
+                 placeholder="000.000.000-00 ou 00.000.000/0000-00">
+          <div style="font-size:11px;color:#666;margin-top:4px;">CPF (11 dígitos) ou CNPJ (14 dígitos) — formatação automática</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" name="email" value="{{ cliente.get('email','') }}"
+                 class="form-control" placeholder="email@exemplo.com">
+        </div>
+        <div class="form-group">
+          <label>Telefone</label>
+          <input type="text" name="phone" value="{{ cliente.get('phone','') }}"
+                 class="form-control" data-mask="phone"
+                 placeholder="(00) 00000-0000">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" class="form-control" style="max-width:200px;">
+            <option value="ativo"   {{ 'selected' if cliente.get('status','ativo') == 'ativo' else '' }}>Ativo</option>
+            <option value="inativo" {{ 'selected' if cliente.get('status') == 'inativo' else '' }}>Inativo</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dados para contrato -->
+    <div class="form-section" id="secao-contrato">
+      <div class="form-section-title">Dados para Contrato
+        <span style="color:#555;font-size:12px;font-weight:400;">(usados no Termo de Aquisição e demais contratos)</span></div>
+      <div class="form-row">
+        <div class="form-group" style="max-width:220px;">
+          <label>Nacionalidade</label>
+          <input type="text" name="nationality" value="{{ cliente.get('nationality') or 'brasileiro(a)' }}"
+                 class="form-control" placeholder="brasileiro(a)">
+        </div>
+        <div class="form-group" style="max-width:240px;">
+          <label>Estado Civil</label>
+          <select name="marital_status" class="form-control">
+            <option value="">—</option>
+            <option value="Solteiro(a)" {{ 'selected' if cliente.get('marital_status') == 'Solteiro(a)' else '' }}>Solteiro(a)</option>
+            <option value="Casado(a)" {{ 'selected' if cliente.get('marital_status') == 'Casado(a)' else '' }}>Casado(a)</option>
+            <option value="União estável" {{ 'selected' if cliente.get('marital_status') == 'União estável' else '' }}>União estável</option>
+            <option value="Divorciado(a)" {{ 'selected' if cliente.get('marital_status') == 'Divorciado(a)' else '' }}>Divorciado(a)</option>
+            <option value="Separado(a)" {{ 'selected' if cliente.get('marital_status') == 'Separado(a)' else '' }}>Separado(a)</option>
+            <option value="Viúvo(a)" {{ 'selected' if cliente.get('marital_status') == 'Viúvo(a)' else '' }}>Viúvo(a)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Profissão</label>
+          <input type="text" name="profession" value="{{ cliente.get('profession') or '' }}"
+                 class="form-control" placeholder="Ex.: Psicóloga, Engenheiro, Empresário">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="max-width:170px;">
+          <label>CEP</label>
+          <input type="text" name="address_zip" id="cli-cep" value="{{ cliente.get('address_zip') or '' }}"
+                 class="form-control" placeholder="00000-000" maxlength="9" inputmode="numeric">
+          <div id="cli-cep-status" style="font-size:11px;color:#666;margin-top:4px;">Preenche o endereço automaticamente</div>
+        </div>
+        <div class="form-group">
+          <label>Endereço (logradouro, número e complemento)</label>
+          <input type="text" name="address_street" id="cli-rua" value="{{ cliente.get('address_street') or '' }}"
+                 class="form-control" placeholder="Ex.: SQN 406 Bloco K Apt 208">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Bairro</label>
+          <input type="text" name="address_district" id="cli-bairro" value="{{ cliente.get('address_district') or '' }}"
+                 class="form-control" placeholder="Ex.: Asa Norte">
+        </div>
+        <div class="form-group">
+          <label>Cidade</label>
+          <input type="text" name="address_city" id="cli-cidade" value="{{ cliente.get('address_city') or '' }}"
+                 class="form-control" placeholder="Ex.: Brasília">
+        </div>
+        <div class="form-group" style="max-width:90px;">
+          <label>UF</label>
+          <input type="text" name="address_state" id="cli-uf" value="{{ cliente.get('address_state') or '' }}"
+                 class="form-control" placeholder="DF" maxlength="2" style="text-transform:uppercase;">
+        </div>
+      </div>
+    </div>
+    <script>
+    (function(){
+      var cep = document.getElementById('cli-cep'), st = document.getElementById('cli-cep-status');
+      if(!cep) return;
+      function fmt(){ var d = cep.value.replace(/\D/g,'').slice(0,8); cep.value = d.length > 5 ? d.slice(0,5)+'-'+d.slice(5) : d; return d; }
+      cep.addEventListener('input', fmt);
+      cep.addEventListener('blur', function(){
+        var d = fmt(); if(d.length !== 8) return;
+        st.textContent = 'Buscando endereço…';
+        fetch('https://viacep.com.br/ws/'+d+'/json/').then(function(r){ return r.json(); }).then(function(j){
+          if(j.erro){ st.textContent = 'CEP não encontrado — preencha manualmente.'; return; }
+          var rua = document.getElementById('cli-rua');
+          if(!rua.value && j.logradouro) rua.value = j.logradouro + (j.complemento ? ' ' + j.complemento : '');
+          document.getElementById('cli-bairro').value = j.bairro || document.getElementById('cli-bairro').value;
+          document.getElementById('cli-cidade').value = j.localidade || '';
+          document.getElementById('cli-uf').value = j.uf || '';
+          st.textContent = 'Endereço preenchido — confira número e complemento.';
+        }).catch(function(){ st.textContent = 'Sem conexão com o ViaCEP — preencha manualmente.'; });
+      });
+    })();
+    </script>
+
+    <!-- Dados Financeiros / Pix -->
+    <div class="form-section">
+      <div class="form-section-title">Dados Financeiros</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Chave PIX</label>
+          <input type="text" name="pix_key" value="{{ cliente.get('pix_key','') }}"
+                 class="form-control" placeholder="CPF, e-mail ou chave aleatória">
+        </div>
+      </div>
+    </div>
+
+    <!-- Dados Bancários -->
+    <div class="form-section">
+      <div class="form-section-title">Dados Bancários <span style="color:#555;font-size:12px;font-weight:400;">(opcional — para clientes sem Pix)</span></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Banco</label>
+          <input type="text" name="bank_name" value="{{ cliente.get('bank_name','') }}"
+                 class="form-control" placeholder="Ex: Bradesco, Itaú, Caixa">
+        </div>
+        <div class="form-group" style="max-width:160px;">
+          <label>Agência</label>
+          <input type="text" name="bank_agency" value="{{ cliente.get('bank_agency','') }}"
+                 class="form-control" placeholder="0000">
+        </div>
+        <div class="form-group" style="max-width:200px;">
+          <label>Conta</label>
+          <input type="text" name="bank_account" value="{{ cliente.get('bank_account','') }}"
+                 class="form-control" placeholder="00000">
+        </div>
+        <div class="form-group" style="max-width:100px;">
+          <label>Dígito</label>
+          <input type="text" name="bank_account_digit" value="{{ cliente.get('bank_account_digit','') }}"
+                 class="form-control" placeholder="0" maxlength="2">
+        </div>
+        <div class="form-group" style="max-width:180px;">
+          <label>Tipo de Conta</label>
+          <select name="bank_account_type" class="form-control">
+            <option value="">—</option>
+            <option value="Corrente"  {{ 'selected' if cliente.get('bank_account_type') == 'Corrente'  else '' }}>Corrente</option>
+            <option value="Poupança"  {{ 'selected' if cliente.get('bank_account_type') == 'Poupança'  else '' }}>Poupança</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Titular da Conta</label>
+          <input type="text" name="bank_holder_name" value="{{ cliente.get('bank_holder_name','') }}"
+                 class="form-control" placeholder="Nome do titular (se diferente do cliente)">
+        </div>
+        <div class="form-group">
+          <label>CPF/CNPJ do Titular <span style="color:#555;font-size:12px;">(se diferente)</span></label>
+          <input type="text" name="bank_holder_document" value="{{ cliente.get('bank_holder_document','') }}"
+                 class="form-control" data-mask="cpfcnpj"
+                 placeholder="CPF ou CNPJ do titular">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observações Bancárias</label>
+        <input type="text" name="bank_notes" value="{{ cliente.get('bank_notes','') }}"
+               class="form-control" placeholder="Informações adicionais sobre pagamento">
+      </div>
+    </div>
+
+    <!-- Observações -->
+    <div class="form-section">
+      <div class="form-section-title">Observações</div>
+      <div class="form-group">
+        <textarea name="notes" class="form-control" rows="3"
+                  placeholder="Anotações internas (opcional)">{{ cliente.get('notes','') }}</textarea>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a href="{{ url_for('clientes_lista') }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">
+        {{ '✓ Cadastrar Cliente' if modo == 'novo' else '✓ Salvar Alterações' }}
+      </button>
+    </div>
+
+  </form>
+</div>
+
+{% endblock %}

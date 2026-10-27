@@ -1,0 +1,106 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Extrato bancário{% endblock %}
+{% block fin_conteudo %}
+<div class="fin-head">
+  <div>
+    <div class="eyebrow-line">Finanças</div>
+    <h1>Extrato bancário</h1>
+    <p>Tudo o que entrou e saiu de cada conta, com o saldo dia a dia.</p>
+  </div>
+  {% if conta %}
+  <div class="fin-acoes">
+    <button class="btn-pill outline fin-btn" type="button" data-abrir="dlg-transf">{{ fic('transferir') }} Transferência</button>
+    <button class="btn-pill fin-btn" type="button" data-abrir="dlg-mov">{{ fic('add') }} Movimento avulso</button>
+  </div>
+  {% endif %}
+</div>
+
+{% if not contas %}
+  <div class="fin-onboarding"><h3>Nenhuma conta cadastrada</h3><p><a href="{{ url_for('financas.cad_contas', slug=empresa.slug) }}">Cadastre a primeira conta bancária</a> para ver o extrato.</p></div>
+{% else %}
+<div class="fin-contas-abas">
+  {% for c in contas %}
+    <a class="{{ 'on' if conta and c.id == conta.id }} {{ 'inativa' if not c.ativa }}" href="{{ url_for('financas.extrato', slug=empresa.slug, conta=c.id, de=de, ate=ate) }}">
+      <small>{{ TIPOS_CONTA.get(c.tipo, '') }}</small><b>{{ c.nome }}</b><span class="{{ 'neg' if c.saldo < 0 }}">{{ moeda(c.saldo) }}</span></a>
+  {% endfor %}
+</div>
+
+{% set ep = 'financas.extrato' %}{% set extra = {'conta': conta.id} %}
+{% include "financas/_periodo.html" %}
+
+<div class="fin-totais">
+  <div><small>Saldo anterior</small><b class="{{ 'neg' if saldo_ini < 0 }}">{{ moeda(saldo_ini) }}</b></div>
+  <div class="pos"><small>Entradas</small><b>{{ moeda(entradas) }}</b></div>
+  <div class="risco"><small>Saídas</small><b>{{ moeda(saidas) }}</b></div>
+  <div class="dark"><small>Saldo no fim do período</small><b>{{ moeda(saldo_ini + entradas - saidas) }}</b></div>
+</div>
+
+<div class="fin-tabela-wrap">
+  <table class="fin-tabela">
+    <thead><tr><th>Data</th><th>Descrição</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th><th></th></tr></thead>
+    <tbody>
+      <tr class="saldo-ant"><td class="dt">{{ data_br(de) }}</td><td colspan="3">Saldo anterior</td><td class="num">{{ moeda(saldo_ini) }}</td><td></td></tr>
+      {% for m in movs %}
+      <tr>
+        <td data-rot="Data" class="dt">{{ data_br(m.data) }}</td>
+        <td data-rot="Descrição" class="desc">
+          {% if m.lancamento_id %}<a href="{{ url_for('financas.lancamento', slug=empresa.slug, lid=m.lancamento_id) }}"><b>{{ m.descricao }}</b></a>{% else %}<b>{{ m.descricao }}</b>{% endif %}
+          <small>{% if m.origem == 'transferencia' %}Transferência entre contas{% else %}{{ m.categoria_nome or 'Sem categoria' }}{% if m.pessoa_nome %} · {{ m.pessoa_nome }}{% endif %}{% endif %}
+            {% if m.conciliado %} · <span class="fin-ok">✓ conciliado</span>{% endif %}</small></td>
+        <td data-rot="Entrada" class="num pos">{{ moeda(m.valor) if m.valor > 0 else '' }}</td>
+        <td data-rot="Saída" class="num risco">{{ moeda(-m.valor) if m.valor < 0 else '' }}</td>
+        <td data-rot="Saldo" class="num {{ 'neg' if m.saldo < 0 }}">{{ moeda(m.saldo) }}</td>
+        <td class="acoes">{% if m.transferencia_id %}
+          <form method="post" action="{{ url_for('financas.transferencia_excluir', slug=empresa.slug, tid=m.transferencia_id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ request.full_path }}">
+            <button class="fin-link-risco" type="submit" title="Excluir a transferência (das duas contas)">Excluir</button></form>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr class="vazio"><td colspan="6">Nenhuma movimentação neste período.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<dialog id="dlg-mov" class="dlg fin-dlg">
+  <form method="post" action="{{ url_for('financas.movimento_novo', slug=empresa.slug) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ request.full_path }}">
+    <input type="hidden" name="conta_id" value="{{ conta.id }}">
+    <div class="dlg-head"><h3>Movimento avulso — {{ conta.nome }}</h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+    <p class="fin-sub">Para tarifas, rendimentos e outros valores que já aconteceram na conta.</p>
+    <div class="seg fin-seg">
+      <input type="radio" id="mv-e" name="sentido" value="entrada"><label for="mv-e">Entrada</label>
+      <input type="radio" id="mv-s" name="sentido" value="saida" checked><label for="mv-s">Saída</label>
+    </div>
+    <label class="lbl">Descrição</label><input class="inp" name="descricao" required maxlength="200" placeholder="Ex.: Tarifa de manutenção">
+    <div class="fin-2col">
+      <div><label class="lbl">Data</label><input class="inp" type="date" name="data" value="{{ hoje_iso }}"></div>
+      <div><label class="lbl">Valor (R$)</label><input class="inp" name="valor" required data-moeda placeholder="R$ 0,00"></div>
+    </div>
+    <div class="fin-2col">
+      <div><label class="lbl">Categoria</label><select class="inp" name="categoria_id"><option value="">—</option>
+        {% for c in categorias %}<option value="{{ c.id }}">{{ c.nome }} ({{ 'receita' if c.tipo == 'receita' else 'despesa' }})</option>{% endfor %}</select></div>
+      <div><label class="lbl">Cliente/fornecedor</label><select class="inp" name="pessoa_id"><option value="">—</option>
+        {% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select></div>
+    </div>
+    <button class="btn-pill" type="submit">Lançar no extrato</button>
+  </form>
+</dialog>
+<dialog id="dlg-transf" class="dlg fin-dlg">
+  <form method="post" action="{{ url_for('financas.transferencia', slug=empresa.slug) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ request.full_path }}">
+    <div class="dlg-head"><h3>Transferência entre contas</h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+    <div class="fin-2col">
+      <div><label class="lbl">De</label><select class="inp" name="origem_id">{% for c in contas_ativas %}<option value="{{ c.id }}" {{ 'selected' if c.id == conta.id }}>{{ c.nome }}</option>{% endfor %}</select></div>
+      <div><label class="lbl">Para</label><select class="inp" name="destino_id">{% set ns = namespace(ok=false) %}{% for c in contas_ativas %}<option value="{{ c.id }}" {% if c.id != conta.id and not ns.ok %}selected{% set ns.ok = true %}{% endif %}>{{ c.nome }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="fin-2col">
+      <div><label class="lbl">Data</label><input class="inp" type="date" name="data" value="{{ hoje_iso }}"></div>
+      <div><label class="lbl">Valor (R$)</label><input class="inp" name="valor" required data-moeda placeholder="R$ 0,00"></div>
+    </div>
+    <label class="lbl">Descrição <small>(opcional)</small></label><input class="inp" name="descricao" maxlength="200">
+    <button class="btn-pill" type="submit">Transferir</button>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}

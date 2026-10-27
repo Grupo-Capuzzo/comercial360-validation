@@ -1,0 +1,81 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% set ren = tipo == 'renovacao' %}
+{% block fin_titulo %}{{ 'Renovar cotas' if ren else 'Retirada de cotas' }}{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Renovar cotas' if ren else 'Retirada de cotas',
+   'Confira as cotas de cada cliente antes de confirmar. Ao confirmar, as cotas são ' ~ ('renovadas' if ren else 'marcadas em retirada')
+   ~ ' e o ' ~ TIPOS[tipo] ~ ' é gerado para o cliente assinar.', 'Condomínios') %}
+  <a class="btn-pill outline fin-btn" href="{{ voltar }}">{{ ic('arrow_back') }} Voltar</a>
+{% endcall %}
+
+{% if not grupos %}
+<section class="vg-box"><p class="fin-vazio">Nenhuma cota selecionada.</p></section>
+{% else %}
+<form method="post" class="tm-form" id="tm-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ voltar }}">
+  <input type="hidden" name="grupos" value="{{ grupos|length }}">
+  {% for g in grupos %}{% set gi = loop.index0 %}{% set pd = PRODUTOS_DOC.get(g.cond.code, {}) %}
+  <section class="vg-box tm-grupo" data-g="{{ gi }}">
+    <input type="hidden" name="g{{ gi }}_cliente" value="{{ g.cliente.id }}"><input type="hidden" name="g{{ gi }}_produto" value="{{ g.cond.id }}">
+    <header><h3>{{ g.cliente.full_name }}</h3><span>{{ COND_NOMES.get(g.cond.code, g.cond.name) }} · {{ g.cotas|length }} cota(s) ativa(s)</span></header>
+    {% if g.falta %}<p class="co-aviso">Cadastro incompleto — falta {{ g.falta|join(', ') }}. Sem isso o termo não é gerado e nada é alterado.
+      <a href="{{ url_for('financas.cond_cotista_editar', slug=empresa.slug, cid=g.cliente.id, voltar=request.full_path) }}">Completar cadastro</a></p>{% endif %}
+
+    <div class="tm-sel">
+      <span><b class="js-n">0</b> de {{ g.cotas|length }} selecionada(s) · <b class="js-tot">R$ 0,00</b></span>
+      <button type="button" class="fin-link js-todas">Marcar todas</button><button type="button" class="fin-link js-nenhuma">Desmarcar</button>
+    </div>
+    <div class="tm-cotas">
+      {% for c in g.cotas %}
+        <label class="tm-cota {{ 'off' if c.bloqueio }}" title="{{ c.bloqueio }}">
+          <input type="checkbox" name="g{{ gi }}_ids" value="{{ c.id }}" data-v="{{ c.share_value }}" {{ 'checked' if c.id in g.marcadas and not c.bloqueio }} {{ 'disabled' if c.bloqueio }}>
+          <span class="mono"><b>{{ c.share_number }}</b></span><span>{{ reais(c.share_value) }}</span>
+          <small>{{ c.bloqueio or ('vence ' ~ data_br(c.maturity_date) if c.maturity_date else 'sem vencimento') }}</small>
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="pe-3col">
+      <div><label class="lbl">{{ 'Data da renovação' if ren else 'Pedido em' }}</label><input class="inp" type="date" name="g{{ gi }}_data" value="{{ g.data }}" required></div>
+      <div><label class="lbl">{{ 'Novo vencimento' if ren else 'Efetiva em' }}</label><input class="inp" type="date" name="g{{ gi }}_venc" value="{{ g.venc }}" required></div>
+      {% if not ren %}<div><label class="lbl">Valor da retirada (R$)</label><input class="inp num js-valor" name="g{{ gi }}_valor" placeholder="soma das cotas"></div>{% endif %}
+    </div>
+    {% if not ren %}<p class="co-dica">A cota continua ativa e rende até a data efetiva. No termo: crédito {{ pd.prazo_credito }} a contar da assinatura.
+      Deixe o valor em branco para usar a soma das cotas selecionadas.</p>{% endif %}
+    <label class="lbl">Observação (vai para o histórico da cota)</label><input class="inp" name="g{{ gi }}_obs">
+    <label class="co-chk"><input type="checkbox" name="g{{ gi }}_termo" value="1" {{ 'checked' if g.modelo and not g.falta }} {{ 'disabled' if not g.modelo }}>
+      <span><b>Gerar o {{ TIPOS[tipo] }} para o cliente assinar</b>
+        <small>{% if auto %}Vai direto para o e-mail do cliente.{% else %}Fica pronto na tela do contrato; você confere e clica em “Enviar para assinatura”.{% endif %}</small></span></label>
+  </section>
+  {% endfor %}
+  <div class="tm-acoes">
+    <a class="btn-pill outline fin-btn" href="{{ voltar }}">Cancelar</a>
+    <button class="btn-pill fin-btn" id="tm-ok">{{ ic('check') }} {{ 'Renovar e gerar termo' if ren else 'Marcar retirada e gerar termo' }}</button>
+  </div>
+</form>
+<script>
+(function () {
+  function brl(v) { return v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); }
+  document.querySelectorAll('.tm-grupo').forEach(function (g) {
+    var cx = g.querySelectorAll('input[type=checkbox][data-v]:not([disabled])');
+    function at() {
+      var n = 0, t = 0;
+      cx.forEach(function (c) { if (c.checked) { n++; t += parseFloat(c.dataset.v) || 0; } c.closest('.tm-cota').classList.toggle('on', c.checked); });
+      g.querySelector('.js-n').textContent = n; g.querySelector('.js-tot').textContent = brl(t);
+      var v = g.querySelector('.js-valor'); if (v) v.placeholder = 'soma: ' + brl(t);
+    }
+    cx.forEach(function (c) { c.addEventListener('change', at); });
+    g.querySelector('.js-todas').addEventListener('click', function () { cx.forEach(function (c) { c.checked = true; }); at(); });
+    g.querySelector('.js-nenhuma').addEventListener('click', function () { cx.forEach(function (c) { c.checked = false; }); at(); });
+    at();
+  });
+  document.getElementById('tm-form').addEventListener('submit', function (e) {
+    var n = document.querySelectorAll('.tm-grupo input[type=checkbox][data-v]:checked').length;
+    if (!n) { e.preventDefault(); alert('Selecione ao menos uma cota.'); return; }
+    if (!confirm('Confirmar {{ "a renovação" if ren else "a retirada" }} de ' + n + ' cota(s)?')) e.preventDefault();
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

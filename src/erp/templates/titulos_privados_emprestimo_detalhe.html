@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block title %}Empréstimo {{ loan.loan_number or ('#' ~ loan.id) }} — Títulos Privados{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('titulos_privados_emprestimos') }}" class="back-link">← Voltar para Empréstimos</a>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+  <div>
+    <div class="page-header-title">Empréstimo {{ loan.loan_number or ('#' ~ loan.id) }}</div>
+    <div class="page-header-sub" style="margin-top:6px;">
+      <a href="{{ url_for('titulos_privados_cliente_detalhe', pcid=loan.private_client_id) }}" style="color:#d4af37;">{{ loan.client_name }}</a>
+      &nbsp;
+      {% if loan_visual_status == 'active' %}<span class="badge badge-active">Ativo</span>
+      {% elif loan_visual_status == 'overdue' %}<span class="badge badge-danger">Em Atraso</span>
+      {% elif loan_visual_status == 'extended' %}<span class="badge badge-extended">Prorrogado</span>
+      {% elif loan_visual_status == 'settled' %}<span class="badge badge-active">Quitado</span>
+      {% elif loan_visual_status == 'renegotiated' %}<span class="badge badge-pending">Renegociado</span>
+      {% else %}<span class="badge badge-inactive">Cancelado</span>{% endif %}
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+    {% if loan.status in ('active','overdue') %}
+      <form method="post" action="{{ url_for('titulos_privados_emprestimo_recalcular', loan_id=loan.id) }}" style="display:inline;">
+        <button type="submit" class="btn btn-secondary">🔄 Recalcular para Hoje</button>
+      </form>
+      <a href="{{ url_for('titulos_privados_emprestimo_prorrogacao', loan_id=loan.id) }}" class="btn btn-secondary">⏳ Registrar Prorrogação</a>
+      <a href="{{ url_for('titulos_privados_emprestimo_amortizacao', loan_id=loan.id) }}" class="btn btn-secondary">📉 Registrar Amortização</a>
+      <form method="post" action="{{ url_for('titulos_privados_emprestimo_quitar', loan_id=loan.id) }}" style="display:inline;">
+        <button type="submit" class="btn btn-danger"
+                data-confirm="Marcar o empréstimo {{ loan.loan_number or ('#' ~ loan.id) }} como quitado? Isso não apaga o histórico de parcelas/pagamentos.">
+          ✅ Quitar Empréstimo
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Dados do empréstimo -->
+<div class="card-gold" style="margin-bottom:20px;">
+  <div class="form-section-title" style="margin-bottom:12px;">Dados do Empréstimo</div>
+  <div class="detail-grid">
+    <div>
+      <div class="detail-item-label">Cliente</div>
+      <div class="detail-item-value">{{ loan.client_name }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">CPF/CNPJ</div>
+      <div class="detail-item-value text-mono">{{ formatar_documento(loan.client_document) if loan.client_document else '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Valor Original</div>
+      <div class="detail-item-value">{{ formatar_moeda(loan.original_amount) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Valor Contratado</div>
+      <div class="detail-item-value" style="color:#d4af37;font-weight:700;">{{ formatar_moeda(loan.contracted_amount) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Taxa Mensal</div>
+      <div class="detail-item-value">{{ formatar_percentual(loan.interest_rate_monthly) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Método</div>
+      <div class="detail-item-value">{{ {'bullet':'Pagamento Único','price':'Price','manual':'Manual'}.get(loan.calculation_method, loan.calculation_method) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Data de Contratação</div>
+      <div class="detail-item-value text-dim">{{ formatar_data(loan.start_date) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Vencimento Final</div>
+      <div class="detail-item-value text-dim">{{ formatar_data(loan.final_due_date) if loan.final_due_date else '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Parcelas</div>
+      <div class="detail-item-value">{{ loan.installments_count }}</div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <div class="detail-item-label">Observações</div>
+    <form method="post" action="{{ url_for('titulos_privados_emprestimo_observacoes', loan_id=loan.id) }}" style="margin-top:6px;display:flex;gap:8px;align-items:flex-start;">
+      <textarea name="notes" class="form-control" rows="2" style="flex:1;">{{ loan.notes or '' }}</textarea>
+      <button type="submit" class="btn btn-secondary btn-sm">Salvar</button>
+    </form>
+  </div>
+</div>
+
+<!-- Saldo atualizado -->
+{% if calc %}
+<div class="card-gold" style="margin-bottom:20px;">
+  <div class="form-section-title" style="margin-bottom:12px;">Saldo Atualizado (calculado para {{ formatar_data(calc.as_of_date) }})</div>
+  <div class="detail-grid">
+    <div>
+      <div class="detail-item-label">Saldo Base</div>
+      <div class="detail-item-value">{{ formatar_moeda(calc.base_amount) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Data Base do Cálculo</div>
+      <div class="detail-item-value text-dim">{{ formatar_data(calc.base_date) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Dias em Atraso</div>
+      <div class="detail-item-value">
+        {% if calc.days_overdue > 0 %}
+          <span class="badge badge-inactive">{{ calc.days_overdue }} dia(s)</span>
+        {% else %}
+          <span class="badge badge-active">Em dia</span>
+        {% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="detail-item-label">Taxa Diária Equivalente</div>
+      <div class="detail-item-value text-mono">{{ '%.6f'|format(calc.daily_rate * 100) }}%</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Juros Acumulados</div>
+      <div class="detail-item-value" style="color:#f0ad4e;">{{ formatar_moeda(calc.accrued_interest) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Total Amortizado Considerado</div>
+      <div class="detail-item-value text-dim">{{ formatar_moeda(calc.total_amortized) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Valor Atualizado</div>
+      <div class="detail-item-value" style="color:#d4af37;font-weight:700;font-size:18px;">{{ formatar_moeda(calc.updated_amount) }}</div>
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('titulos_privados_emprestimo_registrar_calculo', loan_id=loan.id) }}" style="margin-top:14px;">
+    <button type="submit" class="btn btn-secondary btn-sm">📝 Registrar Cálculo no Histórico</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Parcelas -->
+<div class="section-label">🧾 &nbsp;Parcelas ({{ installments | length }})</div>
+{% if installments %}
+<div class="table-wrap" style="margin-bottom:24px;">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Vencimento</th>
+        <th style="text-align:right;">Valor Original</th>
+        <th style="text-align:right;">Valor Pago</th>
+        <th style="text-align:right;">Saldo em Aberto</th>
+        <th style="text-align:center;">Dias em Atraso</th>
+        <th style="text-align:right;">Valor Atualizado Hoje</th>
+        <th>Status</th><th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in installments %}
+      <tr>
+        <td>{{ p.installment_number }}</td>
+        <td class="text-dim">{{ formatar_data(p.due_date) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(p.original_amount) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(p.paid_amount) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(p.open_amount) }}</td>
+        <td style="text-align:center;">
+          {% if p.days_overdue > 0 %}{{ p.days_overdue }}{% else %}—{% endif %}
+        </td>
+        <td style="text-align:right;font-weight:600;{% if p.visual_status == 'overdue' %}color:#f87171;{% endif %}">
+          {% if p.visual_status == 'paid' %}Pago
+          {% else %}{{ formatar_moeda(p.updated_amount) }}{% endif %}
+        </td>
+        <td>
+          {% if p.visual_status == 'paid' %}<span class="badge badge-active" {% if p.early_settled %}title="Quitada antecipadamente com desconto de juros futuro"{% endif %}>Paga{% if p.early_settled %} ⚡{% endif %}</span>
+          {% elif p.visual_status == 'partial' %}<span class="badge badge-warning">Parcial</span>
+          {% elif p.visual_status == 'overdue' %}<span class="badge badge-danger">Atrasada</span>
+          {% elif p.visual_status == 'extended' %}<span class="badge badge-extended">Prorrogada</span>
+          {% else %}<span class="badge badge-pending">Aberta</span>{% endif %}
+        </td>
+        <td style="text-align:right;white-space:nowrap;">
+          {% if p.visual_status != 'paid' %}
+          <form method="post" action="{{ url_for('titulos_privados_parcela_pagar', loan_id=loan.id, installment_id=p.id) }}"
+                style="display:inline-flex;gap:4px;align-items:center;"
+                onsubmit="return confirm('Confirma o registro deste pagamento? Isso não pode ser desfeito automaticamente.');">
+            <input type="number" step="0.01" name="paid_amount" class="form-control form-control-sm"
+                   style="width:110px;" placeholder="Valor pago" required>
+            <input type="date" name="paid_date" class="form-control form-control-sm" style="width:140px;"
+                   value="{{ '' }}">
+            <button type="submit" class="btn btn-secondary btn-sm">Registrar Pagamento</button>
+          </form>
+          {% else %}
+            <span class="text-dim">{{ formatar_data(p.paid_date) if p.paid_date else '—' }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:24px;">
+  <div class="empty-state-icon">🧾</div>
+  <div class="empty-state-title">Nenhuma parcela gerada</div>
+  <div class="empty-state-sub">Empréstimo do tipo manual — parcelas ainda não são geradas automaticamente.</div>
+</div>
+{% endif %}
+
+<!-- Prorrogações -->
+<div class="section-label">⏳ &nbsp;Prorrogações ({{ extensions | length }})</div>
+{% if extensions %}
+<div class="table-wrap" style="margin-bottom:24px;">
+  <table>
+    <thead>
+      <tr><th>Data do Pagamento</th><th style="text-align:right;">Valor Pago</th><th>Coberto Até</th><th>Observações</th></tr>
+    </thead>
+    <tbody>
+      {% for e in extensions %}
+      <tr>
+        <td class="text-dim">{{ formatar_data(e.paid_date) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(e.extension_amount) }}</td>
+        <td style="font-weight:600;color:#d4af37;">{{ formatar_data(e.covered_until_date) }}</td>
+        <td class="text-dim">{{ e.notes or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:24px;">
+  <div class="empty-state-icon">⏳</div>
+  <div class="empty-state-title">Nenhuma prorrogação registrada</div>
+</div>
+{% endif %}
+
+<!-- Amortizações -->
+<div class="section-label">📉 &nbsp;Amortizações ({{ amortizations | length }})</div>
+{% if amortizations %}
+<div class="table-wrap" style="margin-bottom:24px;">
+  <table>
+    <thead>
+      <tr><th>Data</th><th style="text-align:right;">Valor</th><th>Tipo</th><th>Parcela</th>
+          <th style="text-align:right;">Desconto</th><th>Aplicado em</th><th>Observações</th></tr>
+    </thead>
+    <tbody>
+      {% for a in amortizations %}
+      <tr>
+        <td class="text-dim">{{ formatar_data(a.payment_date) }}</td>
+        <td style="text-align:right;font-weight:600;">{{ formatar_moeda(a.amount) }}</td>
+        <td>
+          {% if a.price_action == 'quitar_parcela_antecipada' %}⚡ Quitação Antecipada de Parcela
+          {% else %}{{ {'antecipacao_parcela':'Antecipação de Parcela','reducao_saldo':'Redução de Saldo','liquidacao_parcial':'Liquidação Parcial','liquidacao_total':'Liquidação Total'}.get(a.amortization_type, a.amortization_type) }}
+          {% endif %}
+        </td>
+        <td class="text-dim">
+          {% if a.target_installment_number %}Parcela {{ a.target_installment_number }}
+          {% elif a.target_mode == 'proximas_parcelas' %}Próximas parcelas
+          {% elif a.target_mode == 'saldo_devedor' %}Saldo devedor
+          {% else %}—{% endif %}
+        </td>
+        <td style="text-align:right;" class="text-dim">
+          {% if a.price_action == 'quitar_parcela_antecipada' and a.amount_before is not none %}
+            {{ formatar_moeda(a.amount_before - a.amount) }}
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ {'principal':'Principal','interest':'Juros','mixed':'Misto'}.get(a.applied_to, a.applied_to) }}</td>
+        <td class="text-dim">{{ a.notes or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:24px;">
+  <div class="empty-state-icon">📉</div>
+  <div class="empty-state-title">Nenhuma amortização registrada</div>
+</div>
+{% endif %}
+
+<!-- Pagamentos -->
+<div class="section-label">💳 &nbsp;Pagamentos Registrados ({{ payments | length }})</div>
+{% if payments %}
+<div class="table-wrap" style="margin-bottom:24px;">
+  <table>
+    <thead>
+      <tr><th>Data</th><th style="text-align:right;">Valor</th><th>Tipo</th><th>Observações</th></tr>
+    </thead>
+    <tbody>
+      {% for pg in payments %}
+      <tr>
+        <td class="text-dim">{{ formatar_data(pg.payment_date) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(pg.amount) }}</td>
+        <td>{{ {'installment':'Parcela','extension':'Prorrogação','amortization':'Amortização','settlement':'Quitação','other':'Outro'}.get(pg.payment_type, pg.payment_type) }}</td>
+        <td class="text-dim">{{ pg.notes or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:24px;">
+  <div class="empty-state-icon">💳</div>
+  <div class="empty-state-title">Nenhum pagamento registrado ainda</div>
+</div>
+{% endif %}
+
+<!-- Histórico de cálculos -->
+<div class="section-label">📊 &nbsp;Histórico de Cálculos Registrados ({{ calculations_log | length }})</div>
+{% if calculations_log %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Registrado em</th><th>Data Base</th><th>Dias Atraso</th>
+          <th style="text-align:right;">Saldo Base</th><th style="text-align:right;">Valor Calculado</th></tr>
+    </thead>
+    <tbody>
+      {% for log in calculations_log %}
+      <tr>
+        <td class="text-dim">{{ log.calculation_date }}</td>
+        <td class="text-dim">{{ formatar_data(log.base_date) }}</td>
+        <td>{{ log.days_overdue }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(log.base_amount) }}</td>
+        <td style="text-align:right;font-weight:600;color:#d4af37;">{{ formatar_moeda(log.calculated_amount) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">📊</div>
+  <div class="empty-state-title">Nenhum cálculo registrado no histórico ainda</div>
+  <div class="empty-state-sub">Use "Recalcular para Hoje" e depois "Registrar Cálculo no Histórico".</div>
+</div>
+{% endif %}
+
+{% endblock %}

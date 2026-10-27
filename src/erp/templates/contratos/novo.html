@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Gerar contrato — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+{% include "contratos/_estilo.html" %}
+<a href="{{ url_for('contratos.painel') }}" class="back-link">← Voltar para Contratos</a>
+
+<div class="page-header">
+  <div class="page-header-icon">📄</div>
+  <div class="page-header-title">Gerar contrato para cotas pendentes</div>
+  <div class="page-header-sub">Para cotas que já estão cadastradas como pendentes e ainda não têm contrato.
+    Para uma compra nova, use <a class="text-gold" href="{{ url_for('cotas_nova', produto='civil') }}">Nova cota com contrato</a>.</div>
+</div>
+
+<div class="card-gold">
+  <form method="get" class="form-row" style="align-items:flex-end;">
+    <div class="form-group">
+      <label>Cliente com cotas pendentes</label>
+      <select name="client_id" class="form-control" onchange="this.form.submit()">
+        <option value="">Selecione…</option>
+        {% for cid, nome in clientes %}<option value="{{ cid }}" {{ 'selected' if cliente and cliente.id == cid }}>{{ nome }}</option>{% endfor %}
+        {% if cliente and cliente.id not in (clientes | map(attribute=0) | list) %}<option value="{{ cliente.id }}" selected>{{ cliente.full_name }}</option>{% endif %}
+      </select>
+    </div>
+  </form>
+
+  {% if cliente %}
+    {% if falta %}
+    <div class="alert alert-warning" style="margin-top:12px;"><span>
+      Para gerar o contrato, complete o cadastro de <b>{{ cliente.full_name }}</b>. Falta: {{ falta | join(', ') }}.
+      <a class="text-gold" href="{{ url_for('clientes_editar', cid=cliente.id) }}#secao-contrato">Completar cadastro →</a></span>
+    </div>
+    {% endif %}
+
+    {% if cotas %}
+    <form method="post" style="margin-top:14px;">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="client_id" value="{{ cliente.id }}">
+      {% set produtos = cotas | groupby('condominium_id') %}
+      <div class="form-group">
+        <label>Produto</label>
+        <select name="condominium_id" class="form-control" id="sel-prod" style="max-width:320px">
+          {% for cond_id, lista in produtos %}
+          <option value="{{ cond_id }}" {{ 'disabled' if lista[0].produto_code not in modelos }}>{{ lista[0].produto_nome }}{{ ' (modelo em breve)' if lista[0].produto_code not in modelos }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="table-wrap" style="margin-top:8px">
+        <table>
+          <thead><tr><th style="width:40px"></th><th>Cota</th><th>Produto</th><th style="text-align:right">Valor</th><th>Cadastrada em</th></tr></thead>
+          <tbody>
+          {% for ct in cotas %}
+            <tr data-prod="{{ ct.condominium_id }}">
+              <td><input type="checkbox" name="share_ids" value="{{ ct.id }}" checked style="accent-color:#d4af37;width:16px;height:16px"></td>
+              <td class="text-mono">{{ ct.share_number }}</td><td>{{ ct.produto_nome }}</td>
+              <td style="text-align:right" class="text-mono">{{ moeda(ct.share_value) }}</td>
+              <td class="text-dim">{{ ct.created_at | ct_data }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-primary" {{ 'disabled' if falta }}>✍️ Gerar contrato (já assinado pela empresa)</button>
+      </div>
+    </form>
+    <script>
+    (function(){
+      var s = document.getElementById('sel-prod');
+      function f(){ document.querySelectorAll('tr[data-prod]').forEach(function(tr){
+        var on = tr.dataset.prod === s.value; tr.style.display = on ? '' : 'none';
+        tr.querySelector('input').disabled = !on; }); }
+      if(s){ s.addEventListener('change', f); f(); }
+    })();
+    </script>
+    {% else %}
+      <p class="text-dim" style="margin-top:14px;">Este cliente não tem cotas pendentes sem contrato.
+        <a class="text-gold" href="{{ url_for('cotas_nova', produto='civil') }}">Cadastrar nova cota com contrato →</a></p>
+    {% endif %}
+  {% elif not clientes %}
+    <p class="text-dim" style="margin-top:14px;">Não há cotas pendentes sem contrato.</p>
+  {% endif %}
+</div>
+{% endblock %}

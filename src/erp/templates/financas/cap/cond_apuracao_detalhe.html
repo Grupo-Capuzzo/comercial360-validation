@@ -1,0 +1,91 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Apuração {{ '%02d'|format(meta.calculation_month) }}/{{ meta.calculation_year }}{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Apuração ' ~ MESES[meta.calculation_month] ~ '/' ~ meta.calculation_year ~ ' · ' ~ (meta.condominium_name or 'Todos os produtos'),
+                    'Salva em ' ~ data_br(meta.calculated_at[:10]) ~ ' ' ~ meta.calculated_at[11:16] ~ ((' · ' ~ meta.notes) if meta.notes else '')) %}
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_apuracao', slug=empresa.slug) }}">{{ ic('arrow_back') }} Histórico</a>
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.cond_apuracao_exportar', slug=empresa.slug, calc_id=calc_id) }}" title="Excel no padrão da planilha de controle">{{ ic('table_view') }} Exportar Excel</a>
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_apuracao_editar', slug=empresa.slug, calc_id=calc_id) }}">{{ fic('edit') }} Editar</a>
+  <form method="post" action="{{ url_for('financas.cond_apuracao_excluir', slug=empresa.slug, calc_id=calc_id) }}" onsubmit="return confirm('Excluir esta apuração? Cotas e cotistas não são alterados.')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn-pill outline fin-btn co-perigo-t">{{ ic('delete') }} Excluir</button></form>
+{% endcall %}
+
+<div class="vg-kpis">
+  <div class="vg-kpi escuro"><small>Total apurado</small><b>{{ reais(total_geral) }}</b><em>{{ meta.condominium_name or 'Todos os produtos' }}</em></div>
+  <div class="vg-kpi"><small>Cotistas</small><b>{{ clients|length }}</b></div>
+  <div class="vg-kpi"><small>Cotas</small><b>{{ total_cotas }}</b></div>
+  <div class="vg-kpi"><small>Capital</small><b>{{ reais(clients|sum(attribute='total_share_value')) }}</b></div>
+</div>
+
+<section class="vg-box" style="margin-bottom:1rem">
+  <header><h3>{{ ic('account_balance') }} Arquivo bancário</h3><span>{{ bank.bank_name or 'Banco não definido' }} · {{ {'pix': 'Pix — CNAB240', 'dados_bancarios': 'Dados bancários — CNAB240'}.get(bank.method, 'layout pendente') }}</span></header>
+  {% if bank.method in ('pix', 'dados_bancarios') %}
+  <div class="ap-banco">
+    <div><label class="lbl">Data de pagamento</label><input class="inp" type="date" id="bk-data" value="{{ data_sug or '' }}"></div>
+    <button type="button" class="btn-pill outline fin-btn" id="bk-validar">{{ ic('fact_check') }} Validar pagamentos</button>
+    <button type="button" class="btn-pill fin-btn" id="bk-gerar">{{ ic('account_balance') }} Gerar arquivo do banco</button>
+  </div>
+  <div class="ap-valid" id="bk-res" hidden></div>
+  <form id="bk-form" method="post" action="{{ url_for('financas.cond_apuracao_banco_gerar', slug=empresa.slug, calc_id=calc_id) }}" hidden>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="payment_date" id="bk-data-h"></form>
+  {% else %}
+  <p class="fin-sub">Banco pagador não configurado para este condomínio (apuração com todos os produtos não gera arquivo — faça uma por produto).</p>
+  {% endif %}
+  {% if remessas %}
+  <table class="pr-tabela" style="margin-top:.8rem">
+    <thead><tr><th>Arquivo</th><th>Gerado em</th><th class="num">Valor</th><th class="num">Pagamentos</th><th>Situação</th><th></th></tr></thead>
+    <tbody>{% for rf in remessas %}
+      <tr><td class="mono">{{ rf.file_name }}</td><td>{{ rf.created_at }}</td><td class="num">{{ reais(rf.total_amount) }}</td><td class="num">{{ rf.total_payments }}</td>
+        <td>{{ {'generated': 'Gerado', 'imported_to_bank': 'Importado no banco', 'cancelled': 'Cancelado'}.get(rf.status, 'Erro') }}</td>
+        <td class="num"><a class="fin-link" href="{{ url_for('financas.cond_apuracao_banco_baixar', slug=empresa.slug, calc_id=calc_id, rid=rf.id, tipo='rem') }}">.REM</a> ·
+          <a class="fin-link" href="{{ url_for('financas.cond_apuracao_banco_baixar', slug=empresa.slug, calc_id=calc_id, rid=rf.id, tipo='csv') }}">conferência</a></td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section class="vg-box">
+  <header><h3>Consolidado por cotista</h3><span>Marque ✓ conforme confere no banco (fica salvo neste navegador)</span></header>
+  {% with clientes = clients, conferir = true %}{% include "financas/cap/_apur_cliente.html" %}{% endwith %}
+</section>
+
+<script>
+(function () {
+  // conferência por pessoa (só no navegador)
+  var K = 'confer_apuracao_{{ calc_id }}', mapa = {};
+  try { mapa = JSON.parse(localStorage.getItem(K) || '{}'); } catch (e) {}
+  document.querySelectorAll('.ap-conf').forEach(function (c) {
+    var tr = c.closest('tr'); c.checked = !!mapa[c.dataset.k]; tr.classList.toggle('ok', c.checked);
+    c.addEventListener('change', function () { if (c.checked) mapa[c.dataset.k] = true; else delete mapa[c.dataset.k]; tr.classList.toggle('ok', c.checked); try { localStorage.setItem(K, JSON.stringify(mapa)); } catch (e) {} });
+  });
+  var res = document.getElementById('bk-res'); if (!res) return;
+  var ult = null;
+  function lista(t, a) { return a && a.length ? '<li><b>' + t + ' (' + a.length + '):</b> ' + a.join(', ') + '</li>' : ''; }
+  document.getElementById('bk-validar').addEventListener('click', function () {
+    res.hidden = false; res.className = 'ap-valid'; res.textContent = 'Validando…';
+    var fd = new FormData(); fd.append('_csrf', '{{ csrf_token() }}');
+    fetch('{{ url_for("financas.cond_apuracao_banco_validar", slug=empresa.slug, calc_id=calc_id) }}', {method: 'POST', body: fd, credentials: 'same-origin'})
+      .then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.success) { res.className = 'ap-valid erro'; res.textContent = j.message || 'Não foi possível validar.'; return; }
+        ult = j;
+        res.className = 'ap-valid ' + (j.can_generate ? 'ok' : 'erro');
+        res.innerHTML = '<p><b>' + j.total_client_count + '</b> cotista(s) na apuração · <b class="pos">' + j.valid_count + ' no arquivo</b> (' + j.total_amount + ') · <b class="neg">' + j.pending_count + ' fora por pendência</b> (' + j.pending_total_amount + ')</p><ul>' +
+          lista('Sem nome', j.pending_no_name) + lista('Sem CPF/CNPJ', j.pending_no_document) + lista('CPF/CNPJ inválido', j.pending_invalid_document) +
+          lista('Sem chave Pix', j.pending_no_pix) + lista('Pix e-mail inválido', j.pending_invalid_pix_email) + lista('Dados bancários incompletos', j.pending_no_bank_data) +
+          lista('Valor zerado/negativo', j.pending_zero_amount) + '</ul>' +
+          (j.config_missing && j.config_missing.length ? '<p class="neg">Configuração do banco incompleta: ' + j.config_missing.join(', ') + '.</p>' : '') +
+          (!j.can_generate ? '<p class="neg"><b>Geração bloqueada.</b></p>' : (j.pending_count ? '<p>As pendências não bloqueiam: esses cotistas ficam fora do .REM e aparecem na conferência.</p>' : ''));
+      }).catch(function () { res.className = 'ap-valid erro'; res.textContent = 'Falha ao conectar para validar.'; });
+  });
+  document.getElementById('bk-gerar').addEventListener('click', function () {
+    var dt = document.getElementById('bk-data').value;
+    if (!dt) { alert('Informe a data de pagamento.'); return; }
+    if (!ult) { alert('Clique em "Validar pagamentos" antes de gerar o arquivo.'); return; }
+    if (!ult.can_generate) { alert('Geração bloqueada — veja o resultado da validação.'); return; }
+    if (!confirm('Gerar arquivo com ' + ult.valid_count + ' pagamento(s), total ' + ult.total_amount + '? ' + ult.pending_count + ' cotista(s) ficam fora por pendência.')) return;
+    document.getElementById('bk-data-h').value = dt; document.getElementById('bk-form').submit();
+  });
+})();
+</script>
+{% endblock %}

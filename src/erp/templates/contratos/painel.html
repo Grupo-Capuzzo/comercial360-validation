@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Contratos e Assinaturas — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+{% include "contratos/_estilo.html" %}
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+  <div>
+    <div class="page-header-title">✍️ Contratos e Assinaturas</div>
+    <div class="page-header-sub">Termos gerados a partir das cotas, enviados ao cliente e acompanhados até a ativação.</div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="{{ url_for('contratos.configuracoes') }}" class="btn btn-secondary">⚙️ Configurações</a>
+    <a href="{{ url_for('contratos.novo') }}" class="btn btn-secondary">📄 Contrato p/ cota pendente</a>
+    <a href="{{ url_for('cotas_nova', produto='civil') }}" class="btn btn-primary">+ Nova cota com contrato</a>
+  </div>
+</div>
+
+{% if '127.0.0.1' in cfg.url_publica or 'localhost' in cfg.url_publica %}
+<div class="alert alert-warning"><span>⚠️ O link de assinatura está apontando para este computador ({{ cfg.url_publica }}).
+  O cliente só conseguirá abrir de fora depois que o <b>link público</b> for configurado em
+  <a href="{{ url_for('contratos.configuracoes') }}" class="text-gold">Configurações</a>.</span></div>
+{% endif %}
+
+<div class="metrics-grid ct-kpis">
+  {% for s, rot, cor in [('rascunho','Aguardando envio','#a3a3a3'),('aguardando','Aguardando assinatura','#fbbf24'),
+                         ('assinado','Assinados · aguardam depósito','#60a5fa'),('concluido','Concluídos','#4ade80')] %}
+  <a class="metric-card ct-kpi {{ 'on' if status_filtro == s }}" href="?status={{ s }}">
+    <div class="metric-value" style="color:{{ cor }}">{{ resumo[s] }}</div>
+    <div class="metric-label">{{ rot }}{% if s == 'concluido' %} · {{ resumo.concluidos_mes }} no mês{% endif %}</div>
+  </a>
+  {% endfor %}
+  <a class="metric-card ct-kpi" href="{{ url_for('contratos.novo') }}">
+    <div class="metric-value" style="color:#d4af37">{{ pendentes }}</div>
+    <div class="metric-label">Cotas pendentes sem contrato</div>
+  </a>
+</div>
+
+<form method="get" class="toolbar">
+  <div class="toolbar-left">
+    <input type="text" name="q" value="{{ q }}" placeholder="Buscar cliente, CPF ou código…" class="form-control" style="width:280px;">
+    <select name="status" class="form-control form-control-sm" style="width:220px;">
+      <option value="">Todos os status</option>
+      {% for k, s in STATUS.items() %}<option value="{{ k }}" {{ 'selected' if status_filtro == k }}>{{ s.nome }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-secondary btn-sm">Filtrar</button>
+    {% if q or status_filtro %}<a href="{{ url_for('contratos.painel') }}" class="btn btn-secondary btn-sm">Limpar</a>{% endif %}
+  </div>
+</form>
+
+{% if contratos %}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Cliente</th><th>Documento</th><th>Cotas</th><th style="text-align:right">Valor</th>
+      <th>Assinaturas</th><th>Status</th><th>Última movimentação</th><th></th></tr></thead>
+    <tbody>
+    {% for c in contratos %}
+      {% set st = STATUS[c.status] %}
+      <tr onclick="location.href='{{ url_for('contratos.detalhe', cid=c.id) }}'" style="cursor:pointer">
+        <td><b>{{ c.cliente_nome }}</b><div class="text-dim text-mono" style="font-size:11px">{{ fmt_doc(c.cliente_cpf) }}</div></td>
+        <td>{{ TIPOS[c.tipo] }}<div class="text-dim" style="font-size:11px">{{ c.produto_nome }}</div></td>
+        <td class="text-mono">{{ c.dados.cotas | map(attribute='numero') | join(', ') }}</td>
+        <td style="text-align:right;white-space:nowrap" class="text-mono">{{ moeda(c.dados.valor_total) }}</td>
+        <td>
+          <div class="ct-prog"><i style="width:{{ (100 * c.assinaturas / (c.signatarios or 1)) | round }}%"></i></div>
+          <span style="font-size:11px" class="text-dim">{{ c.assinaturas }}/{{ c.signatarios }}{% if c.visto_em and c.status == 'aguardando' %} · 👁 visto {{ c.visto_em | ct_data(True) }}{% endif %}</span>
+        </td>
+        <td><span class="ct-badge" style="--c:{{ st.cor }}">{{ st.nome }}</span></td>
+        <td class="text-dim" style="font-size:12px">
+          {{ (c.concluido_em or c.assinado_em or c.enviado_em or c.criado_em) | ct_data(True) }}</td>
+        <td style="text-align:right"><a href="{{ url_for('contratos.detalhe', cid=c.id) }}" class="btn btn-secondary btn-sm">Abrir</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">✍️</div>
+  <div class="empty-state-title">Nenhum contrato {{ 'com esse filtro' if q or status_filtro else 'ainda' }}</div>
+  <div class="empty-state-sub">Cadastre uma nova cota marcando “Gerar Termo de Aquisição” — o contrato aparece aqui pronto para envio.</div>
+</div>
+{% endif %}
+{% endblock %}

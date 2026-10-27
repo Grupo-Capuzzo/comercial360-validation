@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Importar Clientes — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">📥</div>
+  <div class="page-header-title">Importar Clientes</div>
+  <div class="page-header-sub">Cadastro em lote via planilha Excel — Grupo Capuzzo</div>
+</div>
+
+<!-- Toolbar de navegação -->
+<div style="display:flex;gap:10px;margin-bottom:24px;">
+  <a href="{{ url_for('clientes_lista') }}" class="btn btn-secondary btn-sm">← Voltar para Clientes</a>
+  <a href="{{ url_for('clientes_modelo_importacao') }}" class="btn btn-secondary btn-sm">⬇ Baixar Modelo da Planilha</a>
+</div>
+
+{% if not importado %}
+<!-- ════════════════════════════════════════════
+     TELA DE UPLOAD
+════════════════════════════════════════════ -->
+
+<!-- Instruções -->
+<div class="card" style="margin-bottom:24px;">
+  <div class="card-header">📋 Instruções de Importação</div>
+  <div class="card-body" style="font-size:14px;line-height:1.8;color:#ccc;">
+    <ul style="margin:0;padding-left:20px;">
+      <li><strong>Nome Completo</strong> é obrigatório — linhas sem nome serão ignoradas.</li>
+      <li><strong>Status</strong> vazio será considerado <em>ativo</em> automaticamente.</li>
+      <li><strong>CPF/CNPJ</strong> não precisa ter máscara (pode enviar só os dígitos).</li>
+      <li>Se o <strong>CPF/CNPJ já existir</strong> no sistema, o cliente não será duplicado.</li>
+      <li><strong>Dados bancários</strong> são todos opcionais.</li>
+      <li>Use o modelo oficial para garantir que as colunas sejam reconhecidas.</li>
+      <li>Apenas arquivos <strong>.xlsx</strong> são aceitos.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Colunas do modelo -->
+<div class="card" style="margin-bottom:24px;">
+  <div class="card-header">📊 Colunas do Modelo</div>
+  <div class="card-body">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      {% for col in ["Nome Completo","CPF/CNPJ","Email","Telefone","Chave Pix","Status","Observações",
+                     "Banco","Agência","Conta","Dígito da Conta","Tipo de Conta",
+                     "Titular da Conta","CPF/CNPJ do Titular","Observações Bancárias"] %}
+      <span style="background:#1a1a2e;border:1px solid #333;border-radius:4px;
+                   padding:4px 10px;font-size:12px;color:#ccc;">{{ col }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Formulário de upload -->
+<div class="card">
+  <div class="card-header">📤 Enviar Planilha</div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data"
+          onsubmit="document.getElementById('btn-importar').disabled=true;
+                    document.getElementById('btn-importar').textContent='Importando...';">
+      <div class="form-group" style="margin-bottom:20px;">
+        <label class="form-label">Selecione o arquivo .xlsx</label>
+        <input type="file" name="arquivo" accept=".xlsx"
+               class="form-control" required
+               style="background:#1a1a2e;border:1px solid #333;color:#F5F5F5;
+                      padding:10px;border-radius:6px;">
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <button type="submit" id="btn-importar" class="btn btn-primary">
+          📥 Importar Clientes
+        </button>
+        <a href="{{ url_for('clientes_modelo_importacao') }}" class="btn btn-secondary">
+          ⬇ Baixar Modelo
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% else %}
+<!-- ════════════════════════════════════════════
+     RESULTADO DA IMPORTAÇÃO
+════════════════════════════════════════════ -->
+
+<!-- Cards de resumo -->
+<div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px;">
+  <div class="metric-card">
+    <div class="metric-value">{{ total }}</div>
+    <div class="metric-label">Linhas Lidas</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#4ade80;">{{ criados }}</div>
+    <div class="metric-label">Criados</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#facc15;">{{ ignorados }}</div>
+    <div class="metric-label">Ignorados</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#f87171;">{{ erros }}</div>
+    <div class="metric-label">Erros</div>
+  </div>
+</div>
+
+<!-- Tabela de resultados -->
+<div class="card">
+  <div class="card-header">📋 Detalhamento por Linha</div>
+  <div class="card-body" style="padding:0;">
+    <div class="table-wrap" style="margin:0;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:60px;text-align:center;">Linha</th>
+            <th>Nome</th>
+            <th>CPF/CNPJ</th>
+            <th style="width:110px;text-align:center;">Resultado</th>
+            <th>Mensagem</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in resultados %}
+          <tr>
+            <td style="text-align:center;color:#888;">{{ r.linha }}</td>
+            <td>{{ r.nome }}</td>
+            <td class="text-mono text-dim">{{ r.cpf_cnpj or '—' }}</td>
+            <td style="text-align:center;">
+              {% if r.resultado == 'Criado' %}
+                <span class="badge badge-active">✓ Criado</span>
+              {% elif r.resultado == 'Ignorado' %}
+                <span class="badge" style="background:#2a2a00;color:#facc15;border:1px solid #555;">
+                  ⚠ Ignorado
+                </span>
+              {% else %}
+                <span class="badge badge-inactive">✗ Erro</span>
+              {% endif %}
+            </td>
+            <td style="font-size:13px;color:#aaa;">{{ r.mensagem }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Ações pós-importação -->
+<div style="display:flex;gap:12px;margin-top:20px;">
+  <a href="{{ url_for('clientes_lista') }}" class="btn btn-primary">Ver Lista de Clientes</a>
+  <a href="{{ url_for('clientes_importar') }}" class="btn btn-secondary">Nova Importação</a>
+  <a href="{{ url_for('clientes_modelo_importacao') }}" class="btn btn-secondary">⬇ Baixar Modelo</a>
+</div>
+
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "portal/base.html" %}
+{% block title %}Alterar senha · Portal Grupo Capuzzo{% endblock %}
+{% block content %}
+<section class="page-title"><div class="eyebrow-line">Minha conta</div><h1>Alterar senha</h1></section>
+<form class="box narrow" method="post">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label class="lbl">Senha atual</label><input class="inp" type="password" name="atual" required>
+  <label class="lbl">Nova senha</label><input class="inp" type="password" name="nova" required minlength="8">
+  <p class="hint">Mínimo de 8 caracteres, com letras e números.</p>
+  <label class="lbl">Confirmar nova senha</label><input class="inp" type="password" name="conf" required>
+  <div class="row-btns"><a class="btn-pill outline" href="{{ url_for('portal_grupo') }}">Cancelar</a>
+    <button class="btn-pill" type="submit">Salvar nova senha</button></div>
+</form>
+{% endblock %}

@@ -1,0 +1,135 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Vencimentos e retiradas{% endblock %}
+{% block fin_conteudo %}
+{% set aqui = request.full_path.rstrip('?') %}
+{% call m.cabecalho('Vencimentos e retiradas', 'Renove, marque retiradas e finalize as saídas — individualmente ou em lote.') %}{% endcall %}
+<div class="pr-abas">
+  <a class="{{ 'on' if aba == 'vencimentos' }}" href="?aba=vencimentos&dias={{ dias }}">Próximos vencimentos</a>
+  <a class="{{ 'on' if aba == 'vencidas' }}" href="?aba=vencidas">Vencidas sem renovação</a>
+  <a class="{{ 'on' if aba == 'retiradas' }}" href="?aba=retiradas">Retiradas solicitadas</a>
+</div>
+{% if aba == 'vencimentos' %}
+<div class="pr-abas">{% for n in [15, 30, 60, 90] %}<a class="{{ 'on' if dias == n }}" href="?aba=vencimentos&dias={{ n }}">{{ n }} dias</a>{% endfor %}</div>
+{% endif %}
+
+<section class="vg-box">
+  <header><h3>{{ lista|length }} cota(s)</h3><span>Total {{ reais(total) }}</span></header>
+  {% if aba != 'retiradas' and lista %}
+  <div class="vc-lote" id="vc-lote" hidden>
+    <b id="vc-n">0</b> selecionada(s)
+    <button type="button" class="btn-pill fin-btn mini" data-lote="renovar">{{ ic('autorenew') }} Renovar selecionadas</button>
+    <button type="button" class="btn-pill outline fin-btn mini" data-lote="retirar">{{ ic('event') }} Marcar retirada</button>
+  </div>
+  {% endif %}
+  <div style="overflow-x:auto">
+  <table class="pr-tabela vc-tab">
+    <thead><tr>
+      {% if aba != 'retiradas' %}<th><input type="checkbox" id="vc-todas" title="Selecionar todas"></th>{% endif %}
+      <th>{{ 'Efetiva em' if aba == 'retiradas' else 'Vencimento' }}</th><th>Cotista</th><th>Produto</th><th>Cota</th><th class="num">Valor</th><th class="num">Ações</th></tr></thead>
+    <tbody>
+    {% for s in lista %}
+      {% set dt = (s.withdrawal_effective_date or s.maturity_date) if aba == 'retiradas' else s.maturity_date %}
+      <tr>
+        {% if aba != 'retiradas' %}<td>{% if not s.withdrawal_requested %}<input type="checkbox" class="vc-sel" value="{{ s.id }}">{% endif %}</td>{% endif %}
+        <td style="{{ 'color:var(--fin-neg);font-weight:600' if dt and dt < hoje }}">{{ data_br(dt) if dt else '—' }}</td>
+        <td><a href="{{ url_for('financas.cond_cotista', slug=empresa.slug, cid=s.client_id) }}"><b>{{ s.cliente }}</b></a>
+          <small class="vc-cont">{{ s.email or '' }}{{ ' · ' if s.email and s.phone }}{{ s.phone or '' }}</small></td>
+        <td>{{ COND_NOMES[s.code] }}</td>
+        <td class="mono"><a href="{{ url_for('financas.cond_cota_editar', slug=empresa.slug, sid=s.id) }}">{{ s.share_number }}</a></td>
+        <td class="num">{{ reais(s.share_value) }}</td>
+        <td class="num vc-acoes">
+        {% if aba == 'retiradas' %}
+          <form method="post" class="vc-f" action="{{ url_for('financas.cond_cota_acao', slug=empresa.slug, sid=s.id, acao='retirada-data') }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="referrer" value="{{ aqui }}">
+            <input class="inp vc-dt" type="date" name="withdrawal_effective_date" value="{{ s.withdrawal_effective_date or '' }}" onchange="this.form.submit()" title="Alterar a data efetiva"></form>
+          <form method="post" class="vc-f" action="{{ url_for('financas.cond_cota_acao', slug=empresa.slug, sid=s.id, acao='cancelar-retirada') }}" onsubmit="return confirm('Cancelar o pedido de retirada da cota {{ s.share_number }}?')">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="referrer" value="{{ aqui }}">
+            <button class="btn-pill outline fin-btn mini">Cancelar</button></form>
+          <form method="post" class="vc-f" action="{{ url_for('financas.cond_cota_acao', slug=empresa.slug, sid=s.id, acao='inativar-retirada') }}" onsubmit="return confirm('Finalizar a retirada e inativar a cota {{ s.share_number }}?')">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="referrer" value="{{ aqui }}">
+            <button class="btn-pill fin-btn mini" {{ 'disabled title="Disponível a partir da data efetiva"' if (s.withdrawal_effective_date or '9') > hoje }}>Finalizar</button></form>
+        {% elif s.withdrawal_requested %}
+          <span class="pr-st pendente">retirada em {{ data_br(s.withdrawal_effective_date) }}</span>
+        {% else %}
+          <a class="btn-pill fin-btn mini" href="{{ url_for('financas.cond_termo', slug=empresa.slug, tipo='renovacao', ids=s.id, referrer=aqui) }}" title="Confere as cotas do cliente e gera o Termo de Renovação">Vai renovar</a>
+          <a class="btn-pill outline fin-btn mini" href="{{ url_for('financas.cond_termo', slug=empresa.slug, tipo='retirada', ids=s.id, referrer=aqui) }}" title="Confere as cotas do cliente e gera o Termo de Retirada">Vai retirar</a>
+        {% endif %}
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="7" class="fin-vazio">Nada por aqui.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+{# ── diálogo: renovar / retirar com datas escolhidas (individual ou lote) ── #}
+<dialog class="dlg fin-dlg" id="dlg-vc">
+  <div class="dlg-head"><h3 id="vc-tit"></h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+  <div class="pr-abas" id="vc-abas"><a href="#" data-m="ren" class="on">Renovar</a><a href="#" data-m="ret">Marcar retirada</a></div>
+  <form method="post" class="fin-form" id="vc-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="referrer" value="{{ aqui }}"><input type="hidden" name="voltar" value="{{ aqui }}">
+    <div id="vc-ids"></div>
+    <div data-m="ren"><div class="fin-2col">
+      <div><label class="lbl">Data da renovação</label><input class="inp" type="date" name="renewal_date" id="vc-ren"></div>
+      <div><label class="lbl">Novo vencimento</label><input class="inp" type="date" name="new_maturity_date" id="vc-venc"></div></div></div>
+    <div data-m="ret" hidden><div class="fin-2col">
+      <div><label class="lbl">Pedido em</label><input class="inp" type="date" id="vc-ped"></div>
+      <div><label class="lbl">Efetiva em</label><input class="inp" type="date" id="vc-eff"></div></div>
+      <p class="co-dica">A cota continua ativa e rende até a data efetiva.</p></div>
+    <label class="lbl">Observação</label><input class="inp" id="vc-obs">
+    <div class="dlg-acoes"><button type="button" class="btn-pill outline fin-btn" data-fechar>Cancelar</button><button class="btn-pill fin-btn" id="vc-ok">Confirmar</button></div>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  var dlg = document.getElementById('dlg-vc'), form = document.getElementById('vc-form'), ids = document.getElementById('vc-ids'), modo = 'ren', alvo = null;
+  var U = {
+    um: function (id, a) { return '{{ url_for("financas.cond_cota_acao", slug=empresa.slug, sid=999999, acao="X") }}'.replace('999999', id).replace('/X', '/' + a); },
+    lote: { ren: '{{ url_for("financas.cond_cotas_lote", slug=empresa.slug, acao="renovar") }}', ret: '{{ url_for("financas.cond_cotas_lote", slug=empresa.slug, acao="retirar") }}' }
+  };
+  function maisUmAno(s) { if (!s) return ''; var p = s.split('-'); return (+p[0] + 1) + '-' + p[1] + '-' + (p[1] === '02' && p[2] === '29' ? '28' : p[2]); }
+  function setModo(m) {
+    modo = m;
+    document.querySelectorAll('#vc-abas a').forEach(function (a) { a.classList.toggle('on', a.dataset.m === m); });
+    form.querySelectorAll('div[data-m]').forEach(function (x) { x.hidden = x.dataset.m !== m; });
+  }
+  document.querySelectorAll('#vc-abas a').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); setModo(a.dataset.m); }); });
+  function abrir(m, dados, lote) {
+    alvo = lote; ids.innerHTML = '';
+    document.getElementById('vc-tit').textContent = lote ? lote.length + ' cota(s) selecionada(s)' : 'Cota ' + dados.n;
+    document.getElementById('vc-ren').value = dados.ren || '{{ hoje }}'; document.getElementById('vc-venc').value = dados.venc || '';
+    document.getElementById('vc-ped').value = dados.ped || '{{ hoje }}'; document.getElementById('vc-eff').value = dados.eff || '';
+    document.getElementById('vc-obs').value = '';
+    form.dataset.id = dados.id || '';
+    if (lote) lote.forEach(function (i) { ids.insertAdjacentHTML('beforeend', '<input type="hidden" name="share_ids[]" value="' + i + '">'); });
+    setModo(m); dlg.showModal();
+  }
+  document.getElementById('vc-ren').addEventListener('change', function () { var v = document.getElementById('vc-venc'); if (!v.value) v.value = maisUmAno(this.value); });
+  form.addEventListener('submit', function () {
+    var obs = document.getElementById('vc-obs').value, ped = document.getElementById('vc-ped').value, eff = document.getElementById('vc-eff').value;
+    function h(n, v) { ids.insertAdjacentHTML('beforeend', '<input type="hidden" name="' + n + '" value="' + String(v).replace(/"/g, '&quot;') + '">'); }
+    if (alvo) {
+      form.action = U.lote[modo];
+      if (modo === 'ren') h('notes', obs); else { h('request_date', ped); h('effective_date', eff); h('notes', obs); }
+    } else if (modo === 'ren') { form.action = U.um(form.dataset.id, 'renovar'); h('user_note', obs); }
+    else { form.action = U.um(form.dataset.id, 'marcar-retirada'); h('withdrawal_request_date', ped); h('withdrawal_effective_date', eff); h('withdrawal_notes', obs); }
+  });
+  document.querySelectorAll('.vc-mais').forEach(function (b) { b.addEventListener('click', function () { abrir('ren', b.dataset, null); }); });
+
+  // seleção em lote
+  var sel = document.querySelectorAll('.vc-sel'), barra = document.getElementById('vc-lote'), todas = document.getElementById('vc-todas');
+  function marcadas() { return Array.prototype.filter.call(sel, function (c) { return c.checked; }).map(function (c) { return c.value; }); }
+  function atualiza() { if (!barra) return; var n = marcadas().length; barra.hidden = !n; document.getElementById('vc-n').textContent = n; }
+  sel.forEach(function (c) { c.addEventListener('change', atualiza); });
+  if (todas) todas.addEventListener('change', function () { sel.forEach(function (c) { c.checked = todas.checked; }); atualiza(); });
+  var URL_TERMO = { renovar: '{{ url_for("financas.cond_termo", slug=empresa.slug, tipo="renovacao") }}', retirar: '{{ url_for("financas.cond_termo", slug=empresa.slug, tipo="retirada") }}' };
+  document.querySelectorAll('[data-lote]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      location.href = URL_TERMO[b.dataset.lote] + '?ids=' + marcadas().join(',') + '&referrer=' + encodeURIComponent('{{ aqui }}');
+    });
+  });
+})();
+</script>
+{% endblock %}

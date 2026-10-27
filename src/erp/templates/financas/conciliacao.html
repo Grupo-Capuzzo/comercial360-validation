@@ -1,0 +1,81 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Conciliação bancária{% endblock %}
+{% block fin_conteudo %}
+<div class="fin-head">
+  <div>
+    <div class="eyebrow-line">Finanças</div>
+    <h1>Conciliação bancária</h1>
+    <p>Importe o extrato do banco (OFX) e confirme cada linha com um lançamento. O que não existir, você cria na hora.</p>
+  </div>
+</div>
+{% if not contas %}
+  <div class="fin-onboarding"><h3>Nenhuma conta cadastrada</h3><p><a href="{{ url_for('financas.cad_contas', slug=empresa.slug) }}">Cadastre a conta bancária</a> antes de importar o extrato.</p></div>
+{% else %}
+<div class="fin-contas-abas">
+  {% for c in contas %}
+    <a class="{{ 'on' if conta and c.id == conta.id }}" href="{{ url_for('financas.conciliacao', slug=empresa.slug, conta=c.id) }}"><small>{{ TIPOS_CONTA.get(c.tipo, '') }}</small><b>{{ c.nome }}</b><span>{{ moeda(c.saldo) }}</span></a>
+  {% endfor %}
+</div>
+
+<form class="fin-box fin-import" method="post" enctype="multipart/form-data" action="{{ url_for('financas.conciliacao_importar', slug=empresa.slug) }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="conta_id" value="{{ conta.id }}">
+  <div><b>{{ fic('upload') }} Importar extrato OFX — {{ conta.nome }}</b>
+    <small>No internet banking: Extrato → Exportar → formato OFX (Money/Quicken). Linhas repetidas são ignoradas.</small></div>
+  <input class="inp" type="file" name="arquivo" accept=".ofx,.OFX" required>
+  <button class="btn-pill fin-btn" type="submit">Importar</button>
+</form>
+
+<section class="fin-box">
+  <header><h3>Para conciliar ({{ pend|length }})</h3><span>sugestões por valor e data próximos</span></header>
+  {% for x in pend %}
+  <article class="fin-conc">
+    <div class="fin-conc-linha">
+      <span class="dt">{{ data_br(x.data) }}</span>
+      <span class="txt"><b>{{ x.descricao }}</b><small>Extrato do banco</small></span>
+      <b class="num {{ 'pos' if x.valor > 0 else 'risco' }}">{{ moeda(x.valor, true) }}</b>
+    </div>
+    <div class="fin-conc-opcoes">
+      {% for s in x.sugestoes %}
+        <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='vincular') }}" class="fin-sug">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="lancamento_id" value="{{ s.id }}">
+          <span><b>{{ s.descricao }}</b><small>{{ s.pessoa_nome or s.categoria_nome or '—' }} · vence {{ data_br(s.vencimento) }} · saldo {{ moeda(s.saldo) }}</small></span>
+          {% if s.saldo > (x.valor|abs) %}<label class="fin-check"><input type="checkbox" name="quitar" value="1"> quitar com desconto</label>{% endif %}
+          <button class="btn-pill fin-btn mini" type="submit">{{ fic('check') }} Conciliar</button>
+        </form>
+      {% endfor %}
+      <details class="fin-conc-novo" {{ 'open' if not x.sugestoes }}>
+        <summary>{{ 'Nenhum lançamento parecido — ' if not x.sugestoes }}Criar {{ 'receita' if x.valor > 0 else 'despesa' }} com esta linha</summary>
+        <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='criar') }}" class="fin-conc-form">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <input class="inp" name="descricao" value="{{ x.descricao }}" aria-label="Descrição">
+          <select class="inp" name="categoria_id" aria-label="Categoria"><option value="">Categoria…</option>
+            {% for c in categorias %}{% if (x.valor > 0) == (c.tipo == 'receita') %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endif %}{% endfor %}</select>
+          <select class="inp" name="pessoa_id" aria-label="Cliente/fornecedor"><option value="">{{ 'Cliente' if x.valor > 0 else 'Fornecedor' }}…</option>
+            {% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select>
+          <button class="btn-pill fin-btn mini" type="submit">Criar e conciliar</button>
+        </form>
+      </details>
+      <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='ignorar') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link" type="submit">Ignorar esta linha</button></form>
+    </div>
+  </article>
+  {% else %}
+    <p class="fin-vazio">Nada pendente. Importe um extrato OFX para começar.</p>
+  {% endfor %}
+</section>
+
+{% if feitas %}
+<section class="fin-box">
+  <header><h3>Últimas conciliadas / ignoradas</h3></header>
+  <ul class="fin-lista">
+    {% for x in feitas %}
+      <li><span>{{ data_br(x.data) }} · {{ x.descricao }} <b class="{{ 'pos' if x.valor > 0 else 'risco' }}">{{ moeda(x.valor, true) }}</b></span>
+        <span class="dir">{{ '✓ Conciliada' if x.status == 'conciliado' else 'Ignorada' }}
+          {% if x.status == 'ignorado' %}<form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='desfazer') }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link" type="submit">voltar para pendentes</button></form>{% endif %}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

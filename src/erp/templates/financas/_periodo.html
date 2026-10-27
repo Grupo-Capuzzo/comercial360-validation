@@ -1,0 +1,13 @@
+{# Seletor de período: mês com setas + datas livres. Espera: de, ate, nav, ep (endpoint), extra (dict de parâmetros) #}
+<form class="fin-periodo" method="get">
+  {% for k, v in extra.items() %}{% if v not in (none, '') %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  {% if nav %}
+    <a class="fin-seta-mes" href="{{ url_for(ep, slug=empresa.slug, de=nav.ant[0], ate=nav.ant[1], **extra) }}" aria-label="Mês anterior">‹</a>
+    <b class="fin-mes-rot">{{ nav.rotulo }}</b>
+    <a class="fin-seta-mes" href="{{ url_for(ep, slug=empresa.slug, de=nav.prox[0], ate=nav.prox[1], **extra) }}" aria-label="Próximo mês">›</a>
+  {% endif %}
+  <input class="inp" type="date" name="de" value="{{ de }}" aria-label="De">
+  <span>até</span>
+  <input class="inp" type="date" name="ate" value="{{ ate }}" aria-label="Até">
+  <button class="btn-pill outline fin-btn" type="submit">Aplicar</button>
+</form>

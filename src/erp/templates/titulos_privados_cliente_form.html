@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Novo Cliente de Títulos' if modo == 'novo' else 'Editar Cliente de Títulos' }} — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('titulos_privados_clientes') }}" class="back-link">← Voltar para Clientes de Títulos</a>
+
+<div class="page-header">
+  <div class="page-header-icon">{{ '➕' if modo == 'novo' else '✏️' }}</div>
+  <div class="page-header-title">{{ 'Novo Cliente de Títulos' if modo == 'novo' else 'Editar Cliente de Títulos' }}</div>
+  <div class="page-header-sub">
+    Cadastro próprio do módulo — não altera o cadastro geral de clientes dos condomínios.
+  </div>
+</div>
+
+<div class="card-gold">
+  <form method="post">
+
+    <!-- Vincular cliente já existente -->
+    <div class="form-section">
+      <div class="form-section-title">Vincular Cliente Já Existente (opcional)</div>
+      <div class="note-box" style="margin-bottom:12px;">
+        ℹ️ Se este tomador já é cliente cadastrado nos condomínios, busque por nome, CPF/CNPJ,
+        telefone ou e-mail e vincule — sem duplicar o cadastro. Se não encontrar, cadastre os
+        dados abaixo normalmente (fica só neste módulo por enquanto).
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="position:relative;">
+          <label>Buscar cliente existente</label>
+          <input type="text" id="busca-cliente-vinculo" class="form-control"
+                 placeholder="Digite nome, CPF/CNPJ, telefone ou e-mail…" autocomplete="off">
+          <div id="resultado-busca-vinculo"
+               style="display:none;position:absolute;z-index:20;top:100%;left:0;right:0;
+                      background:#1a1a1a;border:1px solid rgba(212,175,55,.3);border-radius:8px;
+                      max-height:220px;overflow-y:auto;margin-top:4px;"></div>
+        </div>
+      </div>
+      <div id="cliente-vinculado-info" style="{{ 'display:none;' if not cliente.get('linked_client_id') }}margin-top:6px;">
+        <span class="badge badge-active">🔗 Vinculado a: <span id="cliente-vinculado-nome"></span></span>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="limparVinculo()" style="margin-left:6px;">Remover vínculo</button>
+      </div>
+      <input type="hidden" name="linked_client_id" id="linked_client_id"
+             value="{{ cliente.get('linked_client_id','') or '' }}">
+    </div>
+
+    <!-- Dados do cliente de títulos -->
+    <div class="form-section">
+      <div class="form-section-title">Dados do Cliente</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome Completo *</label>
+          <input type="text" name="name" value="{{ cliente.get('name','') }}"
+                 class="form-control" required placeholder="Nome do tomador do empréstimo">
+        </div>
+        <div class="form-group">
+          <label>CPF/CNPJ</label>
+          <input type="text" name="document" value="{{ formatar_documento(cliente.get('document','')) if cliente.get('document') else '' }}"
+                 class="form-control" data-mask="cpfcnpj"
+                 placeholder="000.000.000-00 ou 00.000.000/0000-00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" name="email" value="{{ cliente.get('email','') }}"
+                 class="form-control" placeholder="email@exemplo.com">
+        </div>
+        <div class="form-group">
+          <label>Telefone</label>
+          <input type="text" name="phone" value="{{ cliente.get('phone','') }}"
+                 class="form-control" data-mask="phone" placeholder="(00) 00000-0000">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Chave PIX</label>
+          <input type="text" name="pix_key" value="{{ cliente.get('pix_key','') }}"
+                 class="form-control" placeholder="CPF, e-mail ou chave aleatória">
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" class="form-control" style="max-width:200px;">
+            <option value="ativo"   {{ 'selected' if cliente.get('status','ativo') == 'ativo' else '' }}>Ativo</option>
+            <option value="inativo" {{ 'selected' if cliente.get('status') == 'inativo' else '' }}>Inativo</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observações</label>
+        <textarea name="notes" class="form-control" rows="3"
+                  placeholder="Anotações internas (opcional)">{{ cliente.get('notes','') }}</textarea>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a href="{{ url_for('titulos_privados_clientes') }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">
+        {{ '✓ Cadastrar Cliente' if modo == 'novo' else '✓ Salvar Alterações' }}
+      </button>
+    </div>
+
+  </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+var buscaInput = document.getElementById('busca-cliente-vinculo');
+var resultadoDiv = document.getElementById('resultado-busca-vinculo');
+var linkedInput = document.getElementById('linked_client_id');
+var infoDiv = document.getElementById('cliente-vinculado-info');
+var nomeSpan = document.getElementById('cliente-vinculado-nome');
+var buscaTimeout = null;
+
+if (buscaInput) {
+  buscaInput.addEventListener('input', function () {
+    var termo = this.value.trim();
+    clearTimeout(buscaTimeout);
+    if (termo.length < 2) {
+      resultadoDiv.style.display = 'none';
+      return;
+    }
+    buscaTimeout = setTimeout(function () {
+      fetch('{{ url_for("titulos_privados_clientes_buscar_vinculo") }}?q=' + encodeURIComponent(termo))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          resultadoDiv.innerHTML = '';
+          if (!data.results || !data.results.length) {
+            resultadoDiv.innerHTML = '<div style="padding:10px;color:#888;font-size:13px;">Nenhum cliente encontrado no cadastro geral.</div>';
+          } else {
+            data.results.forEach(function (c) {
+              var item = document.createElement('div');
+              item.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;';
+              item.innerHTML = '<strong style="color:#F5F5F5;">' + c.full_name + '</strong><br>' +
+                                '<span style="color:#888;font-size:11px;">' + (c.cpf || '') +
+                                (c.phone ? ' · ' + c.phone : '') + (c.email ? ' · ' + c.email : '') + '</span>';
+              item.onclick = function () {
+                linkedInput.value = c.id;
+                nomeSpan.textContent = c.full_name;
+                infoDiv.style.display = 'block';
+                resultadoDiv.style.display = 'none';
+                buscaInput.value = '';
+                if (!document.querySelector('input[name="name"]').value) {
+                  document.querySelector('input[name="name"]').value = c.full_name;
+                }
+                if (c.cpf && !document.querySelector('input[name="document"]').value) {
+                  document.querySelector('input[name="document"]').value = c.cpf;
+                }
+                if (c.email && !document.querySelector('input[name="email"]').value) {
+                  document.querySelector('input[name="email"]').value = c.email;
+                }
+                if (c.phone && !document.querySelector('input[name="phone"]').value) {
+                  document.querySelector('input[name="phone"]').value = c.phone;
+                }
+                if (c.pix_key && !document.querySelector('input[name="pix_key"]').value) {
+                  document.querySelector('input[name="pix_key"]').value = c.pix_key;
+                }
+              };
+              resultadoDiv.appendChild(item);
+            });
+          }
+          resultadoDiv.style.display = 'block';
+        })
+        .catch(function () {
+          resultadoDiv.style.display = 'none';
+        });
+    }, 300);
+  });
+}
+
+function limparVinculo() {
+  linkedInput.value = '';
+  infoDiv.style.display = 'none';
+}
+</script>
+{% endblock %}

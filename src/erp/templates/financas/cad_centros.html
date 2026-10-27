@@ -1,0 +1,24 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Centros de custo{% endblock %}
+{% block fin_conteudo %}
+<div class="fin-head"><div><div class="eyebrow-line">Cadastros</div><h1>Centros de custo</h1>
+  <p>Separe receitas e despesas por área, projeto ou unidade (ex.: Matriz, Filial, Projeto X).</p></div></div>
+<div class="fin-cols">
+  <section class="fin-box">
+    <ul class="fin-cats">
+      {% for c in centros %}<li class="{{ 'inativa' if not c.ativo }}"><a href="{{ url_for('financas.cad_centros', slug=empresa.slug, editar=c.id) }}">{{ c.nome }}</a>{% if not c.ativo %}<small>inativo</small>{% endif %}</li>
+      {% else %}<li class="vazio">Nenhum centro de custo.</li>{% endfor %}
+    </ul>
+  </section>
+  <section class="fin-box">
+    <header><h3>{{ 'Editar' if editar else 'Novo centro de custo' }}</h3>{% if editar %}<a class="fin-link" href="{{ url_for('financas.cad_centros', slug=empresa.slug) }}">+ novo</a>{% endif %}</header>
+    {% set c = editar or {} %}
+    <form method="post" class="fin-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ c.id or '' }}">
+      <label class="lbl">Nome</label><input class="inp" name="nome" required maxlength="80" value="{{ c.nome or '' }}">
+      {% if editar %}<label class="fin-check"><input type="hidden" name="ativo" value="0"><input type="checkbox" name="ativo" value="1" {{ 'checked' if c.ativo }}> Ativo</label>{% endif %}
+      <button class="btn-pill fin-btn" type="submit">Salvar</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

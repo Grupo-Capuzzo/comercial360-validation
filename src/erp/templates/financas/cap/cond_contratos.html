@@ -1,0 +1,27 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Contratos{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Contratos e assinaturas', 'Termos de aquisição, renovação e retirada: emissão, assinatura do cliente e acompanhamento.') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.cond_cota_nova', slug=empresa.slug, produto='civil', voltar=request.path) }}">{{ fic('add') }} Nova cota com contrato</a>
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_contrato_novo', slug=empresa.slug) }}">{{ fic('contrato') }} Contrato p/ cotas pendentes</a>
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_contratos_config', slug=empresa.slug) }}">{{ ic('settings') }} Configurações</a>
+{% endcall %}
+<div class="pr-abas"><a class="{{ 'on' if not tipo }}" href="?">Todos</a>{% for k, v in TIPOS_CT.items() %}<a class="{{ 'on' if tipo == k }}" href="?tipo={{ k }}">{{ v }}</a>{% endfor %}</div>
+<section class="vg-box">
+  <table class="pr-tabela">
+    <thead><tr><th>Nº</th><th>Termo</th><th>Cotista</th><th>Produto</th><th>Cotas</th><th class="num">Valor</th><th>Status</th><th>Criado</th><th>Assinado</th></tr></thead>
+    <tbody>
+    {% for c in lista %}
+      <tr class="clic" onclick="location.href='{{ url_for('financas.cond_contrato', slug=empresa.slug, cid=c.id) }}'">
+        <td class="mono">{{ c.id }}</td><td>{{ TIPOS_CT.get(c.tipo, c.tipo) }}</td><td><b>{{ c.cliente }}</b></td><td>{{ COND_NOMES.get(c.code, c.code) }}</td>
+        <td class="mono">{{ c.dados.cotas|map(attribute='numero')|join(', ') }}</td>
+        <td class="num">{{ reais((c.dados.retirada or {}).valor or c.dados.valor_total) }}</td>
+        <td><span class="pr-st {{ ST[c.status][1] }}">{{ ST[c.status][0] }}</span></td>
+        <td>{{ data_br(c.criado_em[:10]) }}</td><td>{{ data_br(c.assinado_em[:10]) if c.assinado_em else '—' }}</td>
+      </tr>
+    {% else %}<tr><td colspan="9" class="fin-vazio">Nenhum contrato emitido.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+{% block title %}{{ cond.name }} — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('dashboard') }}" class="back-link">← Voltar para Dashboard</a>
+
+<!-- Hero do Produto -->
+<div class="cond-hero">
+  <div class="cond-hero-header">
+    <div>
+      <div style="font-size:11px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">
+        Condomínio de Investimento · {{ cond.code.upper() }}
+      </div>
+      <div class="cond-hero-title">
+        {% if cond.code == 'civil' %}🏗️
+        {% elif cond.code == 'agro' %}🌾
+        {% else %}🏥
+        {% endif %}
+        &nbsp;{{ cond.name }}
+      </div>
+    </div>
+    <div class="cond-hero-actions">
+      <a href="{{ url_for('cotas_nova', produto=cond.code) }}" class="btn btn-primary">
+        + Nova Cota
+      </a>
+      <a href="{{ url_for('apuracao', produto=cond.code) }}" class="btn btn-secondary">
+        📐 Cálculo do Mês
+      </a>
+    </div>
+  </div>
+
+  <div class="cond-stats">
+    <div class="cond-stat">
+      <div class="cond-stat-value text-gold">{{ formatar_moeda(valor_total) }}</div>
+      <div class="cond-stat-label">Patrimônio Ativo</div>
+    </div>
+    <div class="cond-stat">
+      <div class="cond-stat-value" style="color:#4ade80;">{{ ativas | length }}</div>
+      <div class="cond-stat-label">Cotas Ativas</div>
+    </div>
+    <div class="cond-stat">
+      <div class="cond-stat-value" style="color:#fbbf24;">{{ pendentes | length }}</div>
+      <div class="cond-stat-label">Pendentes</div>
+    </div>
+    <div class="cond-stat">
+      <div class="cond-stat-value" style="color:#6b7280;">{{ inativas | length }}</div>
+      <div class="cond-stat-label">Inativas</div>
+    </div>
+    <div class="cond-stat">
+      <div class="cond-stat-value" style="color:#60a5fa;">{{ clientes_ativos }}</div>
+      <div class="cond-stat-label">Clientes Ativos</div>
+    </div>
+    <div class="cond-stat">
+      <div class="cond-stat-value">{{ formatar_percentual(cond.default_monthly_rate) }}</div>
+      <div class="cond-stat-label">Taxa Mensal</div>
+    </div>
+  </div>
+
+  {% if cond.code == 'agro' %}
+  <div class="note-box" style="margin-top:14px;">
+    <span style="color:#fbbf24;font-weight:600;">⚠️ Taxa especial no vencimento: </span>
+    <span>3,5% a 4,5% — verificar a cada operação</span>
+  </div>
+  {% endif %}
+</div>
+
+{% if cotas %}
+<!-- Barra de Busca e Filtros -->
+<div style="background:#111;border:1px solid #222;border-radius:8px;padding:14px 16px;margin-bottom:18px;display:flex;flex-direction:column;gap:10px;">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:220px;position:relative;">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#555;pointer-events:none;">🔍</span>
+      <input type="text" id="cond-search"
+             placeholder="Buscar por cliente, CPF/CNPJ, Pix ou número da cota…"
+             style="width:100%;padding:8px 12px 8px 32px;background:#1a1a1a;color:#F5F5F5;
+                    border:1px solid #333;border-radius:6px;font-size:13px;box-sizing:border-box;outline:none;"
+             onfocus="this.style.borderColor='#d4af37'" onblur="this.style.borderColor='#333'">
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      <button class="filter-btn active" data-filter-status="todos"
+              style="padding:7px 14px;font-size:12px;font-weight:600;border:1px solid #333;
+                     border-radius:5px;cursor:pointer;background:#1e1e1e;color:#aaa;transition:all .15s;">
+        Todos
+      </button>
+      <button class="filter-btn" data-filter-status="ativa"
+              style="padding:7px 14px;font-size:12px;font-weight:600;border:1px solid #333;
+                     border-radius:5px;cursor:pointer;background:#1e1e1e;color:#4ade80;transition:all .15s;">
+        Ativas
+      </button>
+      <button class="filter-btn" data-filter-status="pendente"
+              style="padding:7px 14px;font-size:12px;font-weight:600;border:1px solid #333;
+                     border-radius:5px;cursor:pointer;background:#1e1e1e;color:#fbbf24;transition:all .15s;">
+        Pendentes
+      </button>
+      <button class="filter-btn" data-filter-status="inativa"
+              style="padding:7px 14px;font-size:12px;font-weight:600;border:1px solid #333;
+                     border-radius:5px;cursor:pointer;background:#1e1e1e;color:#6b7280;transition:all .15s;">
+        Inativas
+      </button>
+    </div>
+  </div>
+  <div id="cond-filter-counter" style="font-size:12px;color:#555;padding-left:2px;">
+    Exibindo todas as {{ cotas | length }} cotas
+  </div>
+</div>
+
+<!-- Barra de seleção em lote -->
+<div class="bulk-toolbar" id="cond-bulk-toolbar">
+  <label class="bulk-toolbar-select-all">
+    <input type="checkbox" id="cond-select-all-visiveis">
+    Selecionar todas as cotas exibidas
+  </label>
+  <div class="bulk-toolbar-count" id="bulk-selected-count">0 cota(s) selecionada(s)</div>
+  <div class="bulk-toolbar-actions">
+    <button type="button" class="btn btn-secondary btn-sm" id="btn-limpar-selecao">
+      Limpar seleção
+    </button>
+    <button type="button" class="btn btn-primary btn-sm" id="btn-editar-lote" disabled>
+      ✏️ Editar selecionadas em lote
+    </button>
+  </div>
+</div>
+
+<!-- Form usado só para levar as cotas selecionadas ao grid de edição em lote -->
+<form method="post" action="{{ url_for('cotas_editar_lote') }}" id="form-cond-editar-lote"
+      style="display:none;">
+  <input type="hidden" name="referrer" value="{{ request.url }}">
+  <div id="cond-lote-share-ids"></div>
+</form>
+{% endif %}
+
+<style>
+.filter-btn.active { background:#d4af37!important;color:#000!important;border-color:#d4af37!important; }
+.filter-btn:hover:not(.active) { border-color:#555!important; }
+</style>
+
+<!-- Cotas Ativas -->
+<div class="cond-section-wrap" id="section-ativas">
+{% if ativas %}
+<div class="section-label">● Cotas Ativas ({{ ativas | length }})</div>
+<div class="table-wrap" style="margin-bottom:20px;">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30px;">
+          <input type="checkbox" class="cond-select-all-table" title="Selecionar as ativas exibidas">
+        </th>
+        <th>Nº</th>
+        <th>Cotista</th>
+        <th>CPF</th>
+        <th>Valor</th>
+        <th>Aquisição</th>
+        <th>Vencimento</th>
+        <th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cota in ativas %}
+      <tr data-status="ativa"
+          data-share-number="{{ cota.share_number | lower }}"
+          data-client-name="{{ cota.client_name | lower }}"
+          data-client-document="{{ cota.client_cpf | lower }}"
+          data-pix="{{ (cota.client_pix or '') | lower }}">
+        <td>
+          <input type="checkbox" class="row-select" data-share-id="{{ cota.id }}"
+                 title="Selecionar cota {{ cota.share_number }}">
+        </td>
+        <td style="font-size:20px;font-weight:700;color:#d4af37;">
+          {{ cota.share_number }}
+          {% if cota.withdrawal_requested %}
+            <span class="badge badge-retirada" style="font-size:10px;vertical-align:middle;"
+                  title="Retirada efetiva em {{ cota.withdrawal_effective_date or '—' }}">📤 Em retirada</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('clientes_detalhe', cid=cota.client_id) }}"
+             style="color:#F5F5F5;font-weight:500;">{{ cota.client_name }}</a>
+        </td>
+        <td class="text-mono text-dim">{{ cota.client_cpf }}</td>
+        <td style="font-weight:600;">{{ formatar_moeda(cota.share_value) }}</td>
+        <td class="text-dim">{{ cota.acquisition_date or '—' }}</td>
+        <td class="text-dim">{{ cota.maturity_date or '—' }}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <a href="{{ url_for('cotas_editar', sid=cota.id) }}" class="btn btn-secondary btn-sm">Editar</a>
+          <button type="button" class="btn btn-danger btn-sm"
+                  onclick="openInativarModal(this)"
+                  data-share-id="{{ cota.id }}"
+                  data-share-num="{{ cota.share_number | e }}"
+                  data-client-name="{{ cota.client_name | e }}"
+                  data-share-value="{{ cota.share_value }}"
+                  data-acquisition-date="{{ cota.acquisition_date or '' }}">
+            Inativar
+          </button>
+          <button type="button" class="btn btn-delete btn-sm"
+                  onclick="openDeleteModal({{ cota.id }}, '{{ cota.share_number }}')">
+            Excluir
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+</div>
+
+<!-- Cotas Pendentes -->
+<div class="cond-section-wrap" id="section-pendentes">
+{% if pendentes %}
+<div class="section-label" style="color:#fbbf24;">⏳ Pendentes ({{ pendentes | length }})</div>
+<div class="table-wrap" style="margin-bottom:20px;">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30px;">
+          <input type="checkbox" class="cond-select-all-table" title="Selecionar as pendentes exibidas">
+        </th>
+        <th>Nº</th>
+        <th>Cotista</th>
+        <th>Valor</th>
+        <th>Aquisição</th>
+        <th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cota in pendentes %}
+      <tr data-status="pendente"
+          data-share-number="{{ cota.share_number | lower }}"
+          data-client-name="{{ cota.client_name | lower }}"
+          data-client-document="{{ cota.client_cpf | lower }}"
+          data-pix="{{ (cota.client_pix or '') | lower }}">
+        <td>
+          <input type="checkbox" class="row-select" data-share-id="{{ cota.id }}"
+                 title="Selecionar cota {{ cota.share_number }}">
+        </td>
+        <td style="font-size:18px;font-weight:700;color:#fbbf24;">{{ cota.share_number }}</td>
+        <td>
+          <a href="{{ url_for('clientes_detalhe', cid=cota.client_id) }}"
+             style="color:#F5F5F5;">{{ cota.client_name }}</a>
+        </td>
+        <td style="font-weight:600;">{{ formatar_moeda(cota.share_value) }}</td>
+        <td class="text-dim">{{ cota.acquisition_date or '—' }}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <a href="{{ url_for('cotas_editar', sid=cota.id) }}" class="btn btn-secondary btn-sm">Editar</a>
+          <form method="post" action="{{ url_for('cotas_reativar', sid=cota.id) }}" style="display:inline;">
+            <input type="hidden" name="referrer" value="{{ request.url }}">
+            <button type="submit" class="btn btn-success btn-sm">Ativar</button>
+          </form>
+          <button type="button" class="btn btn-delete btn-sm"
+                  onclick="openDeleteModal({{ cota.id }}, '{{ cota.share_number }}')">
+            Excluir
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+</div>
+
+<!-- Cotas Inativas -->
+<div class="cond-section-wrap" id="section-inativas">
+{% if inativas %}
+<details>
+  <summary style="cursor:pointer;color:#555;font-size:13px;margin-bottom:12px;user-select:none;">
+    🔒 Inativas ({{ inativas | length }}) — clique para expandir
+  </summary>
+  <div class="table-wrap" style="margin-top:10px;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30px;">
+            <input type="checkbox" class="cond-select-all-table" title="Selecionar as inativas exibidas">
+          </th>
+          <th>Nº</th>
+          <th>Cotista</th>
+          <th>Valor</th>
+          <th>Retirada</th>
+          <th style="text-align:right;">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cota in inativas %}
+        <tr style="opacity:0.6;"
+            data-status="inativa"
+            data-share-number="{{ cota.share_number | lower }}"
+            data-client-name="{{ cota.client_name | lower }}"
+            data-client-document="{{ cota.client_cpf | lower }}"
+            data-pix="{{ (cota.client_pix or '') | lower }}">
+          <td>
+            <input type="checkbox" class="row-select" data-share-id="{{ cota.id }}"
+                   title="Selecionar cota {{ cota.share_number }}">
+          </td>
+          <td style="font-size:16px;font-weight:600;color:#555;">{{ cota.share_number }}</td>
+          <td class="text-dim">{{ cota.client_name }}</td>
+          <td>{{ formatar_moeda(cota.share_value) }}</td>
+          <td class="text-dim">{{ cota.withdrawal_date or '—' }}</td>
+          <td style="text-align:right;white-space:nowrap;">
+            <a href="{{ url_for('cotas_editar', sid=cota.id) }}" class="btn btn-secondary btn-sm">Editar</a>
+            <form method="post" action="{{ url_for('cotas_reativar', sid=cota.id) }}" style="display:inline;">
+              <input type="hidden" name="referrer" value="{{ request.url }}">
+              <button type="submit" class="btn btn-secondary btn-sm">Reativar</button>
+            </form>
+            <button type="button" class="btn btn-delete btn-sm"
+                    onclick="openDeleteModal({{ cota.id }}, '{{ cota.share_number }}')">
+              Excluir
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}
+</div>
+
+{% if not cotas %}
+<div class="empty-state">
+  <div class="empty-state-icon">📄</div>
+  <div class="empty-state-title">Nenhuma cota cadastrada</div>
+  <div class="empty-state-sub">Cadastre a primeira cota para este produto.</div>
+</div>
+{% endif %}
+
+<!-- Modal: Inativar Cota -->
+<div class="modal-overlay" id="modal-inativar-cota" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="color:#fbbf24;">⏸️ Inativar Cota</div>
+    <div style="margin-bottom:16px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.8;">
+        <tr>
+          <td style="color:#888;width:110px;">Cota nº</td>
+          <td style="color:#d4af37;font-weight:700;font-size:16px;" id="modal-inativar-share-num"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Cliente</td>
+          <td style="color:#ccc;" id="modal-inativar-client"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Valor</td>
+          <td style="color:#ccc;" id="modal-inativar-value"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Aquisição</td>
+          <td style="color:#ccc;" id="modal-inativar-acq"></td>
+        </tr>
+      </table>
+    </div>
+    <form id="modal-inativar-form" method="post" action="">
+      <input type="hidden" name="referrer" id="modal-inativar-referrer" value="">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Data de retirada <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="withdrawal_date" id="modal-inativar-withdrawal-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:20px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Observação <span style="color:#666;">(opcional)</span>
+        </label>
+        <input type="text" name="user_note" id="modal-inativar-user-note"
+               class="form-control" placeholder="Motivo da inativação…" maxlength="200">
+      </div>
+      <div style="margin-bottom:20px;padding:12px 14px;border:1px solid #6b4f12;
+                  border-radius:6px;background:rgba(251,191,36,0.07);">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0;">
+          <input type="checkbox" name="accrual_until_withdrawal"
+                 id="modal-inativar-prop" value="on"
+                 style="margin-top:3px;flex:0 0 auto;">
+          <span style="color:#ccc;font-size:13px;line-height:1.5;">
+            <strong style="color:#fbbf24;">Retirada fora do período — considerar proporcional até a retirada</strong><br>
+            <small style="color:#999;">
+              Marque <u>somente</u> quando a retirada ocorreu dentro da janela de apuração.
+              A cota continua entrando na apuração e rende proporcionalmente de
+              <em>até o dia anterior</em> à data de retirada (o dia da retirada não rende).<br>
+              <strong style="color:#888;">Desmarcado = regra padrão do condomínio:</strong>
+              cota inativada não rende nada no período.
+            </small>
+          </span>
+        </label>
+      </div>
+      <div class="page-actions" style="margin-top:0;padding-top:0;">
+        <button type="button" onclick="closeModal('modal-inativar-cota')"
+                class="btn btn-secondary">Cancelar</button>
+        <button type="submit" class="btn btn-danger">⏸️ Confirmar inativação</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Confirmar Exclusão de Cota -->
+<div class="modal-overlay" id="modal-excluir-cota" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="color:#f87171;">🗑️ Excluir Cota</div>
+    <p style="color:#ccc;margin-bottom:14px;">
+      Você está prestes a excluir a cota
+      <strong id="modal-delete-share-num" style="color:#d4af37;font-size:18px;"></strong>.
+    </p>
+    <div class="note-box" style="border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.06);margin-bottom:20px;">
+      <strong style="color:#f87171;">⚠️ Atenção:</strong>
+      Tem certeza que deseja excluir esta cota?
+      Esta ação deve ser usada apenas para corrigir cadastros feitos por engano.
+      A cota será removida permanentemente e a exclusão ficará registrada no log de auditoria.
+    </div>
+    <form id="form-excluir-cota" method="post" action="">
+      <input type="hidden" name="referrer" id="modal-delete-referrer" value="">
+      <div class="page-actions" style="margin-top:0;padding-top:0;">
+        <button type="button" onclick="closeModal('modal-excluir-cota')"
+                class="btn btn-secondary">Cancelar</button>
+        <button type="submit" class="btn btn-delete">🗑️ Confirmar exclusão</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

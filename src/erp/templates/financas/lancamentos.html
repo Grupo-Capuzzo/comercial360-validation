@@ -1,0 +1,102 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}{{ 'Contas a receber' if tipo == 'receber' else 'Contas a pagar' }}{% endblock %}
+{% block fin_conteudo %}
+{% set receber = tipo == 'receber' %}
+<div class="fin-head">
+  <div>
+    <div class="eyebrow-line">Finanças</div>
+    <h1>{{ 'Contas a receber' if receber else 'Contas a pagar' }}</h1>
+    <p>{{ 'Vendas, mensalidades e tudo o que a empresa tem a receber.' if receber else 'Fornecedores, impostos, folha e tudo o que a empresa tem a pagar.' }}</p>
+  </div>
+  <div class="fin-acoes">
+    <a class="btn-pill fin-btn {{ 'entrada' if receber else 'saida' }}" href="{{ url_for('financas.lancamento_novo', slug=empresa.slug, tipo=tipo, voltar=request.full_path) }}">{{ fic('add') }} {{ 'Nova receita' if receber else 'Nova despesa' }}</a>
+  </div>
+</div>
+
+{% set ep = 'financas.lancamentos' %}{% set extra = {'tipo': tipo, 'situacao': situacao, 'q': busca, 'categoria': cat} %}
+{% include "financas/_periodo.html" %}
+
+<div class="fin-totais">
+  <a class="risco {{ 'on' if situacao == 'vencido' }}" href="{{ url_for(ep, slug=empresa.slug, tipo=tipo, de=de, ate=ate, situacao='vencido') }}"><small>Vencidos</small><b>{{ moeda(tot.vencido) }}</b></a>
+  <a class="{{ 'on' if situacao == 'abertos' }}" href="{{ url_for(ep, slug=empresa.slug, tipo=tipo, de=de, ate=ate, situacao='abertos') }}"><small>Em aberto</small><b>{{ moeda(tot.aberto) }}</b></a>
+  <a class="pos {{ 'on' if situacao == 'pago' }}" href="{{ url_for(ep, slug=empresa.slug, tipo=tipo, de=de, ate=ate, situacao='pago') }}"><small>{{ 'Recebidos' if receber else 'Pagos' }}</small><b>{{ moeda(tot.pago) }}</b></a>
+  <a class="dark {{ 'on' if not situacao }}" href="{{ url_for(ep, slug=empresa.slug, tipo=tipo, de=de, ate=ate) }}"><small>Total do período</small><b>{{ moeda(tot.total) }}</b></a>
+</div>
+
+<form class="fin-filtros" method="get">
+  <input type="hidden" name="de" value="{{ de }}"><input type="hidden" name="ate" value="{{ ate }}">
+  <select class="inp" name="situacao" aria-label="Situação">
+    <option value="">Todas as situações</option>
+    <option value="abertos" {{ 'selected' if situacao == 'abertos' }}>Em aberto (inclui vencidos)</option>
+    {% for k, v in SITUACOES.items() %}<option value="{{ k }}" {{ 'selected' if situacao == k }}>{{ v }}</option>{% endfor %}
+  </select>
+  <select class="inp" name="categoria" aria-label="Categoria">
+    <option value="">Todas as categorias</option>
+    {% for c in categorias %}<option value="{{ c.id }}" {{ 'selected' if cat == c.id }}>{{ c.nome }}</option>{% endfor %}
+  </select>
+  <label class="search">{{ ic('search') }}<input type="search" name="q" value="{{ busca }}" placeholder="Descrição, {{ 'cliente' if receber else 'fornecedor' }} ou documento"></label>
+  <button class="btn-pill outline fin-btn" type="submit">Filtrar</button>
+</form>
+
+<form method="post" action="{{ url_for('financas.lote_baixar', slug=empresa.slug) }}" id="form-lote">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="voltar" value="{{ request.full_path }}">
+  <div class="fin-lote" id="barra-lote" hidden>
+    <span><b id="lote-n">0</b> selecionado(s) · <b id="lote-total">R$ 0,00</b></span>
+    <select class="inp" name="conta_id" required aria-label="Conta"><option value="">Conta…</option>
+      {% for c in contas_ativas %}<option value="{{ c.id }}" {{ 'selected' if loop.first }}>{{ c.nome }}</option>{% endfor %}</select>
+    <input class="inp" type="date" name="data" value="{{ hoje_iso }}" aria-label="Data">
+    <button class="btn-pill fin-btn" type="submit">{{ 'Receber' if receber else 'Pagar' }} selecionados</button>
+  </div>
+  <div class="fin-tabela-wrap">
+    <table class="fin-tabela">
+      <thead><tr>
+        <th class="ck"><input type="checkbox" id="ck-todos" aria-label="Selecionar todos"></th>
+        <th>Vencimento</th><th>Descrição</th><th>Categoria</th><th class="num">Valor</th><th class="num">{{ 'Recebido' if receber else 'Pago' }}</th><th>Situação</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for l in lista %}
+        <tr class="sit-{{ l.situacao }}">
+          <td class="ck">{% if l.situacao in ('aberto','vencido','parcial') %}<input type="checkbox" name="ids" value="{{ l.id }}" data-saldo="{{ l.saldo }}" aria-label="Selecionar">{% endif %}</td>
+          <td data-rot="Vencimento" class="dt">{{ data_br(l.vencimento) }}</td>
+          <td data-rot="Descrição" class="desc"><a href="{{ url_for('financas.lancamento', slug=empresa.slug, lid=l.id) }}"><b>{{ l.descricao }}</b></a>{% if l.n_anexos %} <span class="fin-chip" title="{{ l.n_anexos }} anexo(s)">📎 {{ l.n_anexos }}</span>{% endif %}
+            <small>{{ l.pessoa_nome or '—' }}{% if l.documento %} · Doc. {{ l.documento }}{% endif %}{% if l.parcelas > 1 %} · parcela {{ l.parcela }}/{{ l.parcelas }}{% endif %}</small></td>
+          <td data-rot="Categoria">{{ l.categoria_nome or '—' }}</td>
+          <td data-rot="Valor" class="num">{{ moeda(l.valor) }}</td>
+          <td data-rot="{{ 'Recebido' if receber else 'Pago' }}" class="num">{{ moeda(l.pago) if l.pago else '—' }}</td>
+          <td data-rot="Situação"><span class="fin-sit {{ l.situacao }}">{{ SITUACOES[l.situacao] }}</span></td>
+          <td class="acoes">
+            {% if l.situacao in ('aberto','vencido','parcial') %}
+              <button type="button" class="btn-pill fin-btn mini" data-baixar="{{ l.id }}" data-desc="{{ l.descricao }}" data-saldo="{{ valor_campo(l.saldo) }}" data-conta="{{ l.conta_id or '' }}">{{ 'Receber' if receber else 'Pagar' }}</button>
+            {% endif %}
+            <a class="ico" href="{{ url_for('financas.lancamento', slug=empresa.slug, lid=l.id) }}" title="Abrir">{{ fic('edit') }}</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr class="vazio"><td colspan="8">Nenhum lançamento neste período. Use “{{ 'Nova receita' if receber else 'Nova despesa' }}”.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+
+{% include "financas/_dlg_lancamento.html" %}
+{% include "financas/_dlg_baixa.html" %}
+{% endblock %}
+{% block fin_scripts %}
+<script>
+(function () {
+  var cks = Array.from(document.querySelectorAll('input[name=ids]')), barra = document.getElementById('barra-lote');
+  function fmt(c) { return (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+  function atualizar() {
+    var sel = cks.filter(function (c) { return c.checked; });
+    barra.hidden = !sel.length;
+    document.getElementById('lote-n').textContent = sel.length;
+    document.getElementById('lote-total').textContent = fmt(sel.reduce(function (a, c) { return a + Number(c.dataset.saldo); }, 0));
+  }
+  cks.forEach(function (c) { c.addEventListener('change', atualizar); });
+  var todos = document.getElementById('ck-todos');
+  if (todos) todos.addEventListener('change', function () { cks.forEach(function (c) { c.checked = todos.checked; }); atualizar(); });
+})();
+</script>
+{% endblock %}

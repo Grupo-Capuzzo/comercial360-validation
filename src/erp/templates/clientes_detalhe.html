@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}{{ cliente.full_name }} — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('clientes_lista') }}" class="back-link">← Voltar para Clientes</a>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+  <div>
+    <div class="page-header-title">{{ cliente.full_name }}</div>
+    <div class="page-header-sub" style="margin-top:6px;">
+      {% if cliente.status == 'ativo' %}
+        <span class="badge badge-active">● Ativo</span>
+      {% else %}
+        <span class="badge badge-inactive">● Inativo</span>
+      {% endif %}
+      &nbsp;
+      <span class="text-mono text-dim">{{ cliente.cpf }}</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+    <a href="{{ url_for('clientes_editar', cid=cliente.id) }}" class="btn btn-secondary">✏️ Editar</a>
+    {% if cliente.status == 'ativo' %}
+      <form method="post" action="{{ url_for('clientes_inativar', cid=cliente.id) }}" style="display:inline;">
+        <button type="submit" class="btn btn-danger"
+                data-confirm="Inativar o cliente {{ cliente.full_name }}?">
+          🔒 Inativar
+        </button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('clientes_reativar', cid=cliente.id) }}" style="display:inline;">
+        <button type="submit" class="btn btn-success">🔓 Reativar</button>
+      </form>
+    {% endif %}
+    {% if cotas | length == 0 %}
+    <form method="post" action="{{ url_for('clientes_excluir', cid=cliente.id) }}" style="display:inline;"
+          onsubmit="return confirm('Excluir o cliente {{ cliente.full_name }} permanentemente?\nEsta ação não pode ser desfeita.');">
+      <button type="submit" class="btn btn-danger">🗑️ Excluir</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Dados Pessoais -->
+<div class="card-gold" style="margin-bottom:20px;">
+  <div class="form-section-title" style="margin-bottom:12px;">Dados Pessoais</div>
+  <div class="detail-grid">
+    <div>
+      <div class="detail-item-label">Nome Completo</div>
+      <div class="detail-item-value">{{ cliente.full_name }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">CPF/CNPJ</div>
+      <div class="detail-item-value text-mono">{{ cliente.cpf }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">E-mail</div>
+      <div class="detail-item-value">{{ cliente.email or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Telefone</div>
+      <div class="detail-item-value">{{ cliente.phone or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Status</div>
+      <div class="detail-item-value">
+        {% if cliente.status == 'ativo' %}
+          <span class="badge badge-active">● Ativo</span>
+        {% else %}
+          <span class="badge badge-inactive">● Inativo</span>
+        {% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="detail-item-label">Cadastrado em</div>
+      <div class="detail-item-value text-dim">{{ cliente.created_at or '—' }}</div>
+    </div>
+  </div>
+  {% if cliente.notes %}
+  <div style="margin-top:14px;">
+    <div class="detail-item-label">Observações</div>
+    <div class="detail-item-value text-dim" style="margin-top:4px;">{{ cliente.notes }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Dados para contrato -->
+{% set _end = [cliente.address_street, cliente.address_district,
+               ((cliente.address_city or '') ~ ('-' ~ cliente.address_state if cliente.address_state else ''))]
+              | select | join(', ') %}
+<div class="card-gold" style="margin-bottom:20px;" id="dados-contrato">
+  <div class="form-section-title" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+    <span>Dados para Contrato</span>
+    <a href="/erp/contratos/?q={{ cliente.cpf }}" class="btn btn-secondary btn-sm">✍️ Contratos do cliente</a>
+  </div>
+  <div class="detail-grid">
+    <div><div class="detail-item-label">Nacionalidade</div><div class="detail-item-value">{{ cliente.nationality or '—' }}</div></div>
+    <div><div class="detail-item-label">Estado Civil</div><div class="detail-item-value">{{ cliente.marital_status or '—' }}</div></div>
+    <div><div class="detail-item-label">Profissão</div><div class="detail-item-value">{{ cliente.profession or '—' }}</div></div>
+    <div><div class="detail-item-label">Endereço</div><div class="detail-item-value">{{ _end or '—' }}</div></div>
+    <div><div class="detail-item-label">CEP</div><div class="detail-item-value text-mono">{{ cliente.address_zip or '—' }}</div></div>
+  </div>
+</div>
+
+<!-- Dados Financeiros -->
+<div class="card-gold" style="margin-bottom:20px;">
+  <div class="form-section-title" style="margin-bottom:12px;">Dados Financeiros</div>
+  <div class="detail-grid">
+    <div>
+      <div class="detail-item-label">Chave PIX</div>
+      <div class="detail-item-value text-mono">{{ cliente.pix_key or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Banco</div>
+      <div class="detail-item-value">{{ cliente.bank_name or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Agência</div>
+      <div class="detail-item-value">{{ cliente.bank_agency or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Conta</div>
+      <div class="detail-item-value">
+        {% if cliente.bank_account %}
+          {{ cliente.bank_account }}{% if cliente.bank_account_digit %}-{{ cliente.bank_account_digit }}{% endif %}
+        {% else %}—{% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="detail-item-label">Tipo de Conta</div>
+      <div class="detail-item-value">{{ cliente.bank_account_type or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Titular da Conta</div>
+      <div class="detail-item-value">{{ cliente.bank_holder_name or '—' }}</div>
+    </div>
+    {% if cliente.bank_holder_document %}
+    <div>
+      <div class="detail-item-label">CPF/CNPJ do Titular</div>
+      <div class="detail-item-value text-mono">{{ cliente.bank_holder_document }}</div>
+    </div>
+    {% endif %}
+  </div>
+  {% if cliente.bank_notes %}
+  <div style="margin-top:12px;">
+    <div class="detail-item-label">Observações Bancárias</div>
+    <div class="detail-item-value text-dim" style="margin-top:4px;">{{ cliente.bank_notes }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Cotas vinculadas -->
+<div class="section-label">📄 &nbsp;Cotas Vinculadas ({{ cotas | length }})</div>
+
+{% if cotas %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Nº Cota</th>
+        <th>Produto</th>
+        <th>Valor</th>
+        <th>Aquisição</th>
+        <th>Vencimento</th>
+        <th>Status</th>
+        <th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cota in cotas %}
+      <tr>
+        <td style="font-size:18px;font-weight:700;color:#d4af37;">{{ cota.share_number }}</td>
+        <td>
+          {% if cota.condominium_code == 'civil' %}
+            <span class="badge badge-civil">🏗️ Civil</span>
+          {% elif cota.condominium_code == 'agro' %}
+            <span class="badge badge-agro">🌾 Agro</span>
+          {% else %}
+            <span class="badge badge-saude">🏥 Saúde</span>
+          {% endif %}
+        </td>
+        <td style="font-weight:600;">{{ formatar_moeda(cota.share_value) }}</td>
+        <td class="text-dim">{{ cota.acquisition_date or '—' }}</td>
+        <td class="text-dim">{{ cota.maturity_date or '—' }}</td>
+        <td>
+          {% if cota.status == 'ativa' %}
+            <span class="badge badge-active">● Ativa</span>
+          {% elif cota.status == 'pendente' %}
+            <span class="badge badge-pending">● Pendente</span>
+          {% else %}
+            <span class="badge badge-inactive">● Inativa</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right;">
+          <a href="{{ url_for('cotas_editar', sid=cota.id) }}" class="btn btn-secondary btn-sm">Editar</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">📄</div>
+  <div class="empty-state-title">Nenhuma cota cadastrada</div>
+  <div class="empty-state-sub">Este cliente ainda não possui cotas vinculadas.</div>
+</div>
+{% endif %}
+
+<div style="margin-top:16px;">
+  <a href="{{ url_for('cotas_nova') }}" class="btn btn-primary">+ Nova Cota para este Cliente</a>
+</div>
+
+{% endblock %}

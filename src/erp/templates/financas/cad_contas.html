@@ -1,0 +1,82 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Contas bancárias{% endblock %}
+{% block fin_conteudo %}
+<div class="fin-head"><div><div class="eyebrow-line">Cadastros</div><h1>Contas bancárias</h1>
+  <p>Bancos, caixa, aplicações e cartões. O saldo inicial é o ponto de partida do extrato.</p></div></div>
+{% if contas %}
+{% set n_cons = contas|selectattr('considerada')|list|length %}
+<form method="post" class="fin-box cc-sel" id="cc-sel">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="considerar">
+  <header><h3>Contas consideradas no sistema</h3><span id="cc-n">{{ n_cons }} de {{ contas|length }}</span></header>
+  <p class="co-dica">Só as contas marcadas aparecem nos saldos, no extrato, nas contas a pagar e a receber, no fluxo de caixa e na DRE.
+    As desmarcadas continuam guardadas (nada é apagado) e voltam a aparecer quando você marcar de novo.</p>
+  <div class="cc-acoes">
+    <button type="button" class="fin-link" data-cc="todas">Marcar todas</button>
+    <button type="button" class="fin-link" data-cc="nenhuma">Desmarcar todas</button>
+  </div>
+  <div class="cc-lista">
+    {% for c in contas|sort(attribute='nome') %}
+      <label class="cc-item {{ 'off' if not c.considerada }}">
+        <input type="checkbox" name="considerada" value="{{ c.id }}" {{ 'checked' if c.considerada }}>
+        <span class="txt"><b>{{ c.nome }}</b><small>{{ TIPOS_CONTA.get(c.tipo) }}{% if not c.ativa %} · inativa{% endif %}</small></span>
+        <b class="num {{ 'neg' if c.saldo < 0 }}">{{ moeda(c.saldo) }}</b>
+      </label>
+    {% endfor %}
+  </div>
+  <div class="cc-rodape"><span>Total das marcadas: <b id="cc-tot">{{ moeda(contas|selectattr('considerada')|sum(attribute='saldo')) }}</b></span>
+    <button class="btn-pill fin-btn" type="submit">{{ ic('check') }} Salvar seleção</button></div>
+</form>
+<script>
+(function () {
+  var f = document.getElementById('cc-sel'); if (!f) return;
+  var saldos = { {% for c in contas %}"{{ c.id }}": {{ c.saldo }}{{ ',' if not loop.last }}{% endfor %} };
+  function brl(v) { return (v / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); }
+  function atualiza() {
+    var cx = f.querySelectorAll('input[name=considerada]'), n = 0, t = 0;
+    cx.forEach(function (c) { c.closest('.cc-item').classList.toggle('off', !c.checked); if (c.checked) { n++; t += saldos[c.value] || 0; } });
+    document.getElementById('cc-n').textContent = n + ' de ' + cx.length; document.getElementById('cc-tot').textContent = brl(t);
+  }
+  f.addEventListener('change', atualiza);
+  f.querySelectorAll('[data-cc]').forEach(function (b) { b.addEventListener('click', function () {
+    f.querySelectorAll('input[name=considerada]').forEach(function (c) { c.checked = b.dataset.cc === 'todas'; }); atualiza(); }); });
+})();
+</script>
+{% endif %}
+
+<div class="fin-cols">
+  <div class="fin-contas-grade">
+    {% for c in contas %}
+      <a class="fin-conta {{ 'inativa' if not c.ativa or not c.considerada }}" href="{{ url_for('financas.cad_contas', slug=empresa.slug, editar=c.id) }}">
+        <span class="fin-conta-ic">{{ fic('banco') }}</span>
+        <span class="txt"><b>{{ c.nome }}</b><small>{{ TIPOS_CONTA.get(c.tipo) }}{% if c.banco %} · {{ c.banco }}{% endif %}{% if c.agencia %} · Ag. {{ c.agencia }}{% endif %}{% if c.numero %} · C/C {{ c.numero }}{% endif %}{% if not c.ativa %} · inativa{% endif %}{% if not c.considerada %} · fora do sistema{% endif %}</small></span>
+        <b class="{{ 'neg' if c.saldo < 0 }}">{{ moeda(c.saldo) }}</b>
+      </a>
+    {% else %}
+      <p class="fin-vazio">Nenhuma conta ainda. Cadastre ao lado.</p>
+    {% endfor %}
+  </div>
+  <section class="fin-box">
+    <header><h3>{{ 'Editar conta' if editar else 'Nova conta' }}</h3>{% if editar %}<a class="fin-link" href="{{ url_for('financas.cad_contas', slug=empresa.slug) }}">+ nova</a>{% endif %}</header>
+    {% set c = editar or {} %}
+    <form method="post" class="fin-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ c.id or '' }}">
+      <label class="lbl">Nome da conta</label><input class="inp" name="nome" required maxlength="80" value="{{ c.nome or '' }}" placeholder="Ex.: Itaú PJ">
+      <div class="fin-2col">
+        <div><label class="lbl">Tipo</label><select class="inp" name="tipo">{% for k, v in TIPOS_CONTA.items() %}<option value="{{ k }}" {{ 'selected' if c.tipo == k }}>{{ v }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Banco</label><input class="inp" name="banco" maxlength="60" value="{{ c.banco or '' }}" placeholder="Ex.: Itaú (341)"></div>
+      </div>
+      <div class="fin-2col">
+        <div><label class="lbl">Agência</label><input class="inp" name="agencia" maxlength="20" value="{{ c.agencia or '' }}"></div>
+        <div><label class="lbl">Conta</label><input class="inp" name="numero" maxlength="30" value="{{ c.numero or '' }}"></div>
+      </div>
+      <div class="fin-2col">
+        <div><label class="lbl">Saldo inicial (R$)</label><input class="inp" name="saldo_inicial" data-moeda value="{{ valor_campo(c.saldo_inicial) if c else '' }}" placeholder="R$ 0,00"></div>
+        <div><label class="lbl">Data do saldo inicial</label><input class="inp" type="date" name="data_saldo_inicial" value="{{ c.data_saldo_inicial or hoje_iso }}"></div>
+      </div>
+      {% if editar %}<label class="fin-check"><input type="hidden" name="ativa" value="0"><input type="checkbox" name="ativa" value="1" {{ 'checked' if c.ativa }}> Conta ativa</label>
+      <label class="fin-check"><input type="hidden" name="considerada" value="0"><input type="checkbox" name="considerada" value="1" {{ 'checked' if c.considerada }}> Considerar no sistema</label>{% endif %}
+      <button class="btn-pill fin-btn" type="submit">Salvar</button>
+    </form>
+  </section>
+</div>
+{% endblock %}
