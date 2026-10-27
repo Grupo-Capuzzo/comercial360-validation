@@ -1,0 +1,41 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Omie pelo navegador{% endblock %}
+{% block fin_conteudo %}
+<div class="fin-head"><div><div class="eyebrow-line">Cadastros · Integrações</div><h1>Dados recebidos do Omie</h1>
+  <p>O favorito leu a tela do Omie e trouxe os lançamentos conciliados para cá. A importação roda sozinha.</p></div>
+  <div><a class="btn-pill outline fin-btn" href="{{ url_for('financas.cad_integracoes', slug=empresa.slug) }}">{{ ic('arrow_back') }} Integrações</a></div></div>
+
+<section class="api-card fin-box" id="ow">
+  <div class="ow-passo" id="ow-msg"><span class="ow-spin"></span> Lendo o pacote…</div>
+  <div class="vg-linhas" id="ow-res" hidden></div>
+  <p class="co-dica" id="ow-dica" hidden>Pode fechar esta aba: a importação continua. O resultado fica no histórico de sincronizações.</p>
+</section>
+
+<script>
+(function () {
+  var msg = document.getElementById('ow-msg'), res = document.getElementById('ow-res'), dica = document.getElementById('ow-dica');
+  var pacote = location.hash.slice(1);
+  function linha(r, v) { var d = document.createElement('div'); var s = document.createElement('span'); s.textContent = r; var b = document.createElement('b'); b.textContent = v; d.append(s, b); res.append(d); }
+  function texto(t, fim) { msg.innerHTML = fim ? '' : '<span class="ow-spin"></span> '; msg.append(t); }
+  if (!pacote) { texto('Nenhum dado chegou. No Omie, abra Finanças → Movimentação da Conta Corrente e use o favorito “Enviar ao ERP”.', true); return; }
+  history.replaceState(null, '', location.pathname);          // tira o pacote do endereço (e do histórico)
+  var fd = new FormData(); fd.append('_csrf', '{{ csrf_token() }}'); fd.append('pacote', pacote);
+  fetch(location.pathname, {method: 'POST', body: fd, credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j.ok) { texto(j.erro || 'Não foi possível importar.', true); return; }
+    res.hidden = false; dica.hidden = false;
+    linha('Empresa no Omie', j.empresa || '—'); linha('Período lido', (j.de || '?') + ' a ' + (j.ate || '?'));
+    linha('Contas', j.filtro || '—'); linha('Linhas conciliadas recebidas', j.linhas + ' de ' + (j.total || '?') + ' registros da tela');
+    if (j.saldo) linha('Saldo atual no Omie', 'R$ ' + j.saldo);
+    texto('Importando…');
+    var t = setInterval(function () {
+      fetch('{{ url_for("financas.cad_integracoes_status", slug=empresa.slug) }}', {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (s) {
+        if (s.status === 'rodando' || s.rodando) { texto(s.mensagem || 'Importando…'); return; }
+        clearInterval(t); texto(s.mensagem || 'Concluído.', true);
+        var a = document.createElement('a'); a.className = 'btn-pill fin-btn'; a.style.marginTop = '.8rem'; a.textContent = 'Ver o resultado';
+        a.href = '{{ url_for("financas.cad_integracoes", slug=empresa.slug) }}'; msg.after(a);
+      }).catch(function () {});
+    }, 2500);
+  }).catch(function (e) { texto('Falha ao enviar: ' + e, true); });
+})();
+</script>
+{% endblock %}

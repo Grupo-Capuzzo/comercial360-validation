@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block title %}Cotas — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">📄</div>
+  <div class="page-header-title">Todas as Cotas</div>
+  <div class="page-header-sub">Gestão de cotas de investimento — todos os produtos</div>
+</div>
+
+<!-- KPIs -->
+<div class="metrics-grid" style="grid-template-columns: repeat(5,1fr);">
+  <div class="metric-card">
+    <div class="metric-value">{{ resumo.total }}</div>
+    <div class="metric-label">Total de Cotas</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#4ade80;">{{ resumo.ativas }}</div>
+    <div class="metric-label">Ativas</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#fbbf24;">{{ resumo.pendentes }}</div>
+    <div class="metric-label">Pendentes</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#555;">{{ resumo.inativas }}</div>
+    <div class="metric-label">Inativas</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value text-gold">{{ formatar_moeda(resumo.valor_total) }}</div>
+    <div class="metric-label">Patrimônio Ativo</div>
+  </div>
+</div>
+
+<!-- KPIs por produto -->
+<div class="metrics-grid" style="grid-template-columns: repeat(3,1fr);margin-top:-8px;">
+  {% for pp in resumo.por_produto %}
+  <div class="metric-card">
+    <div class="metric-value">{{ pp.qty }}</div>
+    <div class="metric-label">{{ pp.name }} · {{ formatar_moeda(pp.total_value) }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Toolbar -->
+<form method="get" class="toolbar">
+  <div class="toolbar-left">
+    <div class="search-wrap">
+      <input type="text" name="q" value="{{ q }}"
+             placeholder="Buscar por nº cota, cliente, CPF…"
+             class="form-control" style="width:260px;">
+    </div>
+    <select name="produto" class="form-control form-control-sm" style="width:160px;">
+      <option value="">Todos os produtos</option>
+      {% for c in conds %}
+      <option value="{{ c.code }}" {{ 'selected' if produto_filtro == c.code else '' }}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" class="form-control form-control-sm" style="width:140px;">
+      <option value="">Todos os status</option>
+      <option value="ativa"    {{ 'selected' if status_filtro == 'ativa' else '' }}>Ativas</option>
+      <option value="pendente" {{ 'selected' if status_filtro == 'pendente' else '' }}>Pendentes</option>
+      <option value="inativa"  {{ 'selected' if status_filtro == 'inativa' else '' }}>Inativas</option>
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+    {% if q or status_filtro or produto_filtro %}
+      <a href="{{ url_for('cotas_lista') }}" class="btn btn-secondary btn-sm">Limpar</a>
+    {% endif %}
+  </div>
+  <div class="toolbar-right">
+    <a href="{{ url_for('cotas_nova') }}" class="btn btn-primary">+ Nova Cota</a>
+  </div>
+</form>
+
+<!-- Tabela -->
+{% if cotas %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Nº</th>
+        <th>Produto</th>
+        <th>Cliente</th>
+        <th>Valor</th>
+        <th>Aquisição</th>
+        <th>Vencimento</th>
+        <th>Status</th>
+        <th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cota in cotas %}
+      <tr>
+        <td style="font-size:18px;font-weight:700;color:#d4af37;">{{ cota.share_number }}</td>
+        <td>
+          {% if cota.condominium_code == 'civil' %}
+            <span class="badge badge-civil">🏗️ Civil</span>
+          {% elif cota.condominium_code == 'agro' %}
+            <span class="badge badge-agro">🌾 Agro</span>
+          {% else %}
+            <span class="badge badge-saude">🏥 Saúde</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('clientes_detalhe', cid=cota.client_id) }}"
+             style="color:#F5F5F5;">{{ cota.client_name }}</a>
+          <div class="text-mono text-dim" style="font-size:11px;">{{ cota.client_cpf }}</div>
+        </td>
+        <td style="font-weight:600;">{{ formatar_moeda(cota.share_value) }}</td>
+        <td class="text-dim">{{ cota.acquisition_date or '—' }}</td>
+        <td class="text-dim">{{ cota.maturity_date or '—' }}</td>
+        <td>
+          {% if cota.status == 'ativa' %}
+            <span class="badge badge-active">● Ativa</span>
+            {% if cota.withdrawal_requested %}
+              <span class="badge badge-retirada" title="Retirada efetiva em {{ cota.withdrawal_effective_date or '—' }}">📤 Em retirada</span>
+            {% endif %}
+          {% elif cota.status == 'pendente' %}
+            <span class="badge badge-pending">● Pendente</span>
+          {% else %}
+            <span class="badge badge-inactive">● Inativa</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right;white-space:nowrap;">
+          <a href="{{ url_for('cotas_editar', sid=cota.id) }}" class="btn btn-secondary btn-sm">Editar</a>
+          {% if cota.status == 'ativa' or cota.status == 'pendente' %}
+            <button type="button" class="btn btn-danger btn-sm"
+                    onclick="openInativarModal(this)"
+                    data-share-id="{{ cota.id }}"
+                    data-share-num="{{ cota.share_number | e }}"
+                    data-client-name="{{ cota.client_name | e }}"
+                    data-share-value="{{ cota.share_value }}"
+                    data-acquisition-date="{{ cota.acquisition_date or '' }}">
+              Inativar
+            </button>
+          {% else %}
+            <form method="post" action="{{ url_for('cotas_reativar', sid=cota.id) }}" style="display:inline;">
+              <input type="hidden" name="referrer" value="{{ request.url }}">
+              <button type="submit" class="btn btn-success btn-sm">Reativar</button>
+            </form>
+          {% endif %}
+          <button type="button" class="btn btn-delete btn-sm"
+                  onclick="openDeleteModal({{ cota.id }}, '{{ cota.share_number }}')">
+            Excluir
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="text-dim" style="font-size:12px;margin-top:10px;text-align:right;">
+  {{ cotas | length }} cota(s) encontrada(s)
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">📄</div>
+  <div class="empty-state-title">Nenhuma cota encontrada</div>
+  <div class="empty-state-sub">
+    {% if q or status_filtro or produto_filtro %}
+      Tente ajustar os filtros de busca.
+    {% else %}
+      Cadastre a primeira cota para começar.
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal: Inativar Cota -->
+<div class="modal-overlay" id="modal-inativar-cota" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="color:#fbbf24;">⏸️ Inativar Cota</div>
+    <div style="margin-bottom:16px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.8;">
+        <tr>
+          <td style="color:#888;width:110px;">Cota nº</td>
+          <td style="color:#d4af37;font-weight:700;font-size:16px;" id="modal-inativar-share-num"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Cliente</td>
+          <td style="color:#ccc;" id="modal-inativar-client"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Valor</td>
+          <td style="color:#ccc;" id="modal-inativar-value"></td>
+        </tr>
+        <tr>
+          <td style="color:#888;">Aquisição</td>
+          <td style="color:#ccc;" id="modal-inativar-acq"></td>
+        </tr>
+      </table>
+    </div>
+    <form id="modal-inativar-form" method="post" action="">
+      <input type="hidden" name="referrer" id="modal-inativar-referrer" value="">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Data de retirada <span style="color:#f87171;">*</span>
+        </label>
+        <input type="date" name="withdrawal_date" id="modal-inativar-withdrawal-date"
+               class="form-control" required>
+      </div>
+      <div class="form-group" style="margin-bottom:20px;">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">
+          Observação <span style="color:#666;">(opcional)</span>
+        </label>
+        <input type="text" name="user_note" id="modal-inativar-user-note"
+               class="form-control" placeholder="Motivo da inativação…" maxlength="200">
+      </div>
+      <div style="margin-bottom:20px;padding:12px 14px;border:1px solid #6b4f12;
+                  border-radius:6px;background:rgba(251,191,36,0.07);">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0;">
+          <input type="checkbox" name="accrual_until_withdrawal"
+                 id="modal-inativar-prop" value="on"
+                 style="margin-top:3px;flex:0 0 auto;">
+          <span style="color:#ccc;font-size:13px;line-height:1.5;">
+            <strong style="color:#fbbf24;">Retirada fora do período — considerar proporcional até a retirada</strong><br>
+            <small style="color:#999;">
+              Marque <u>somente</u> quando a retirada ocorreu dentro da janela de apuração.
+              A cota continua entrando na apuração e rende proporcionalmente de
+              <em>até o dia anterior</em> à data de retirada (o dia da retirada não rende).<br>
+              <strong style="color:#888;">Desmarcado = regra padrão do condomínio:</strong>
+              cota inativada não rende nada no período.
+            </small>
+          </span>
+        </label>
+      </div>
+      <div class="page-actions" style="margin-top:0;padding-top:0;">
+        <button type="button" onclick="closeModal('modal-inativar-cota')"
+                class="btn btn-secondary">Cancelar</button>
+        <button type="submit" class="btn btn-danger">⏸️ Confirmar inativação</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Confirmar Exclusão de Cota -->
+<div class="modal-overlay" id="modal-excluir-cota" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="color:#f87171;">🗑️ Excluir Cota</div>
+    <p style="color:#ccc;margin-bottom:14px;">
+      Você está prestes a excluir a cota
+      <strong id="modal-delete-share-num" style="color:#d4af37;font-size:18px;"></strong>.
+    </p>
+    <div class="note-box" style="border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.06);margin-bottom:20px;">
+      <strong style="color:#f87171;">⚠️ Atenção:</strong>
+      Tem certeza que deseja excluir esta cota?
+      Esta ação deve ser usada apenas para corrigir cadastros feitos por engano.
+      A cota será removida permanentemente e a exclusão ficará registrada no log de auditoria.
+    </div>
+    <form id="form-excluir-cota" method="post" action="">
+      <input type="hidden" name="referrer" id="modal-delete-referrer" value="">
+      <div class="page-actions" style="margin-top:0;padding-top:0;">
+        <button type="button" onclick="closeModal('modal-excluir-cota')"
+                class="btn btn-secondary">Cancelar</button>
+        <button type="submit" class="btn btn-delete">🗑️ Confirmar exclusão</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

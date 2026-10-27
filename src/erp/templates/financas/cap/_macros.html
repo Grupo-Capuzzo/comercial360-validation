@@ -1,0 +1,28 @@
+{% macro cabecalho(titulo, sub, eyebrow='Condomínios de Investimento') %}
+<div class="fin-head">
+  <div>
+    <div class="eyebrow-line">{{ eyebrow }}</div>
+    <h1>{{ titulo }}</h1>
+    {% if sub %}<p>{{ sub }}</p>{% endif %}
+  </div>
+  <div class="fin-acoes">{{ caller() if caller }}</div>
+</div>
+{% endmacro %}
+
+{% macro aviso_modulo() %}{% endmacro %}
+
+{% macro status_cota(s) %}<span class="pr-st {{ s }}">{{ {'ativa':'Ativa','pendente':'Pendente','inativa':'Inativa'}.get(s, s) }}</span>{% endmacro %}
+
+{% macro financeiro(fin, produto, empresa) %}
+<section class="vg-box">
+  <header><h3>{{ fic('centro') }} Financeiro do produto</h3>
+    <a href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo='receber') }}">Lançamentos</a></header>
+  <div class="vg-linhas">
+    <div><span>Receitas recebidas no mês</span><b style="color:var(--fin-pos)">{{ moeda(fin.receitas_mes) }}</b></div>
+    <div><span>Despesas pagas no mês</span><b style="color:var(--fin-neg)">{{ moeda(fin.despesas_mes) }}</b></div>
+    <div><span>A receber em aberto</span><b>{{ moeda(fin.a_receber) }}</b></div>
+    <div><span>A pagar em aberto</span><b>{{ moeda(fin.a_pagar) }}</b></div>
+  </div>
+  <p class="fin-sub">Lance receitas e despesas com o centro de custo <b>{{ produto }}</b> para que apareçam aqui.</p>
+</section>
+{% endmacro %}

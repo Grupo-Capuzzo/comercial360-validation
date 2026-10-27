@@ -1,0 +1,60 @@
+{# Diálogo de novo lançamento. Espera: tipo ('receber'|'pagar'), contas, e categorias/pessoas/centros (opcionais) #}
+<dialog id="dlg-{{ tipo }}" class="dlg fin-dlg">
+  <form method="post" action="{{ url_for('financas.lancamento_novo', slug=empresa.slug, tipo=tipo) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="voltar" value="{{ request.full_path }}">
+    <div class="dlg-head"><h3>{{ 'Nova conta a receber' if tipo == 'receber' else 'Nova conta a pagar' }}</h3>
+      <button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+    <label class="lbl">Descrição</label>
+    <input class="inp" name="descricao" required maxlength="200" placeholder="{{ 'Ex.: Mensalidade outubro' if tipo == 'receber' else 'Ex.: Aluguel do escritório' }}">
+    <div class="fin-3col">
+      <div><label class="lbl">Valor (R$)</label><input class="inp" name="valor" required inputmode="decimal" data-moeda placeholder="R$ 0,00"></div>
+      <div><label class="lbl">Vencimento</label><input class="inp" type="date" name="vencimento" required value="{{ hoje_iso }}"></div>
+      <div><label class="lbl">Competência</label><input class="inp" type="date" name="competencia" value="{{ hoje_iso }}"></div>
+    </div>
+    <div class="fin-2col">
+      <div><label class="lbl">{{ 'Cliente' if tipo == 'receber' else 'Fornecedor' }}</label>
+        <select class="inp" name="pessoa_id"><option value="">—</option>
+          {% for p in pessoas_todas %}
+            {% if (tipo == 'receber' and p.tipo in ('cliente','ambos')) or (tipo == 'pagar' and p.tipo in ('fornecedor','ambos')) %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endif %}
+          {% endfor %}
+        </select></div>
+      <div><label class="lbl">Categoria</label>
+        <select class="inp" name="categoria_id"><option value="">—</option>
+          {% for c in categorias_todas %}
+            {% if (tipo == 'receber' and c.tipo == 'receita') or (tipo == 'pagar' and c.tipo == 'despesa') %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endif %}
+          {% endfor %}
+        </select></div>
+    </div>
+    <div class="fin-2col">
+      <div><label class="lbl">Conta prevista</label>
+        <select class="inp" name="conta_id"><option value="">—</option>
+          {% for c in contas_ativas %}{% if c.ativa %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endif %}{% endfor %}
+        </select></div>
+      <div><label class="lbl">Forma de pagamento</label>
+        <select class="inp" name="forma_pagamento"><option value="">—</option>{% for f in FORMAS %}<option>{{ f }}</option>{% endfor %}</select></div>
+    </div>
+    <details class="fin-mais">
+      <summary>Repetir, parcelar e mais detalhes</summary>
+      <div class="fin-2col">
+        <div><label class="lbl">Repetição</label>
+          <select class="inp" name="modo" data-modo>
+            <option value="unico">Não repete</option>
+            <option value="parcelado">Parcelado (divide o valor)</option>
+            <option value="recorrente">Recorrente mensal (mesmo valor)</option>
+          </select></div>
+        <div><label class="lbl">Quantidade</label><input class="inp" type="number" name="parcelas" min="1" max="120" value="1"></div>
+      </div>
+      <div class="fin-2col">
+        <div><label class="lbl">Centro de custo</label>
+          <select class="inp" name="centro_id"><option value="">—</option>
+            {% for c in centros_todos %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Nº documento / NF</label><input class="inp" name="documento" maxlength="60"></div>
+      </div>
+      <label class="lbl">Observações</label><textarea class="inp" name="obs" rows="2"></textarea>
+      <label class="fin-check"><input type="checkbox" name="ja_pago" value="1"> Já foi {{ 'recebido' if tipo == 'receber' else 'pago' }} (registra na conta prevista)</label>
+      <input type="hidden" name="data_pagamento" value="{{ hoje_iso }}">
+    </details>
+    <button class="btn-pill" type="submit">Salvar</button>
+  </form>
+</dialog>

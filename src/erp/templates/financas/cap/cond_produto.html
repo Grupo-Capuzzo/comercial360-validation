@@ -1,0 +1,51 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}{{ COND_NOMES[code] }}{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho(COND_NOMES[code], ('%.2f'|format(cond.default_monthly_rate * 100)) ~ '% a.m. · pagamento no dia ' ~ cond.payment_day) %}
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.cond_cota_nova', slug=empresa.slug, produto=code) }}">{{ fic('add') }} Nova cota</a>
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_apuracao_nova', slug=empresa.slug, produto=code) }}">{{ fic('calculo') }} Apurar mês</a>
+{% endcall %}
+
+<div class="vg-kpis">
+  <div class="vg-kpi escuro"><small>Patrimônio ativo</small><b>{{ reais(prod.valor) }}</b><em>{{ prod.ativas }} cotas</em></div>
+  <div class="vg-kpi"><small>Cotistas</small><b>{{ prod.cotistas }}</b><em>com cota ativa</em></div>
+  <div class="vg-kpi"><small>Rendimento mensal</small><b>{{ reais(prod.rendimento) }}</b><em>estimado</em></div>
+  <div class="vg-kpi"><small>Pendentes</small><b>{{ prod.pendentes }}</b><em>{{ reais(prod.valor_pend) }}</em></div>
+  <div class="vg-kpi"><small>Vencem em 30 dias</small><b>{{ prod.venc30 }}</b><em>cotas</em></div>
+  <div class="vg-kpi {{ 'alerta' if prod.vencidas }}"><small>Vencidas</small><b>{{ prod.vencidas }}</b><em>sem renovação registrada</em></div>
+</div>
+
+<form class="pr-filtros" method="get">
+  <input class="inp" name="q" value="{{ busca }}" placeholder="Buscar cotista, CPF ou nº da cota">
+  <div class="pr-abas" style="margin:0">
+    {% for k, rot in [('ativa','Ativas'),('pendente','Pendentes'),('inativa','Inativas'),('todas','Todas')] %}
+      <a class="{{ 'on' if status == k }}" href="?status={{ k }}{{ '&q=' ~ busca if busca }}">{{ rot }}</a>
+    {% endfor %}
+  </div>
+  <input type="hidden" name="status" value="{{ status }}">
+</form>
+
+<section class="vg-box">
+  <header><h3>{{ cotas|length }} cota(s)</h3><span>Total {{ reais(cotas|sum(attribute='share_value')) }}</span></header>
+  <div style="overflow-x:auto">
+  <table class="pr-tabela">
+    <thead><tr><th>Cota</th><th>Cotista</th><th class="num">Valor</th><th>Aquisição</th><th>Últ. renovação</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for s in cotas %}
+      <tr>
+        <td class="mono"><a href="{{ url_for('financas.cond_cota_editar', slug=empresa.slug, sid=s.id) }}">{{ s.share_number }}</a></td>
+        <td><a href="{{ url_for('financas.cond_cotista', slug=empresa.slug, cid=s.client_id) }}">{{ s.cliente }}</a></td>
+        <td class="num">{{ reais(s.share_value) }}</td>
+        <td>{{ data_br(s.acquisition_date) if s.acquisition_date else '—' }}</td>
+        <td>{{ data_br(s.last_renewal_date) if s.last_renewal_date else '—' }}</td>
+        <td style="{{ 'color:var(--fin-neg);font-weight:600' if s.status == 'ativa' and s.maturity_date and s.maturity_date < hoje }}">{{ data_br(s.maturity_date) if s.maturity_date else '—' }}</td>
+        <td>{{ m.status_cota(s.status) }}{% if s.withdrawal_requested %} <span class="pr-st risco">Retirada</span>{% endif %}</td>
+        <td class="num"><a class="fin-link" href="{{ url_for('financas.cond_cota_editar', slug=empresa.slug, sid=s.id) }}">editar</a></td>
+      </tr>
+    {% else %}<tr><td colspan="8" class="fin-vazio">Nenhuma cota encontrada.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,51 @@
+{# Tabela "consolidado por cliente" com detalhe das cotas — usada na apuração nova e no detalhe #}
+<div style="overflow-x:auto">
+<table class="pr-tabela ap-tab">
+  <thead><tr>{% if conferir %}<th title="Marque conforme confere no banco">✓</th>{% endif %}<th>#</th><th>Cotista</th><th>CPF/CNPJ</th><th>Pix</th><th>Produto</th>
+    <th class="num">Cotas</th><th class="num">Capital</th><th class="num">Rendimento</th><th></th></tr></thead>
+  <tbody>
+  {% for cli in clientes %}
+    <tr class="ap-cli" id="ap-l{{ loop.index0 }}">
+      {% if conferir %}<td><input type="checkbox" class="ap-conf" data-k="{{ cli.client_id }}-{{ cli.condominium_code }}"></td>{% endif %}
+      <td class="ap-i">{{ loop.index }}</td>
+      <td><a href="{{ url_for('financas.cond_cotista', slug=empresa.slug, cid=cli.client_id) }}"><b>{{ cli.client_name }}</b></a></td>
+      <td class="mono">{{ cli.client_cpf }}</td>
+      <td class="ap-pix">{{ cli.client_pix or '—' }}</td>
+      <td><span class="ap-prod" style="--c:{{ COND_CORES.get(cli.condominium_code) }}">{{ COND_NOMES.get(cli.condominium_code, cli.condominium_code) }}</span></td>
+      <td class="num">{{ cli.active_shares_count if cli.active_shares_count is defined else cli.shares_count }}{% if cli.withdrawn_count %}<small class="ap-ret">+{{ cli.withdrawn_count }} retirada(s)</small>{% endif %}</td>
+      <td class="num">{{ reais(cli.total_share_value) }}{% if cli.withdrawn_count %}<small class="ap-ret">− {{ reais(cli.total_withdrawn_value) }} retirado</small>{% endif %}</td>
+      <td class="num"><b>{{ reais(cli.total_income) }}</b></td>
+      <td class="num"><button type="button" class="ap-ver" data-i="{{ loop.index0 }}">cotas ▾</button></td>
+    </tr>
+    <tr class="ap-det" id="ap-d{{ loop.index0 }}" hidden><td colspan="{{ 10 if conferir else 9 }}">
+      <table class="ap-sub">
+        <thead><tr><th>Cota</th><th class="num">Valor</th><th>Aquisição</th><th>Vencimento</th><th>Últ. renovação</th><th>Período</th><th class="num">Dias</th><th class="num">Taxa</th><th class="num">Rendimento</th><th>Tipo</th></tr></thead>
+        <tbody>
+        {% for it in cli.shares_detail %}
+          {% set ct = it.calc_type or it.calculation_details or '' %}
+          <tr><td class="mono">{{ it.share_number or '—' }}</td><td class="num">{{ reais(it.share_value) }}</td>
+            <td>{{ data_br(it.acquisition_date) if it.acquisition_date else '—' }}</td><td>{{ data_br(it.maturity_date) if it.maturity_date else '—' }}</td>
+            <td>{{ data_br(it.last_renewal_date) if it.last_renewal_date else '—' }}</td>
+            <td class="ap-per">{{ data_br(it.period_start) }} → {{ data_br(it.period_end) }}</td>
+            <td class="num">{{ it.active_days }}/{{ it.total_period_days }}</td><td class="num">{{ '%.2f'|format(it.applied_rate * 100) }}%</td>
+            <td class="num"><b>{{ reais(it.income_value) }}</b></td>
+            <td>{% if 'RETIRADA em' in ct or 'até retirada' in ct %}<span class="ap-t ret" title="{{ it.calculation_details }}">Proporc. até retirada</span>
+              {% elif 'Especial' in ct %}<span class="ap-t esp">Especial Agro</span>
+              {% elif it.active_days == it.total_period_days %}<span class="ap-t int">Integral</span>
+              {% else %}<span class="ap-t prop" title="{{ it.calculation_details }}">Proporcional</span>{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr>{% if conferir %}<td></td>{% endif %}<td colspan="6"><b>Total geral</b> · {{ clientes|length }} cotista(s)</td>
+    <td class="num"><b>{{ reais(clientes|sum(attribute='total_share_value')) }}</b></td>
+    <td class="num"><b>{{ reais(clientes|sum(attribute='total_income')) }}</b></td><td></td></tr></tfoot>
+</table>
+</div>
+<script>
+document.querySelectorAll('.ap-ver').forEach(function (b) {
+  b.addEventListener('click', function () { var r = document.getElementById('ap-d' + b.dataset.i); r.hidden = !r.hidden; b.textContent = r.hidden ? 'cotas ▾' : 'ocultar ▴'; });
+});
+</script>

@@ -1,0 +1,34 @@
+{# Diálogo de baixa (pagamento/recebimento). Botões com data-baixar preenchem os campos. #}
+<dialog id="dlg-baixa" class="dlg fin-dlg">
+  <form method="post" id="form-baixa" data-base="{{ url_for('financas.lancamento_baixar', slug=empresa.slug, lid=0) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="voltar" value="{{ request.full_path }}">
+    <div class="dlg-head"><h3 id="baixa-tit">Registrar pagamento</h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+    <p id="baixa-desc" class="fin-sub"></p>
+    <div class="fin-2col">
+      <div><label class="lbl">Data</label><input class="inp" type="date" name="data" value="{{ hoje_iso }}" required></div>
+      <div><label class="lbl">Conta</label>
+        <select class="inp" name="conta_id" required><option value="">Escolha…</option>
+          {% for c in contas_ativas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="fin-3col">
+      <div><label class="lbl">Valor pago (R$)</label><input class="inp" name="valor" required inputmode="decimal" data-moeda></div>
+      <div><label class="lbl">Juros/multa (R$)</label><input class="inp" name="juros" inputmode="decimal" data-moeda placeholder="R$ 0,00"></div>
+      <div><label class="lbl">Desconto (R$)</label><input class="inp" name="desconto" inputmode="decimal" data-moeda placeholder="R$ 0,00"></div>
+    </div>
+    <p class="fin-sub">Valor menor que o saldo, sem desconto, fica como pagamento parcial.</p>
+    <button class="btn-pill" type="submit">Confirmar</button>
+  </form>
+</dialog>
+<script>
+document.querySelectorAll('[data-baixar]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var f = document.getElementById('form-baixa');
+    f.action = f.dataset.base.replace(/\/0\/baixar$/, '/' + b.dataset.baixar + '/baixar');
+    f.valor.value = b.dataset.saldo; f.juros.value = ''; f.desconto.value = '';
+    if (b.dataset.conta) f.conta_id.value = b.dataset.conta;
+    document.getElementById('baixa-desc').textContent = b.dataset.desc;
+    document.getElementById('dlg-baixa').showModal();
+  });
+});
+</script>

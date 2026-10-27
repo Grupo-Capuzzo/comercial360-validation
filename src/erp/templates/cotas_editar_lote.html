@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% block title %}Edição em lote de cotas — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<a href="{{ referrer or url_for('cotas_lista') }}" class="back-link">← Voltar sem salvar</a>
+
+<div class="page-header">
+  <div class="page-header-icon">✏️</div>
+  <div class="page-header-title">Edição em lote de cotas</div>
+  <div class="page-header-sub">
+    {{ cotas | length }} cota(s) selecionada(s) — edite linha por linha ou preencha um campo
+    igual para todas de uma vez
+  </div>
+</div>
+
+<!-- ══════════ Painel: aplicar o mesmo valor a todas ══════════ -->
+<div class="form-section" style="margin-bottom:18px;">
+  <div class="form-section-title">⚡ Aplicar a todas as linhas</div>
+  <p class="text-dim" style="font-size:12px;margin:-4px 0 14px;">
+    Preencha só o que quiser padronizar e clique em <strong>Aplicar</strong>. Nada é salvo
+    neste momento — os valores apenas caem nas linhas abaixo, onde você ainda pode ajustar
+    caso a caso.
+  </p>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Data de aquisição</label>
+      <div style="display:flex;gap:6px;">
+        <input type="date" id="fill-acquisition_date" class="form-control form-control-sm">
+        <button type="button" class="btn btn-secondary btn-sm"
+                data-fill-target="acquisition_date">Aplicar</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Última renovação</label>
+      <div style="display:flex;gap:6px;">
+        <input type="date" id="fill-last_renewal_date" class="form-control form-control-sm">
+        <button type="button" class="btn btn-secondary btn-sm"
+                data-fill-target="last_renewal_date">Aplicar</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Vencimento</label>
+      <div style="display:flex;gap:6px;">
+        <input type="date" id="fill-maturity_date" class="form-control form-control-sm">
+        <button type="button" class="btn btn-secondary btn-sm"
+                data-fill-target="maturity_date">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Valor da cota (R$)</label>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="fill-share_value" class="form-control form-control-sm"
+               data-mask="currency" placeholder="10.000,00">
+        <button type="button" class="btn btn-secondary btn-sm"
+                data-fill-target="share_value">Aplicar</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <div style="display:flex;gap:6px;">
+        <select id="fill-status" class="form-control form-control-sm">
+          <option value="">—</option>
+          <option value="ativa">Ativa</option>
+          <option value="pendente">Pendente</option>
+          <option value="inativa">Inativa</option>
+        </select>
+        <button type="button" class="btn btn-secondary btn-sm"
+                data-fill-target="status">Aplicar</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Data de retirada <span class="text-dim">(cotas inativas)</span></label>
+      <div style="display:flex;gap:6px;">
+        <input type="date" id="fill-withdrawal_date" class="form-control form-control-sm">
+        <button type="button" class="btn btn-secondary btn-sm"
+                data-fill-target="withdrawal_date">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group" style="flex:1;">
+      <label>Observações</label>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="fill-notes" class="form-control form-control-sm"
+               maxlength="300" placeholder="Texto igual para todas…">
+        <button type="button" class="btn btn-secondary btn-sm"
+                data-fill-target="notes">Aplicar</button>
+      </div>
+    </div>
+    <div class="form-group" style="flex:1;">
+      <label>Cliente (cotista)</label>
+      <div style="display:flex;gap:6px;">
+        <select id="fill-client_id" class="form-control form-control-sm">
+          <option value="">—</option>
+          {% for c in clientes %}
+          <option value="{{ c.id }}">{{ c.display_name }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="btn btn-secondary btn-sm"
+                data-fill-target="client_id">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:6px;">
+    <label class="bulk-toolbar-select-all" style="cursor:pointer;">
+      <input type="checkbox" id="fill-only-empty">
+      Preencher somente os campos vazios
+    </label>
+    <button type="button" class="btn btn-secondary btn-sm" id="btn-fill-all">
+      ⚡ Aplicar tudo o que está preenchido acima
+    </button>
+  </div>
+</div>
+
+<!-- ══════════ Grid editável ══════════ -->
+<form method="post" action="{{ url_for('cotas_editar_lote_salvar') }}" id="form-lote">
+  <input type="hidden" name="referrer" value="{{ referrer }}">
+
+  <div class="text-dim" style="font-size:11px;margin-bottom:6px;">
+    ↔ A tabela rola na horizontal — o número da cota fica fixo à esquerda.
+  </div>
+
+  <div class="table-wrap" id="lote-table-wrap">
+    <table id="tabela-lote">
+      <thead>
+        <tr>
+          <th style="min-width:90px;">Nº da cota</th>
+          <th style="min-width:120px;">Produto</th>
+          <th style="min-width:170px;">Cotista</th>
+          <th style="min-width:105px;">Valor (R$)</th>
+          <th style="min-width:135px;">Aquisição</th>
+          <th style="min-width:135px;">Últ. renovação</th>
+          <th style="min-width:135px;">Vencimento</th>
+          <th style="min-width:100px;">Status</th>
+          <th style="min-width:135px;">Retirada</th>
+          <th style="min-width:170px;">Observações</th>
+          <th style="text-align:center;min-width:44px;">Tirar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cota in cotas %}
+        <tr class="lote-row">
+          <td>
+            <input type="hidden" name="row_id[]" value="{{ cota.id }}">
+            <input type="text" name="row_share_number[]" class="form-control form-control-sm"
+                   data-field="share_number"
+                   value="{{ cota.share_number or '' }}" style="font-weight:700;color:#d4af37;">
+          </td>
+          <td>
+            <select name="row_condominium_id[]" class="form-control form-control-sm"
+                    data-field="condominium_id">
+              {% for c in conds %}
+              <option value="{{ c.id }}"
+                {{ 'selected' if c.id == cota.condominium_id else '' }}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select name="row_client_id[]" class="form-control form-control-sm"
+                    data-field="client_id">
+              {% for c in clientes %}
+              <option value="{{ c.id }}"
+                {{ 'selected' if c.id == cota.client_id else '' }}>{{ c.display_name }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <input type="text" name="row_share_value[]" class="form-control form-control-sm"
+                   data-mask="currency" data-field="share_value"
+                   value="{{ '%.2f' | format(cota.share_value or 0) | replace('.', ',') }}">
+          </td>
+          <td>
+            <input type="date" name="row_acquisition_date[]" class="form-control form-control-sm"
+                   data-field="acquisition_date" value="{{ cota.acquisition_date or '' }}">
+          </td>
+          <td>
+            <input type="date" name="row_last_renewal_date[]" class="form-control form-control-sm"
+                   data-field="last_renewal_date" value="{{ cota.last_renewal_date or '' }}">
+          </td>
+          <td>
+            <input type="date" name="row_maturity_date[]" class="form-control form-control-sm"
+                   data-field="maturity_date" value="{{ cota.maturity_date or '' }}">
+          </td>
+          <td>
+            <select name="row_status[]" class="form-control form-control-sm" data-field="status">
+              <option value="ativa"    {{ 'selected' if cota.status == 'ativa'    else '' }}>Ativa</option>
+              <option value="pendente" {{ 'selected' if cota.status == 'pendente' else '' }}>Pendente</option>
+              <option value="inativa"  {{ 'selected' if cota.status == 'inativa'  else '' }}>Inativa</option>
+            </select>
+          </td>
+          <td>
+            <input type="date" name="row_withdrawal_date[]" class="form-control form-control-sm"
+                   data-field="withdrawal_date" value="{{ cota.withdrawal_date or '' }}">
+            {% if cota.withdrawal_requested %}
+            <div class="text-dim" style="font-size:10px;margin-top:2px;">
+              📤 em retirada · efetiva {{ cota.withdrawal_effective_date or '—' }}
+            </div>
+            {% endif %}
+          </td>
+          <td>
+            <input type="text" name="row_notes[]" class="form-control form-control-sm"
+                   data-field="notes" maxlength="300" value="{{ cota.notes or '' }}">
+          </td>
+          <td style="text-align:center;">
+            <button type="button" class="btn btn-secondary btn-sm btn-remover-linha"
+                    title="Remover esta cota da edição em lote (não altera nada no cadastro)">✕</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note-box" style="margin-top:14px;">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#ccc;">
+      <input type="checkbox" name="allow_duplicate_share_number">
+      Lançamento histórico — permitir números de cota repetidos
+    </label>
+    <div class="text-dim" style="font-size:11px;margin-top:6px;">
+      Cada cota alterada gera um registro individual no log de auditoria. Um backup
+      automático do banco é criado antes de salvar.
+    </div>
+  </div>
+
+  <div class="page-actions">
+    <a href="{{ referrer or url_for('cotas_lista') }}" class="btn btn-secondary">Cancelar</a>
+    <button type="submit" class="btn btn-primary" id="btn-salvar-lote">
+      💾 Salvar <span id="lote-row-count">{{ cotas | length }}</span> cota(s)
+    </button>
+  </div>
+</form>
+
+<style>
+  /* a .table-wrap padrão usa overflow:hidden — aqui o grid precisa rolar na horizontal */
+  #lote-table-wrap { overflow-x: auto; overflow-y: visible; }
+  #tabela-lote { min-width: 1280px; }
+  #tabela-lote td { padding: 6px 6px; vertical-align: top; }
+  #tabela-lote th { white-space: nowrap; }
+  #tabela-lote .form-control-sm {
+    width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 6px;
+  }
+  /* Nº da cota fica fixo ao rolar a tabela na horizontal */
+  #tabela-lote th:first-child,
+  #tabela-lote td:first-child {
+    position: sticky; left: 0; z-index: 2; background: #111113;
+    box-shadow: 1px 0 0 #1e1e1e;
+  }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var FIELDS = ['share_number', 'condominium_id', 'client_id', 'share_value',
+                'acquisition_date', 'last_renewal_date', 'maturity_date',
+                'status', 'withdrawal_date', 'notes'];
+
+  function rows() {
+    return Array.prototype.slice.call(document.querySelectorAll('#tabela-lote tr.lote-row'));
+  }
+
+  function updateCount() {
+    var n = rows().length;
+    var el = document.getElementById('lote-row-count');
+    if (el) el.textContent = n;
+    var btn = document.getElementById('btn-salvar-lote');
+    if (btn) btn.disabled = n === 0;
+  }
+
+  function applyField(field) {
+    var src = document.getElementById('fill-' + field);
+    if (!src) return 0;
+    var val = (src.value || '').trim();
+    if (!val) return 0;
+
+    var onlyEmpty = document.getElementById('fill-only-empty');
+    onlyEmpty = onlyEmpty && onlyEmpty.checked;
+    var changed = 0;
+
+    rows().forEach(function (tr) {
+      var target = tr.querySelector('[data-field="' + field + '"]');
+      if (!target) return;
+      if (onlyEmpty && (target.value || '').trim() !== '') return;
+      target.value = val;
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+      /* feedback visual rápido */
+      target.style.borderColor = '#d4af37';
+      setTimeout(function () { target.style.borderColor = ''; }, 900);
+      changed++;
+    });
+    return changed;
+  }
+
+  document.querySelectorAll('[data-fill-target]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      applyField(btn.dataset.fillTarget);
+    });
+  });
+
+  var fillAll = document.getElementById('btn-fill-all');
+  if (fillAll) {
+    fillAll.addEventListener('click', function () {
+      var total = 0;
+      FIELDS.forEach(function (f) { total += applyField(f); });
+      if (total === 0) {
+        alert('Preencha ao menos um campo no painel "Aplicar a todas" antes de aplicar.');
+      }
+    });
+  }
+
+  /* Remover linha do lote (não mexe no cadastro) */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.btn-remover-linha') : null;
+    if (!btn) return;
+    var tr = btn.closest('tr');
+    if (tr) { tr.remove(); updateCount(); }
+  });
+
+  /* Data de retirada só é usada quando o status é inativa */
+  function syncWithdrawal(tr) {
+    var st = tr.querySelector('[data-field="status"]');
+    var wd = tr.querySelector('[data-field="withdrawal_date"]');
+    if (!st || !wd) return;
+    var inativa = st.value === 'inativa';
+    wd.disabled = false;                 /* nunca desabilita: precisa ser postado */
+    wd.style.opacity = inativa ? '1' : '0.4';
+    wd.title = inativa
+      ? 'Obrigatória para cota inativa'
+      : 'Ignorada enquanto o status não for "inativa"';
+  }
+
+  document.addEventListener('change', function (e) {
+    if (e.target.dataset && e.target.dataset.field === 'status') {
+      var tr = e.target.closest('tr');
+      if (tr) syncWithdrawal(tr);
+    }
+  });
+
+  /* Formata os valores iniciais em pt-BR (10000,00 → 10.000,00) */
+  document.querySelectorAll('#tabela-lote [data-mask="currency"]').forEach(function (el) {
+    var raw = (el.value || '').replace(/\./g, '').replace(',', '.');
+    var n = parseFloat(raw);
+    if (!isNaN(n)) el.value = n.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  });
+
+  rows().forEach(syncWithdrawal);
+  updateCount();
+})();
+</script>
+{% endblock %}

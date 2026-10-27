@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Empréstimos — Títulos Privados — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">💰</div>
+  <div class="page-header-title">Empréstimos</div>
+  <div class="page-header-sub">Todos os empréstimos privados cadastrados.</div>
+</div>
+
+<form method="get" class="toolbar">
+  <div class="toolbar-left">
+    <select name="status" class="form-control form-control-sm" style="width:200px;" onchange="this.form.submit()">
+      <option value="">Todos os status</option>
+      <option value="active"       {% if status_filtro == 'active' %}selected{% endif %}>Ativo</option>
+      <option value="overdue"      {% if status_filtro == 'overdue' %}selected{% endif %}>Em Atraso</option>
+      <option value="settled"      {% if status_filtro == 'settled' %}selected{% endif %}>Quitado</option>
+      <option value="renegotiated" {% if status_filtro == 'renegotiated' %}selected{% endif %}>Renegociado</option>
+      <option value="cancelled"    {% if status_filtro == 'cancelled' %}selected{% endif %}>Cancelado</option>
+    </select>
+    {% if status_filtro %}
+      <a href="{{ url_for('titulos_privados_emprestimos') }}" class="btn btn-secondary btn-sm">Limpar</a>
+    {% endif %}
+  </div>
+  <div class="toolbar-right">
+    <a href="{{ url_for('titulos_privados_emprestimos_novo') }}" class="btn btn-primary">+ Novo Empréstimo</a>
+  </div>
+</form>
+
+{% if loans %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Empréstimo</th><th>Cliente</th><th>Método</th>
+        <th style="text-align:right;">Original</th><th style="text-align:right;">Contratado</th>
+        <th style="text-align:right;">Saldo Atualizado</th><th>Status</th><th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in loans %}
+      <tr>
+        <td class="text-mono">{{ l.loan_number or ('#' ~ l.id) }}</td>
+        <td>
+          <a href="{{ url_for('titulos_privados_cliente_detalhe', pcid=l.private_client_id) }}"
+             style="color:#F5F5F5;">{{ l.client_name }}</a>
+        </td>
+        <td>{{ {'bullet':'Pagamento Único','price':'Price','manual':'Manual'}.get(l.calculation_method, l.calculation_method) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(l.original_amount) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(l.contracted_amount) }}</td>
+        <td style="text-align:right;font-weight:600;{% if l.calc and l.calc.days_overdue > 0 %}color:#f87171;{% endif %}">
+          {{ formatar_moeda(l.calc.updated_amount) if l.calc else '—' }}
+        </td>
+        <td>
+          {% if l.status == 'active' %}<span class="badge badge-active">Ativo</span>
+          {% elif l.status == 'overdue' %}<span class="badge badge-inactive">Em Atraso</span>
+          {% elif l.status == 'settled' %}<span class="badge badge-active">Quitado</span>
+          {% elif l.status == 'renegotiated' %}<span class="badge badge-pending">Renegociado</span>
+          {% else %}<span class="badge badge-inactive">Cancelado</span>{% endif %}
+        </td>
+        <td style="text-align:right;">
+          <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=l.id) }}" class="btn btn-secondary btn-sm">Ver</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="text-dim" style="font-size:12px;margin-top:10px;text-align:right;">
+  {{ loans | length }} empréstimo(s) encontrado(s)
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">💰</div>
+  <div class="empty-state-title">Nenhum empréstimo cadastrado</div>
+  <div class="empty-state-sub">Cadastre o primeiro empréstimo privado para começar.</div>
+</div>
+{% endif %}
+
+{% endblock %}

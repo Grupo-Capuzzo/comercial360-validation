@@ -1,0 +1,65 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Gestão Tática{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Gestão Tática', 'Esboço do produto — estrutura inicial para validarmos juntos antes de desenvolver.', 'Produto · Gestão Tática') %}
+  <span class="vg-tag">Em construção</span>
+{% endcall %}
+<div class="pr-abas">
+  {% for k, rot in [('painel','Painel'),('clientes','Clientes atendidos'),('entregas','Entregas do mês'),('honorarios','Honorários')] %}
+    <a class="{{ 'on' if aba == k }}" href="?aba={{ k }}">{{ rot }}</a>
+  {% endfor %}
+</div>
+
+<div class="vg-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="vg-kpi escuro"><small>Receitas do mês</small><b>{{ moeda(fin.receitas_mes) }}</b><em>centro de custo “Gestão Tática”</em></div>
+  <div class="vg-kpi"><small>Honorários a receber</small><b>{{ moeda(fin.a_receber) }}</b><em>em aberto</em></div>
+  <div class="vg-kpi pr-esboco"><small>Clientes ativos</small><b>—</b><em>cadastro a criar</em></div>
+  <div class="vg-kpi pr-esboco"><small>Entregas no prazo</small><b>—</b><em>rotina mensal a definir</em></div>
+</div>
+
+{% if aba == 'honorarios' %}
+<section class="vg-box">
+  <header><h3>Honorários em aberto</h3><a href="{{ url_for('financas.lancamentos', slug=empresa.slug, tipo='receber') }}">Contas a receber</a></header>
+  <table class="pr-tabela">
+    <thead><tr><th>Vencimento</th><th>Descrição</th><th>Cliente</th><th class="num">Saldo</th><th>Situação</th></tr></thead>
+    <tbody>
+    {% for l in fin.abertos if l.tipo == 'receber' %}
+      <tr class="clic" onclick="location.href='{{ url_for('financas.lancamento', slug=empresa.slug, lid=l.id) }}'"><td>{{ data_br(l.vencimento) }}</td><td>{{ l.descricao }}</td>
+        <td>{{ l.pessoa_nome or '—' }}</td><td class="num">{{ moeda(l.saldo) }}</td>
+        <td><span class="pr-st {{ 'risco' if l.situacao == 'vencido' else 'aviso' }}">{{ SITUACOES[l.situacao] }}</span></td></tr>
+    {% else %}<tr><td colspan="5" class="fin-vazio">Nenhum honorário em aberto no centro de custo “Gestão Tática”.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<div class="vg-prods">
+  <section class="vg-box pr-esboco">
+    <header><h3>{{ fic('pessoas') }} Clientes atendidos</h3><span class="vg-tag">Esboço</span></header>
+    <ul>
+      <li>Cadastro das empresas atendidas (ligado a Clientes e fornecedores do ERP)</li>
+      <li>Plano contratado, valor da mensalidade e dia de vencimento</li>
+      <li>Responsável interno e início do contrato</li>
+      <li>Situação: ativo, em implantação, pausado, encerrado</li>
+    </ul>
+  </section>
+  <section class="vg-box pr-esboco">
+    <header><h3>{{ fic('calendario') }} Entregas do mês</h3><span class="vg-tag">Esboço</span></header>
+    <ul>
+      <li>Checklist mensal por cliente (ex.: fechamento, DRE, fluxo de caixa, reunião tática)</li>
+      <li>Prazo, responsável e status de cada entrega</li>
+      <li>Integração com Demandas e cronômetro do módulo Operação (horas por cliente)</li>
+    </ul>
+  </section>
+  <section class="vg-box pr-esboco">
+    <header><h3>{{ fic('receber') }} Honorários e indicadores</h3><span class="vg-tag">Esboço</span></header>
+    <ul>
+      <li>Geração automática das mensalidades em Contas a receber (centro “Gestão Tática”)</li>
+      <li>Receita recorrente (MRR), inadimplência e rentabilidade por cliente (receita ÷ horas)</li>
+      <li>Já funcionando: receitas e honorários lançados no centro de custo aparecem aqui</li>
+    </ul>
+  </section>
+</div>
+<div class="pr-aviso">{{ fic('tatica') }}<div>Me explique como a Gestão Tática funciona hoje (o que é vendido, como cobra e o que é entregue) e eu transformo este esboço nas telas reais.</div></div>
+{% endif %}
+{% endblock %}

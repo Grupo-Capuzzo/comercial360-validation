@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% block title %}Validação Sistema — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">🧾</div>
+  <div class="page-header-title">Validação Sistema</div>
+  <div class="page-header-sub">
+    Projeção gerencial cota a cota — simula a retirada de cada cota no vencimento
+  </div>
+</div>
+
+<!-- ═══ Aviso: simulação, não apuração ═══ -->
+<div class="note-box" style="margin-bottom:18px;">
+  <strong style="color:#d4af37;">⚠️ Tela somente leitura — simulação gerencial.</strong>
+  Esta projeção assume que o cliente <strong>retira</strong> cada cota no vencimento
+  (não renova). Ela <strong>não</strong> altera cotas, não cria lançamentos e
+  <strong>não substitui a Apuração</strong>, que é o cálculo oficial do mês.
+</div>
+
+<!-- ═══ CARDS DE TOTAIS ═══ -->
+<div class="metrics-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px;">
+
+  <div class="metric-card">
+    <div class="metric-value" style="color:#d4af37;">{{ formatar_moeda(totais.total_invested) }}</div>
+    <div class="metric-label">Total investido ativo</div>
+    <div style="font-size:11px;color:#888;margin-top:4px;line-height:1.6;">
+      🏗️ {{ formatar_moeda(totais.total_by_condominium.civil) }} ·
+      🌾 {{ formatar_moeda(totais.total_by_condominium.agro) }} ·
+      🏥 {{ formatar_moeda(totais.total_by_condominium.saude) }}
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-value" style="color:#F5F5F5;">{{ totais.clients_count }}</div>
+    <div class="metric-label">Clientes com cotas</div>
+    <div style="font-size:11px;color:#888;margin-top:4px;">
+      Apenas cotas com status <strong>ativa</strong>
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-value" style="color:#F5F5F5;">{{ totais.shares_count }}</div>
+    <div class="metric-label">Cotas consideradas</div>
+    <div style="font-size:11px;color:{{ '#f0ad4e' if totais.shares_without_maturity else '#888' }};margin-top:4px;">
+      {% if totais.shares_without_maturity %}
+        ⚠️ {{ totais.shares_without_maturity }} sem vencimento cadastrado
+      {% else %}
+        Todas com vencimento cadastrado
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-value" style="color:#4ade80;">{{ formatar_moeda(totais.current_month_yield) }}</div>
+    <div class="metric-label">Rendimento previsto — {{ inicio_label }}</div>
+    <div style="font-size:11px;color:#888;margin-top:4px;">Primeiro mês da projeção</div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-value" style="color:#4ade80;">{{ formatar_moeda(totais.yield_12m) }}</div>
+    <div class="metric-label">Rendimento previsto — próximos 12 meses</div>
+    <div style="font-size:11px;color:#888;margin-top:4px;">{{ totais.window_12m_label }}</div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-value" style="color:#f87171;">{{ formatar_moeda(totais.leaving_base_12m) }}</div>
+    <div class="metric-label">Deixa de render em 12 meses</div>
+    <div style="font-size:11px;color:#888;margin-top:4px;">
+      {{ totais.leaving_shares_12m }} cota(s) saem da base por vencimento
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ FILTROS ═══ -->
+<form method="get" class="toolbar">
+  <div class="toolbar-left" style="flex-wrap:wrap;gap:8px;">
+    <div>
+      <label style="display:block;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">Início da projeção</label>
+      <input type="month" name="inicio" value="{{ inicio_input }}"
+             class="form-control form-control-sm" style="width:150px;">
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">Meses</label>
+      <select name="meses" class="form-control form-control-sm" style="width:105px;">
+        {% for m in [6, 12, 18, 24, 36, 48, 60] %}
+        <option value="{{ m }}" {{ 'selected' if meses == m else '' }}>{{ m }} meses</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">Cliente</label>
+      <select name="cliente" class="form-control form-control-sm" style="width:250px;">
+        <option value="">Todos os clientes</option>
+        {% for c in clientes_filtro %}
+        <option value="{{ c.id }}" {{ 'selected' if cliente_filtro == c.id|string else '' }}>
+          {{ c.full_name }} ({{ c.qtd_cotas }} cotas)
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">Condomínio</label>
+      <select name="produto" class="form-control form-control-sm" style="width:170px;">
+        <option value="">Todos os condomínios</option>
+        {% for c in conds %}
+        <option value="{{ c.code }}" {{ 'selected' if produto_filtro == c.code else '' }}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">Busca livre</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="Nome, CPF/CNPJ ou nº da cota…"
+             class="form-control form-control-sm" style="width:230px;">
+    </div>
+    <div style="align-self:flex-end;display:flex;gap:8px;">
+      <button type="submit" class="btn btn-primary btn-sm">Aplicar filtros</button>
+      <a href="{{ url_for('condominios_validacao_sistema') }}" class="btn btn-secondary btn-sm">Limpar</a>
+    </div>
+  </div>
+  <div class="toolbar-right" style="align-self:flex-end;">
+    <a class="btn btn-secondary btn-sm"
+       href="{{ url_for('condominios_validacao_sistema_exportar') }}{% if query_export %}?{{ query_export }}{% endif %}">
+      📊 Exportar Excel
+    </a>
+  </div>
+</form>
+
+<!-- ═══ LEGENDA DAS REGRAS ═══ -->
+<div class="card" style="margin-bottom:16px;padding:14px 16px;">
+  <div class="section-label" style="margin-bottom:10px;">Regras de retirada aplicadas na simulação</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;font-size:12px;color:#aaa;line-height:1.7;">
+    <div>
+      <span class="badge badge-civil">🏗️ Construção Civil</span>
+      <div style="margin-top:6px;">
+        Taxa normal <strong style="color:#d4af37;">1,7%</strong> ao mês.<br>
+        Rende <strong>até o mês do vencimento</strong>, inclusive.<br>
+        Retirada em 3 dias — <strong>sem mês extra</strong>.
+      </div>
+    </div>
+    <div>
+      <span class="badge badge-agro">🌾 Agronegócio</span>
+      <div style="margin-top:6px;">
+        Taxa normal <strong style="color:#d4af37;">1,5%</strong> ao mês.<br>
+        No mês do vencimento: <strong style="color:#fbbf24;">{{ agro_special_label }}</strong> (taxa especial fixa).<br>
+        Retirada em 30 dias — <strong>+1 mês a 1,5%</strong>.
+      </div>
+    </div>
+    <div>
+      <span class="badge badge-saude">🏥 Saúde</span>
+      <div style="margin-top:6px;">
+        Taxa normal <strong style="color:#d4af37;">1,8%</strong> ao mês.<br>
+        No mês do vencimento: taxa normal.<br>
+        Retirada em 30 dias — <strong>+1 mês a 1,8%</strong>.
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:10px;font-size:11px;color:#666;">
+    As taxas normais vêm da tabela <span class="text-mono">condominiums</span> do banco.
+    A taxa especial do Agro no vencimento é fixa em {{ agro_special_label }}.
+  </div>
+</div>
+
+{% import "_validacao_sistema_macros.html" as vsm with context %}
+
+{# ═══════════════════════════════════════════════════════════════
+   NÍVEL 1 — CLIENTES
+   ═══════════════════════════════════════════════════════════════ #}
+
+{% if not clientes %}
+  <div class="empty-state">
+    <div class="empty-state-icon">🔍</div>
+    <div class="empty-state-title">Nenhum cliente encontrado</div>
+    <div class="empty-state-sub">Ajuste os filtros acima para ver a projeção.</div>
+  </div>
+{% else %}
+
+<div style="font-size:11px;color:#666;margin-bottom:6px;">
+  👆 Clique no cliente para abrir a <strong style="color:#d4af37;">previsão mês a mês</strong>
+  com os vencimentos identificados. Dentro dela, clique no condomínio para ver cota a cota.
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:34px;"></th>
+        <th>Cliente</th>
+        <th>CPF/CNPJ</th>
+        <th style="text-align:right;">Total investido</th>
+        <th style="text-align:right;">🏗️ Civil</th>
+        <th style="text-align:right;">🌾 Agro</th>
+        <th style="text-align:right;">🏥 Saúde</th>
+        <th style="text-align:center;">Cotas</th>
+        <th style="text-align:center;">Próx. venc.</th>
+        <th style="text-align:right;">Rend. {{ inicio_label }}</th>
+        <th style="text-align:right;">Rend. próx. mês</th>
+        <th style="text-align:right;">Rend. 12 meses</th>
+        <th style="text-align:center;">Último mês</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cli in clientes %}
+      {% set cid = 'c' ~ cli.client_id %}
+
+      <tr class="vs-client-row" onclick="vsToggle('{{ cid }}')" style="cursor:pointer;">
+        <td style="text-align:center;">
+          <span id="arrow-{{ cid }}" style="color:#d4af37;font-size:11px;">▶</span>
+        </td>
+        <td style="font-weight:600;color:#F5F5F5;">
+          {{ cli.client_name }}
+          {% if cli.client_status == 'inativo' %}
+            <span class="badge badge-inactive" style="margin-left:6px;">Cliente inativo</span>
+          {% endif %}
+        </td>
+        <td class="text-mono text-dim">{{ formatar_documento(cli.client_document) }}</td>
+        <td style="text-align:right;font-weight:700;color:#d4af37;font-size:15px;">
+          {{ formatar_moeda(cli.total_invested) }}
+        </td>
+        <td style="text-align:right;color:{{ '#818cf8' if cli.total_by_condominium.civil else '#3a3a3a' }};">
+          {{ formatar_moeda(cli.total_by_condominium.civil) if cli.total_by_condominium.civil else '—' }}
+        </td>
+        <td style="text-align:right;color:{{ '#22c55e' if cli.total_by_condominium.agro else '#3a3a3a' }};">
+          {{ formatar_moeda(cli.total_by_condominium.agro) if cli.total_by_condominium.agro else '—' }}
+        </td>
+        <td style="text-align:right;color:{{ '#f87171' if cli.total_by_condominium.saude else '#3a3a3a' }};">
+          {{ formatar_moeda(cli.total_by_condominium.saude) if cli.total_by_condominium.saude else '—' }}
+        </td>
+        <td style="text-align:center;color:#888;">{{ cli.shares_count }}</td>
+        <td style="text-align:center;color:{{ '#f87171' if cli.next_maturity_overdue else '#ccc' }};font-weight:600;">
+          {{ vsm.data_br(cli.next_maturity_date) }}
+          {% if cli.next_maturity_overdue %}<br><span style="font-size:10px;">vencida</span>{% endif %}
+        </td>
+        <td style="text-align:right;color:#4ade80;font-weight:600;">{{ formatar_moeda(cli.current_month_yield) }}</td>
+        <td style="text-align:right;color:#4ade80;">{{ formatar_moeda(cli.next_month_yield) }}</td>
+        <td style="text-align:right;color:#4ade80;font-weight:600;">{{ formatar_moeda(cli.yield_12m) }}</td>
+        <td style="text-align:center;color:#a78bfa;font-size:12px;">{{ cli.last_yield_month_label }}</td>
+      </tr>
+
+      {# ═══ NÍVEL 2 — previsão mês a mês do cliente, carregada sob demanda ═══ #}
+      <tr id="det-{{ cid }}" style="display:none;background:rgba(0,0,0,0.3);">
+        <td colspan="13" style="padding:0;">
+          <div class="vs-lazy" id="lazy-{{ cid }}"
+               data-client-id="{{ cli.client_id }}"
+               data-loaded="0"
+               style="padding:18px;color:#666;font-size:12px;">
+            Carregando previsão mês a mês…
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="margin-top:12px;font-size:11px;color:#666;">
+  {{ clientes | length }} cliente(s) na projeção · horizonte de {{ meses }} meses a partir de {{ inicio_label }} ·
+  rendimento total previsto no horizonte:
+  <strong style="color:#4ade80;">{{ formatar_moeda(totais.yield_horizon) }}</strong>
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* Parâmetros da projeção — usados no carregamento sob demanda */
+  var VS_INICIO   = {{ inicio_input | tojson }};
+  var VS_MESES    = {{ meses | tojson }};
+  var VS_PRODUTO  = {{ produto_filtro | tojson }};
+  var VS_URL_CLI  = {{ url_for("condominios_validacao_sistema_cliente") | tojson }};
+  var VS_URL_DET  = {{ url_for("condominios_validacao_sistema_detalhe")  | tojson }};
+
+  /* Abre/fecha qualquer nível (cliente ou condomínio) */
+  function vsToggle(id) {
+    var linha = document.getElementById('det-' + id);
+    var seta  = document.getElementById('arrow-' + id);
+    if (!linha) return;
+
+    var abrir = (linha.style.display === 'none' || linha.style.display === '');
+    linha.style.display = abrir ? 'table-row' : 'none';
+    if (seta) seta.textContent = abrir ? '▼' : '▶';
+
+    if (abrir) vsCarregar(id);
+  }
+  window.vsToggle = vsToggle;
+
+  /* Carrega o conteúdo apenas na primeira abertura (mantém a tela leve).
+     Sem data-condominium-id → nível 2 (cliente); com → nível 3 (condomínio). */
+  function vsCarregar(id) {
+    var box = document.getElementById('lazy-' + id);
+    if (!box || box.dataset.loaded === '1' || box.dataset.loading === '1') return;
+    box.dataset.loading = '1';
+
+    var base = box.dataset.condominiumId ? VS_URL_DET : VS_URL_CLI;
+    var url  = base
+             + '?cliente='  + encodeURIComponent(box.dataset.clientId)
+             + '&inicio='   + encodeURIComponent(VS_INICIO)
+             + '&meses='    + encodeURIComponent(VS_MESES)
+             + '&produto='  + encodeURIComponent(VS_PRODUTO || '');
+    if (box.dataset.condominiumId) {
+      url += '&condominio=' + encodeURIComponent(box.dataset.condominiumId);
+    }
+
+    fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function (html) {
+        box.innerHTML = html;
+        box.style.padding = '0';
+        box.dataset.loaded = '1';
+        box.dataset.loading = '0';
+      })
+      .catch(function (err) {
+        box.innerHTML = '<div style="padding:18px;color:#f87171;font-size:12px;">'
+                      + 'Não foi possível carregar: ' + err.message
+                      + ' — recarregue a página e tente novamente.</div>';
+        box.dataset.loading = '0';
+      });
+  }
+</script>
+{% endblock %}

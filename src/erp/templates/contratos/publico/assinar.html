@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Assinatura de documento · Capuzzo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+<style>
+  :root{--ouro:#C7A955;--ouro-esc:#9E7C34;--tinta:#16140F;--muted:#6E6552;--linha:#E4DFD2;--fundo:#F5F2EA;--ok:#2d7d46;--erro:#b42318}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fundo);color:var(--tinta);font:15px/1.5 "Segoe UI",Roboto,Arial,sans-serif}
+  header{background:#fff;border-bottom:1px solid var(--linha)}
+  header .in{max-width:1100px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  header img{height:46px}
+  header .seg{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .faixa{height:4px;background:linear-gradient(90deg,var(--ouro-esc),#f1d98a,var(--ouro-esc))}
+  main{max-width:1100px;margin:0 auto;padding:20px 16px 60px;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start}
+  .card{background:#fff;border:1px solid var(--linha);border-radius:10px;padding:18px}
+  h1{font-size:21px;margin:0 0 4px;letter-spacing:-.2px}
+  .sub{color:var(--muted);font-size:13.5px}
+  .docs{display:flex;flex-direction:column;gap:6px;margin:14px 0 0}
+  .doc{display:flex;gap:10px;align-items:center;border:1px solid var(--linha);border-radius:8px;padding:9px 12px;font-size:14px}
+  .doc small{display:block;color:var(--muted);font-size:12px}
+  .viewer{margin-top:14px;border:1px solid var(--linha);border-radius:8px;overflow:hidden;background:#e9e6df}
+  .viewer iframe{display:block;width:100%;height:72vh;border:0}
+  .viewer .acoes{display:flex;justify-content:flex-end;gap:12px;padding:8px 12px;background:#fff;border-top:1px solid var(--linha);font-size:13px}
+  a{color:var(--ouro-esc)}
+  .pessoas{margin:0;padding:0;list-style:none}
+  .pessoas li{display:flex;gap:10px;padding:8px 0;border-top:1px solid #f0ece2}
+  .pessoas li:first-child{border-top:0}
+  .pessoas .b{width:20px;height:20px;border-radius:50%;border:2px solid #c9c2b0;flex:none;margin-top:2px;display:grid;place-items:center;color:#fff;font-size:11px}
+  .pessoas .b.ok{background:var(--ok);border-color:var(--ok)}
+  .pessoas small{display:block;color:var(--muted);font-size:12px}
+  .passo{margin-top:16px;padding-top:14px;border-top:1px solid var(--linha)}
+  .passo h3{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  label.chk{display:flex;gap:10px;align-items:flex-start;font-size:14px;cursor:pointer}
+  label.chk input{width:18px;height:18px;margin-top:2px;accent-color:var(--ouro-esc)}
+  input.campo{width:100%;padding:11px 12px;border:1px solid #cfc8b6;border-radius:7px;font-size:16px;background:#fff}
+  input.campo:focus{outline:2px solid var(--ouro);border-color:var(--ouro)}
+  .linha2{display:flex;gap:8px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:7px;padding:11px 16px;font-weight:700;font-size:14.5px;cursor:pointer}
+  .btn-ouro{background:var(--ouro);color:#141210}
+  .btn-ouro:hover{background:#b8962e}
+  .btn-sec{background:#fff;border:1px solid #cfc8b6;color:var(--tinta)}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .btn-full{width:100%;padding:14px;font-size:16px}
+  .tabs{display:flex;gap:4px;background:#f1ede3;border-radius:7px;padding:3px;margin-bottom:8px}
+  .tabs button{flex:1;border:0;background:none;padding:7px;border-radius:5px;font-weight:600;color:var(--muted);cursor:pointer}
+  .tabs button.on{background:#fff;color:var(--tinta);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+  .pad{position:relative;border:1.5px dashed #c9c2b0;border-radius:8px;background:#fff;touch-action:none}
+  .pad canvas{display:block;width:100%;height:150px;cursor:crosshair}
+  .pad .dica{position:absolute;left:12px;bottom:8px;font-size:12px;color:#aaa;pointer-events:none}
+  .pad .limpar{position:absolute;right:8px;top:6px;font-size:12px;background:none;border:0;color:var(--ouro-esc);cursor:pointer}
+  .previa{border:1.5px dashed #c9c2b0;border-radius:8px;background:#fff;min-height:80px;display:flex;align-items:center;padding:8px 14px;
+          font-family:"Great Vibes","Segoe Script",cursive;font-size:38px;color:#1d2a5a;overflow:hidden;white-space:nowrap;margin-top:8px}
+  .msg{font-size:13.5px;margin-top:8px;min-height:1em}
+  .msg.erro{color:var(--erro)} .msg.ok{color:var(--ok)}
+  .status{border-radius:10px;padding:18px;text-align:center}
+  .status.ok{background:#eef8f1;border:1px solid #b9e2c6}
+  .status.aviso{background:#fff8e6;border:1px solid #f0dca0}
+  .status .ic{font-size:40px;line-height:1}
+  .legal{font-size:11.5px;color:var(--muted);margin-top:12px}
+  .oculto{display:none}
+  @media (max-width:900px){main{grid-template-columns:1fr}.viewer iframe{height:60vh}}
+</style>
+</head>
+<body>
+<header><div class="in"><img src="{{ logo }}" alt="Capuzzo Assessoria Empresarial">
+  <span class="seg">🔒 Ambiente seguro de assinatura eletrônica</span></div></header>
+<div class="faixa"></div>
+
+<main>
+  <section class="card">
+    <h1>{{ TIPOS[c.tipo] }}</h1>
+    <div class="sub">{{ d.produto.nome }} · {{ d.qtd }} cota(s) nº {{ d.cotas | map(attribute='numero') | join(', ') }} · {{ moeda((d.retirada or {}).valor or d.valor_total) }}</div>
+    <div class="docs">
+      <div class="doc">📄<div>{{ TIPOS[c.tipo] }}<small>Documento principal · preenchido com seus dados</small></div></div>
+      {% if d.anexo_nome %}<div class="doc">📎<div>{{ d.anexo_nome }}<small>Anexo · parte integrante do termo</small></div></div>{% endif %}
+    </div>
+    <div class="viewer">
+      <iframe src="{{ url_for('contratos.assinar_documento', token=c.token) }}" title="Documento"></iframe>
+      <div class="acoes"><a href="{{ url_for('contratos.assinar_documento', token=c.token) }}" target="_blank" rel="noopener">Abrir em tela cheia</a>
+        <a href="{{ url_for('contratos.assinar_documento', token=c.token, imprimir=1) }}" target="_blank" rel="noopener">Baixar PDF</a></div>
+    </div>
+  </section>
+
+  <aside class="card">
+    <h3 style="margin:0 0 6px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Signatários</h3>
+    <ul class="pessoas">
+      {% for s in c.signatarios %}
+      <li><span class="b {{ 'ok' if s.status == 'assinado' }}">{{ '✔' if s.status == 'assinado' }}</span>
+        <div><b>{{ s.nome }}</b><small>{{ 'Assinou em ' ~ (s.assinado_em | ct_data(True)) if s.status == 'assinado' else 'Aguardando assinatura' }}</small></div></li>
+      {% endfor %}
+    </ul>
+
+    {% if ok or c.status in ('assinado', 'concluido') %}
+      <div class="status ok" style="margin-top:14px">
+        <div class="ic">✅</div>
+        <p style="margin:8px 0 4px;font-weight:700">Documento assinado com sucesso</p>
+        <p style="margin:0;font-size:13.5px">Enviamos uma cópia para o seu e-mail.{% if c.tipo == 'aquisicao' %} As cotas serão ativadas após a confirmação do depósito.{% elif c.tipo == 'retirada' %} O valor será creditado {{ d.produto_doc.prazo_credito }} a contar da assinatura.{% endif %}</p>
+        {% if c.tipo == 'aquisicao' and cfg.instrucoes_deposito %}<p style="margin:12px 0 0;text-align:left;font-size:13.5px;white-space:pre-line;background:#fff;border:1px solid #d9eedf;border-radius:8px;padding:10px"><b>Dados para depósito</b>
+{{ cfg.instrucoes_deposito }}</p>{% endif %}
+        <p style="margin:12px 0 0"><a class="btn btn-sec" href="{{ url_for('contratos.assinar_documento', token=c.token, imprimir=1) }}" target="_blank" rel="noopener">⬇ Baixar documento assinado</a></p>
+      </div>
+    {% elif c.status == 'cancelado' %}
+      <div class="status aviso" style="margin-top:14px"><div class="ic">⚠️</div>
+        <p style="margin:8px 0 0">Este documento foi cancelado pela Capuzzo e não pode mais ser assinado. Em caso de dúvida, fale com {{ cfg.email_copia }}.</p></div>
+    {% elif c.status != 'aguardando' %}
+      <div class="status aviso" style="margin-top:14px"><div class="ic">⏳</div>
+        <p style="margin:8px 0 0">Este documento ainda não foi liberado para assinatura.</p></div>
+    {% else %}
+    <form id="f" autocomplete="off" onsubmit="return false">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="passo">
+        <h3>1 · Leitura</h3>
+        <label class="chk"><input type="checkbox" id="aceite"> <span>Li e concordo com o <b>{{ TIPOS[c.tipo] }}</b>{% if d.anexo_nome %} e com o <b>Regulamento</b> anexo{% endif %}.</span></label>
+      </div>
+      <div class="passo">
+        <h3>2 · Confirme sua identidade</h3>
+        <input class="campo" id="cpf" inputmode="numeric" placeholder="Seu CPF{{ '/CNPJ' if d.investidor.documento_tipo == 'CNPJ' }}" maxlength="18">
+        <div style="margin-top:8px" class="linha2">
+          <input class="campo" id="codigo" inputmode="numeric" placeholder="Código do e-mail" maxlength="6" style="flex:1">
+          <button type="button" class="btn btn-sec" id="btn-codigo">Enviar código</button>
+        </div>
+        <div class="msg" id="msg-codigo">O código será enviado para {{ email_mask }}.</div>
+      </div>
+      <div class="passo">
+        <h3>3 · Sua assinatura</h3>
+        <div class="tabs"><button type="button" class="on" data-t="desenho">Desenhar</button><button type="button" data-t="texto">Digitar</button></div>
+        <div id="t-desenho" class="pad"><canvas id="cv"></canvas><span class="dica">Assine aqui com o dedo ou o mouse</span>
+          <button type="button" class="limpar" id="limpar">Limpar</button></div>
+        <div id="t-texto" class="oculto">
+          <input class="campo" id="texto" placeholder="Digite seu nome completo" value="{{ cli.nome }}" maxlength="80">
+          <div class="previa" id="previa">{{ cli.nome }}</div>
+        </div>
+      </div>
+      <div class="passo">
+        <button type="button" class="btn btn-ouro btn-full" id="btn-assinar">✍️ Assinar documento</button>
+        <div class="msg" id="msg"></div>
+        <p class="legal">Ao assinar, você concorda que sua assinatura eletrônica tem validade jurídica (MP 2.200-2/2001, art. 10, §2º, e Lei 14.063/2020).
+          Registramos data, hora, IP e o código de verificação para comprovar a autoria.</p>
+      </div>
+    </form>
+    {% endif %}
+  </aside>
+</main>
+
+{% if c.status == 'aguardando' and not ok %}
+<script>
+(function(){
+  var f = document.getElementById('f'), csrf = f.querySelector('[name=_csrf]').value;
+  var tipo = 'desenho', desenhou = false;
+  function post(url, dados){
+    var fd = new FormData(); fd.append('_csrf', csrf);
+    for(var k in dados) fd.append(k, dados[k]);
+    return fetch(url, {method:'POST', body:fd, credentials:'same-origin'}).then(function(r){
+      return r.json().catch(function(){ return {ok:false, msg:'Sessão expirada. Recarregue a página.'}; });
+    });
+  }
+  function msg(el, t, cls){ el.textContent = t; el.className = 'msg ' + (cls||''); }
+
+  /* CPF/CNPJ */
+  var cpf = document.getElementById('cpf');
+  cpf.addEventListener('input', function(){
+    var d = cpf.value.replace(/\D/g,'').slice(0,14), v = d;
+    if(d.length <= 11) v = d.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+    else v = d.replace(/^(\d{2})(\d)/,'$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d)/,'.$1/$2').replace(/(\d{4})(\d)/,'$1-$2');
+    cpf.value = v;
+  });
+
+  /* Código */
+  var bc = document.getElementById('btn-codigo'), mc = document.getElementById('msg-codigo');
+  bc.addEventListener('click', function(){
+    bc.disabled = true; msg(mc, 'Enviando…');
+    post('{{ url_for("contratos.assinar_codigo", token=c.token) }}', {}).then(function(j){
+      msg(mc, j.msg, j.ok ? 'ok' : 'erro');
+      var s = j.ok ? 45 : 0;
+      (function tick(){ if(s <= 0){ bc.disabled = false; bc.textContent = j.ok ? 'Reenviar' : 'Enviar código'; return; }
+        bc.textContent = 'Reenviar (' + s-- + ')'; setTimeout(tick, 1000); })();
+      if(j.ok) document.getElementById('codigo').focus();
+    }).catch(function(){ bc.disabled = false; msg(mc, 'Falha de conexão. Tente de novo.', 'erro'); });
+  });
+
+  /* Abas */
+  document.querySelectorAll('.tabs button').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.tabs button').forEach(function(x){ x.classList.toggle('on', x === b); });
+      tipo = b.dataset.t;
+      document.getElementById('t-desenho').classList.toggle('oculto', tipo !== 'desenho');
+      document.getElementById('t-texto').classList.toggle('oculto', tipo !== 'texto');
+      if(tipo === 'desenho') ajustar();
+    });
+  });
+  var tx = document.getElementById('texto'), pv = document.getElementById('previa');
+  tx.addEventListener('input', function(){ pv.textContent = tx.value; });
+
+  /* Quadro de assinatura */
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d'), tracando = false, ult = null;
+  function ajustar(){
+    var r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    if(!r.width) return;
+    var img = desenhou ? cv.toDataURL() : null;
+    cv.width = r.width * dpr; cv.height = r.height * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1d2a5a';
+    if(img){ var i = new Image(); i.onload = function(){ ctx.drawImage(i, 0, 0, r.width, r.height); }; i.src = img; }
+  }
+  function pos(e){ var r = cv.getBoundingClientRect(); return {x:e.clientX - r.left, y:e.clientY - r.top}; }
+  cv.addEventListener('pointerdown', function(e){ tracando = true; ult = pos(e); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', function(e){
+    if(!tracando) return; var p = pos(e);
+    ctx.beginPath(); ctx.moveTo(ult.x, ult.y); ctx.lineTo(p.x, p.y); ctx.stroke(); ult = p; desenhou = true;
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(function(ev){ cv.addEventListener(ev, function(){ tracando = false; }); });
+  document.getElementById('limpar').addEventListener('click', function(){ desenhou = false; ctx.clearRect(0,0,cv.width,cv.height); });
+  window.addEventListener('resize', ajustar); ajustar();
+
+  function recortar(){
+    /* recorta a área desenhada e devolve PNG com fundo transparente */
+    var w = cv.width, h = cv.height, dados = ctx.getImageData(0,0,w,h).data, x0=w, y0=h, x1=0, y1=0;
+    for(var y=0;y<h;y++) for(var x=0;x<w;x++) if(dados[(y*w+x)*4+3] > 0){ if(x<x0)x0=x; if(y<y0)y0=y; if(x>x1)x1=x; if(y>y1)y1=y; }
+    if(x1 <= x0) return '';
+    var m = 8, o = document.createElement('canvas'); o.width = x1-x0+2*m; o.height = y1-y0+2*m;
+    o.getContext('2d').drawImage(cv, x0-m, y0-m, o.width, o.height, 0, 0, o.width, o.height);
+    return o.toDataURL('image/png');
+  }
+
+  /* Assinar */
+  var ba = document.getElementById('btn-assinar'), ma = document.getElementById('msg');
+  ba.addEventListener('click', function(){
+    if(!document.getElementById('aceite').checked) return msg(ma, 'Marque que leu e concorda com os documentos.', 'erro');
+    if(cpf.value.replace(/\D/g,'').length < 11) return msg(ma, 'Informe seu CPF.', 'erro');
+    if(document.getElementById('codigo').value.replace(/\D/g,'').length !== 6) return msg(ma, 'Informe o código de 6 dígitos enviado ao seu e-mail.', 'erro');
+    if(tipo === 'desenho' && !desenhou) return msg(ma, 'Desenhe sua assinatura no quadro (ou use “Digitar”).', 'erro');
+    ba.disabled = true; msg(ma, 'Registrando assinatura…');
+    post('{{ url_for("contratos.assinar_confirmar", token=c.token) }}', {
+      aceite:'1', cpf:cpf.value, codigo:document.getElementById('codigo').value, tipo:tipo,
+      imagem: tipo === 'desenho' ? recortar() : '', texto: tx.value
+    }).then(function(j){
+      if(j.ok){ window.location = j.redirect; return; }
+      ba.disabled = false; msg(ma, j.msg, 'erro');
+    }).catch(function(){ ba.disabled = false; msg(ma, 'Falha de conexão. Tente de novo.', 'erro'); });
+  });
+})();
+</script>
+{% endif %}
+</body>
+</html>

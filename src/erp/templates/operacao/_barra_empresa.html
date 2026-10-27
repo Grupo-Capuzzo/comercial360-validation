@@ -1,0 +1,63 @@
+{# Barra da empresa: cronômetro de jornada + atalhos de Demandas e Chamados.
+   Incluída na barra superior das páginas da empresa (portal e módulo Operação). #}
+{% if empresa and portal_user %}
+<link rel="stylesheet" href="{{ url_for('operacao.static', filename='operacao.css') }}">
+<div class="op-crono" id="op-crono" data-url="{{ url_for('operacao.cronometro', slug=empresa.slug) }}"
+     data-csrf="{{ csrf_token() }}" title="Tempo nesta empresa hoje">
+  <span class="op-crono-ic">{{ oic('timer') }}</span>
+  <span class="op-crono-txt"><b id="op-crono-tempo">00:00:00</b><small id="op-crono-rot">hoje nesta empresa</small></span>
+  <button type="button" class="op-crono-btn" id="op-crono-btn" aria-label="Iniciar" disabled>
+    <span class="quando-parado">{{ oic('play') }}<span>Iniciar</span></span>
+    <span class="quando-rodando">{{ oic('pause') }}<span>Pausar</span></span>
+  </button>
+</div>
+<a class="tb-btn op-tb {{ 'op-on' if op_ativo == 'demandas' }}" href="{{ url_for('operacao.demandas', slug=empresa.slug) }}">{{ oic('tarefas') }}<span class="lbl">Demandas</span></a>
+<a class="tb-btn op-tb {{ 'op-on' if op_ativo == 'chamados' }}" href="{{ url_for('operacao.chamados', slug=empresa.slug) }}">{{ oic('chamados') }}<span class="lbl">Chamados</span></a>
+<script>
+(function () {
+  var box = document.getElementById('op-crono');
+  if (!box || box.dataset.ok) return; box.dataset.ok = '1';
+  // Botões só com ícone continuam com o nome ao passar o mouse.
+  document.querySelectorAll('.topbar .tb-btn').forEach(function (a) {
+    var l = a.querySelector('.lbl'); if (l && !a.title) a.title = l.textContent.trim();
+  });
+  var tempo = document.getElementById('op-crono-tempo'), rot = document.getElementById('op-crono-rot'),
+      btn = document.getElementById('op-crono-btn');
+  var est = null, base = 0, t0 = 0;
+  function fmt(s) { s = Math.max(0, Math.floor(s)); var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(x).padStart(2, '0'); }
+  function pintar() {
+    var s = base + (est && est.rodando ? (Date.now() - t0) / 1000 : 0);
+    tempo.textContent = fmt(s);
+    var tarefa = document.querySelector('[data-op-tarefa-tempo]');
+    if (tarefa && est && est.tarefa && String(est.tarefa.id) === tarefa.dataset.opTarefaTempo) {
+      tarefa.textContent = fmt(est.tarefa_segundos + (Date.now() - t0) / 1000);
+    }
+  }
+  function aplicar(d) {
+    est = d; base = d.segundos_hoje; t0 = Date.now(); btn.disabled = false;
+    box.classList.toggle('rodando', !!d.rodando);
+    btn.setAttribute('aria-label', d.rodando ? 'Pausar' : 'Iniciar');
+    rot.textContent = d.rodando ? (d.tarefa ? 'em: ' + d.tarefa.titulo : 'em andamento') :
+      (d.outra_empresa ? 'rodando em ' + d.outra_empresa : 'pausado · hoje');
+    rot.title = rot.textContent;
+    pintar();
+  }
+  function chamar(acao) {
+    var op = { credentials: 'same-origin' };
+    if (acao) { var f = new FormData(); f.append('_csrf', box.dataset.csrf); f.append('acao', acao); op.method = 'POST'; op.body = f; }
+    return fetch(box.dataset.url, op).then(function (r) { if (!r.ok) throw r; return r.json(); }).then(aplicar)
+      .catch(function () { rot.textContent = 'sem conexão com o sistema'; btn.disabled = !est; });
+  }
+  btn.addEventListener('click', function () {
+    if (!est) return;
+    btn.disabled = true;
+    var ia = est && est.rodando ? 'pausar' : 'iniciar';
+    chamar(ia).then(function () { if (document.body.dataset.opRecarregar) location.reload(); });
+  });
+  chamar();
+  setInterval(pintar, 1000);
+  setInterval(function () { chamar(); }, 60000);   // sinal de uso + sincroniza
+})();
+</script>
+{% endif %}

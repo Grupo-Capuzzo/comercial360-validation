@@ -1,0 +1,60 @@
+{% extends "portal/base.html" %}
+{% block title %}Entrar · Portal Grupo Capuzzo{% endblock %}
+{% block body_class %}page-login{% endblock %}
+{% block topbar %}{% endblock %}
+{% block content %}
+<div class="login">
+  <section class="cover">
+    <div class="grain"></div>
+    <div class="cover-top">
+      <img src="{{ url_for('static', filename='portal/logos/grupo_ring_light.png') }}" alt="Grupo Capuzzo">
+    </div>
+    <div class="cover-mid">
+      <div class="eyebrow-line">Portal corporativo</div>
+      <h1>Gestão integrada de <strong>todas as empresas</strong> do grupo.</h1>
+      <p class="lead">Finanças, indicadores e rotinas de cada empresa do Grupo Capuzzo reunidos em um só lugar,
+        com a identidade de cada marca.</p>
+      <div class="cover-brands">
+        {% for e in marcas %}
+          <span class="logo-circle sm"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt="{{ e.nome }}"></span>
+        {% endfor %}
+        <span class="cb-txt">{{ marcas|length }} empresas conectadas</span>
+      </div>
+    </div>
+    <div class="cover-foot"><span>© {{ ano }} Grupo Capuzzo · Grupo Empresarial</span><span>Acesso restrito</span></div>
+  </section>
+
+  <section class="login-side">
+    <form class="login-box" method="post" autocomplete="on">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="eyebrow">Bem-vindo</div>
+      <h2>Acesse sua conta</h2>
+      <p class="sub">Entre com o e-mail e a senha cadastrados.</p>
+
+      <label class="lbl">Tipo de acesso</label>
+      <div class="seg">
+        <input type="radio" id="ac-admin" name="acesso" value="admin" {% if acesso == 'admin' %}checked{% endif %}>
+        <label for="ac-admin">Administrador</label>
+        <input type="radio" id="ac-user" name="acesso" value="usuario" {% if acesso != 'admin' %}checked{% endif %}>
+        <label for="ac-user">Usuário</label>
+      </div>
+
+      <label class="lbl" for="email">E-mail</label>
+      <input class="inp" id="email" name="email" type="email" value="{{ email }}" placeholder="nome@grupocapuzzo.com" required autofocus>
+
+      <label class="lbl" for="senha">Senha</label>
+      <div class="pw">
+        <input class="inp" id="senha" name="senha" type="password" placeholder="Sua senha" required>
+        <button type="button" class="pw-eye" aria-label="Mostrar senha"
+          onclick="const i=document.getElementById('senha');i.type=i.type==='password'?'text':'password'">{{ ic('visibility') }}</button>
+      </div>
+
+      {% if erro %}<div class="alert">{{ ic('error') }}{{ erro }}</div>{% endif %}
+
+      <button class="btn-gold" type="submit">Entrar</button>
+      <div class="login-help">Esqueceu a senha? Fale com o administrador do portal.</div>
+      <div class="login-secure">{{ ic('lock') }} Conexão protegida · senhas armazenadas com criptografia</div>
+    </form>
+  </section>
+</div>
+{% endblock %}

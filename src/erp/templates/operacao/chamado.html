@@ -1,0 +1,84 @@
+{% extends "operacao/_layout.html" %}
+{% block title %}Chamado nº {{ numero_chamado(c.id) }} · {{ empresa.nome }}{% endblock %}
+{% block op_content %}
+<a class="op-voltar" href="{{ url_for('operacao.chamados', slug=empresa.slug) }}">{{ ic('arrow_back') }} Chamados</a>
+
+<section class="op-detalhe">
+  <header class="op-detalhe-head">
+    <div>
+      <div class="op-meta">
+        <span class="op-num-grande">Nº {{ numero_chamado(c.id) }}</span>
+        <span class="op-status st-{{ c.status }}">{{ STATUS_CHAMADO[c.status] }}</span>
+        <span class="op-tag">{{ c.setor }}</span>
+      </div>
+      <h1>{{ c.assunto }}</h1>
+      <p class="op-info">Solicitante: <b>{{ c.solicitante or '—' }}</b> · Aberto em {{ data_hora_br(c.aberto_em) }} por {{ aberto_por }}
+        · Última movimentação: {{ data_hora_br(c.ultima_mov_em) }}{% if resp_nome %} · Responsável: <b>{{ resp_nome }}</b>{% endif %}</p>
+    </div>
+  </header>
+  {% if c.descricao %}<div class="op-desc">{{ c.descricao }}</div>{% endif %}
+</section>
+
+<div class="op-cols">
+  <section class="op-card">
+    <h3>Movimentações</h3>
+    <ol class="op-timeline cronologica">
+      {% for m in movs %}
+        <li class="{{ 'evento' if m.status and not m.texto.strip() }}">
+          <span class="op-quando">{{ data_hora_br(m.criado_em) }} · {{ m.autor }}{% if m.status %} · <span class="op-status st-{{ m.status }}">{{ STATUS_CHAMADO[m.status] }}</span>{% endif %}</span>
+          <span class="op-texto">{{ m.texto }}</span>
+        </li>
+      {% endfor %}
+    </ol>
+    <form class="op-nota-form" method="post" action="{{ url_for('operacao.chamado_mov', slug=empresa.slug, cid=c.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label class="lbl" for="m-texto">Nova movimentação</label>
+      <textarea class="inp" id="m-texto" name="texto" rows="3" placeholder="Resposta, andamento, pedido de informação…"></textarea>
+      <div class="op-2col">
+        <div>
+          <label class="lbl" for="m-status">Status</label>
+          <select class="inp" id="m-status" name="status">
+            {% for k, v in STATUS_CHAMADO.items() %}<option value="{{ k }}" {{ 'selected' if c.status == k }}>{{ v }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="lbl" for="m-resp">Responsável</label>
+          <select class="inp" id="m-resp" name="responsavel_id">
+            <option value="">Ninguém ainda</option>
+            {% for x in usuarios %}<option value="{{ x.id }}" {{ 'selected' if c.responsavel_id == x.id }}>{{ x.nome }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <button class="btn-pill op-btn" type="submit">Registrar movimentação</button>
+    </form>
+  </section>
+  <aside class="op-resumo">
+    <section class="op-card">
+      <h3>Demandas deste chamado</h3>
+      <p class="op-sub">Transforme o chamado em tarefa para medir o tempo de atendimento.</p>
+      <ul class="op-sessoes">
+        {% for t in tarefas %}
+          <li>{% if t.posso_abrir %}<a href="{{ url_for('operacao.demanda', slug=empresa.slug, tid=t.id) }}">{{ t.titulo }}</a>{% else %}<span>{{ t.titulo }}</span>{% endif %}
+            <b class="{{ 'ok' if t.status == 'concluida' }}">{{ t.resp_nome }} · {{ STATUS_TAREFA[t.status] }}</b></li>
+        {% else %}
+          <li><span>Nenhuma demanda criada.</span></li>
+        {% endfor %}
+      </ul>
+      <button class="btn-pill outline op-btn" type="button" onclick="document.getElementById('dlg-tarefa').showModal()">{{ oic('tarefas') }} Criar demanda</button>
+    </section>
+  </aside>
+</div>
+
+<dialog id="dlg-tarefa" class="dlg op-dlg">
+  <form method="post" action="{{ url_for('operacao.demanda_nova', slug=empresa.slug) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="chamado_id" value="{{ c.id }}">
+    <input type="hidden" name="voltar" value="{{ url_for('operacao.chamado', slug=empresa.slug, cid=c.id) }}">
+    <div class="dlg-head"><h3>Demanda do chamado nº {{ numero_chamado(c.id) }}</h3>
+      <button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
+    {% with d={'titulo': 'Chamado ' ~ numero_chamado(c.id) ~ ' — ' ~ c.assunto, 'descricao': c.descricao, 'prioridade': 'normal'} %}{% include "operacao/_form_demanda.html" %}{% endwith %}
+    <button class="btn-pill" type="submit">Criar demanda</button>
+  </form>
+</dialog>
+{% include "operacao/_js_form.html" %}
+{% endblock %}

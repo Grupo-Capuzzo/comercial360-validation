@@ -1,0 +1,10 @@
+{% extends "portal/base.html" %}
+{% block title %}Acesso negado · Portal Grupo Capuzzo{% endblock %}
+{% block content %}
+<div class="empty" style="margin-top:3rem">
+  <div class="empty-ic">{{ ic('block') }}</div>
+  <h3>{{ msg }}</h3>
+  <p>Se precisar de acesso, fale com o administrador do portal.</p>
+  <p style="margin-top:1.2rem"><a class="btn-pill" href="{{ url_for('portal_grupo') }}">Voltar às empresas</a></p>
+</div>
+{% endblock %}

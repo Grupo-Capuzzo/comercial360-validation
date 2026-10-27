@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Editar Apuração #{{ calculation_id }} — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+  <a href="{{ url_for('historico_detalhe', calc_id=calculation_id) }}" class="back-link">← Ver Detalhes</a>
+  <div style="flex:1;"></div>
+  <a href="{{ url_for('historico') }}" class="btn btn-secondary btn-sm">← Histórico</a>
+</div>
+
+<div class="page-header">
+  <div class="page-header-icon">✏️</div>
+  <div class="page-header-title">
+    Editar Apuração #{{ calculation_id }}
+    {% if detail %}
+    {% set h = detail["header"] %}
+    · {{ '%02d'|format(h.calculation_month) }}/{{ h.calculation_year }}
+    {% if h.condominium_name %}— {{ h.condominium_name }}{% else %}— Todos os Produtos{% endif %}
+    {% endif %}
+  </div>
+  <div class="page-header-sub">
+    Editando registro salvo — as cotas e clientes originais não serão alterados.
+  </div>
+</div>
+
+{% if erro %}
+<div class="alert alert-error" style="margin-bottom:20px;">⚠️ {{ erro }}</div>
+{% endif %}
+
+{% if detail %}
+{% set h = detail["header"] %}
+{% set calc_items = detail["items"] %}
+
+<form method="POST">
+
+  <!-- Observações do cabeçalho -->
+  <div class="card-gold" style="margin-bottom:24px;">
+    <div class="form-section">
+      <div class="form-section-title">Observações da Apuração</div>
+      <div style="font-size:12px;color:#888;margin-bottom:12px;">
+        Salvo em {{ h.calculated_at }}
+        {% if h.agro_special_rate %} · Taxa especial Agro: {{ "%.2f"|format(h.agro_special_rate * 100) }}%{% endif %}
+      </div>
+      <div class="form-group">
+        <label>Notas / Observações</label>
+        <input type="text" name="notes" class="form-control"
+               value="{{ h.notes or '' }}"
+               placeholder="Observação opcional sobre esta apuração">
+      </div>
+    </div>
+  </div>
+
+  <!-- Itens por cota -->
+  <div class="section-label" style="margin-bottom:12px;">● Itens da Apuração — edite os valores e clique em Salvar</div>
+  <div class="note-box" style="margin-bottom:16px;font-size:12px;">
+    ℹ️ <strong>Taxa aplicada:</strong> use decimal — ex: <code>0.017</code> para 1,7% · <code>0.04</code> para 4%.
+    Alterar o rendimento de uma cota atualiza o total ao salvar.
+  </div>
+
+  {% if calc_items %}
+  <div class="table-wrap" style="margin-bottom:24px;overflow-x:auto;">
+    <table style="min-width:1100px;">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Produto</th>
+          <th>Nº Cota</th>
+          <th style="text-align:right;">Valor Cota (R$)</th>
+          <th style="text-align:center;">Dias Ativos</th>
+          <th style="text-align:center;">Total Dias</th>
+          <th style="text-align:right;">Taxa (decimal)</th>
+          <th style="text-align:right;color:#d4af37;">Rendimento (R$)</th>
+          <th>Obs. Cota</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in calc_items %}
+        <tr>
+          <td style="font-weight:600;color:#F5F5F5;white-space:nowrap;">{{ it.client_name }}</td>
+          <td>
+            {% if it.condominium_code == 'civil' %}<span class="badge badge-civil">🏗️ Civil</span>
+            {% elif it.condominium_code == 'agro' %}<span class="badge badge-agro">🌾 Agro</span>
+            {% else %}<span class="badge badge-saude">🏥 Saúde</span>{% endif %}
+          </td>
+          <td style="font-weight:700;color:#d4af37;">{{ it.share_number }}</td>
+          <td>
+            <input type="number" name="sv_{{ it.id }}" step="0.01" min="0"
+                   value="{{ '%.2f'|format(it.share_value) }}"
+                   class="form-control" style="min-width:110px;text-align:right;">
+          </td>
+          <td>
+            <input type="number" name="ad_{{ it.id }}" min="0"
+                   value="{{ it.active_days }}"
+                   class="form-control" style="min-width:70px;text-align:center;">
+          </td>
+          <td>
+            <input type="number" name="tpd_{{ it.id }}" min="1"
+                   value="{{ it.total_period_days }}"
+                   class="form-control" style="min-width:70px;text-align:center;">
+          </td>
+          <td>
+            <input type="number" name="ar_{{ it.id }}" step="0.00001" min="0"
+                   value="{{ '%.5f'|format(it.applied_rate) }}"
+                   class="form-control" style="min-width:100px;text-align:right;">
+          </td>
+          <td>
+            <input type="number" name="iv_{{ it.id }}" step="0.01" min="0"
+                   value="{{ '%.2f'|format(it.income_value) }}"
+                   class="form-control" style="min-width:110px;text-align:right;">
+          </td>
+          <td>
+            <input type="text" name="cd_{{ it.id }}"
+                   value="{{ it.calculation_details or '' }}"
+                   class="form-control" style="min-width:140px;"
+                   placeholder="Obs.">
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state-title">Nenhum item encontrado</div>
+  </div>
+  {% endif %}
+
+  <div class="page-actions">
+    <a href="{{ url_for('historico_detalhe', calc_id=calculation_id) }}" class="btn btn-secondary">Cancelar</a>
+    <button type="submit" class="btn btn-primary">💾 Salvar Alterações</button>
+  </div>
+
+</form>
+{% endif %}
+
+{% endblock %}

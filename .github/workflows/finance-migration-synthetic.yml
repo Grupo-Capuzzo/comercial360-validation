@@ -1,0 +1,59 @@
+name: Finance migration synthetic review
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - 'tools/finance-migration/**'
+      - '.github/workflows/finance-migration-synthetic.yml'
+permissions:
+  contents: read
+jobs:
+  postgres17:
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.ref == 'codex/finance-migration-ci' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/finance-migration-ci')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: capuzzo_test_ci
+          POSTGRES_USER: synthetic_runner
+          POSTGRES_PASSWORD: synthetic_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U synthetic_runner -d capuzzo_test_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      FINANCE_LOCAL_POSTGRES_DSN: postgresql://synthetic_runner:synthetic_ci_only@127.0.0.1:5432/capuzzo_test_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install pinned test driver
+        run: python -m pip install -r tools/finance-migration/requirements-test.txt
+      - name: Mark disposable CI database
+        run: |
+          python - <<'PY'
+          import os, psycopg
+          from psycopg import sql
+          # Bootstrap only in this workflow's ephemeral service, no project secret.
+          with psycopg.connect(os.environ['FINANCE_LOCAL_POSTGRES_DSN']) as db:
+              db.execute("ALTER DATABASE capuzzo_test_ci SET capuzzo.disposable='synthetic-only'")
+          PY
+      - name: Python regression suite
+        run: python tools/finance-migration/strict_tests.py test_engine.py 11
+      - name: Review regressions
+        run: python tools/finance-migration/strict_tests.py test_regressions.py 16
+      - name: Real PostgreSQL and SQL-role tests (not Supabase E2E)
+        run: python tools/finance-migration/strict_tests.py test_postgres.py 13

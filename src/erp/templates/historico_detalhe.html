@@ -1,0 +1,437 @@
+{% extends "base.html" %}
+{% block title %}Detalhes da Apuração #{{ calc_id }} — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+  <a href="{{ url_for('historico') }}" class="back-link">← Histórico</a>
+  <div style="flex:1;"></div>
+  <a href="{{ url_for('historico_exportar_planilha', calc_id=calc_id) }}"
+     class="btn btn-primary"
+     title="Gera o Excel no padrão da planilha de controle: uma aba consolidada por cliente e outra de vencimentos, separadas por produto">
+    📊 Exportar Excel (padrão planilha)
+  </a>
+  <a href="{{ url_for('historico_editar', calculation_id=calc_id) }}" class="btn btn-secondary">✏️ Editar Apuração</a>
+  <form method="POST" action="{{ url_for('historico_excluir', calculation_id=calc_id) }}"
+        onsubmit="return confirm('Excluir esta apuração? As cotas e clientes não serão alterados.');"
+        style="display:inline;">
+    <button type="submit" class="btn btn-danger">Excluir</button>
+  </form>
+</div>
+
+<div class="page-header">
+  <div class="page-header-icon">📐</div>
+  <div class="page-header-title">
+    Apuração #{{ calc_id }}
+    {% if calc_meta %}
+    · {{ '%02d'|format(calc_meta.calculation_month) }}/{{ calc_meta.calculation_year }}
+    {% if calc_meta.condominium_name %}— {{ calc_meta.condominium_name }}{% else %}— Todos os Produtos{% endif %}
+    {% endif %}
+  </div>
+  <div class="page-header-sub">
+    Salvo em {{ calc_meta.calculated_at if calc_meta else '—' }}
+    {% if calc_meta and calc_meta.notes %} · <em>{{ calc_meta.notes }}</em>{% endif %}
+  </div>
+</div>
+
+<!-- KPIs -->
+<div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px;">
+  <div class="metric-card">
+    <div class="metric-value text-gold">{{ formatar_moeda(total_geral) }}</div>
+    <div class="metric-label">Total Apurado</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#4ade80;">{{ clients|length }}</div>
+    <div class="metric-label">Clientes</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">{{ total_shares }}</div>
+    <div class="metric-label">Cotas</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#888;font-size:13px;">
+      {{ calc_meta.condominium_name if calc_meta and calc_meta.condominium_name else 'Todos' }}
+    </div>
+    <div class="metric-label">Produto</div>
+  </div>
+</div>
+
+<!-- Consolidado por cliente -->
+<div class="section-label" style="margin-bottom:12px;">● Consolidado por Cliente</div>
+<div class="table-wrap" style="margin-bottom:8px;">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:34px;text-align:center;color:#4ade80;"
+            title="Marque conforme confere cada pessoa no banco">✓</th>
+        <th style="width:32px;"></th>
+        <th>Cliente</th>
+        <th>CPF</th>
+        <th>Pix</th>
+        <th>Produto</th>
+        <th style="text-align:center;">Cotas</th>
+        <th style="text-align:right;">Capital Investido</th>
+        <th style="text-align:right;color:#d4af37;">Total Apurado</th>
+        <th style="text-align:center;">Detalhes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cli in clients %}
+      {% set row_id = loop.index0 %}
+      <tr id="linha-{{ row_id }}">
+        <td style="text-align:center;">
+          <input type="checkbox" class="confer-check"
+                 id="confer-{{ row_id }}"
+                 data-row="{{ row_id }}"
+                 data-key="{{ cli.client_id }}-{{ cli.condominium_code }}"
+                 title="Marcar {{ cli.client_name }} como conferido">
+        </td>
+        <td style="text-align:center;color:#888;font-size:12px;">{{ loop.index }}</td>
+        <td style="font-weight:600;color:#F5F5F5;">{{ cli.client_name }}</td>
+        <td class="text-mono text-dim">{{ cli.client_cpf }}</td>
+        <td class="text-dim" style="font-size:12px;">{{ cli.client_pix or '—' }}</td>
+        <td>
+          {% if cli.condominium_code == 'civil' %}<span class="badge badge-civil">🏗️ Civil</span>
+          {% elif cli.condominium_code == 'agro' %}<span class="badge badge-agro">🌾 Agro</span>
+          {% else %}<span class="badge badge-saude">🏥 Saúde</span>{% endif %}
+        </td>
+        <td style="text-align:center;color:#888;">{{ cli.shares_count }}</td>
+        <td style="text-align:right;color:#aaa;">
+          {{ formatar_moeda(cli.total_share_value) }}
+          {% if cli.withdrawn_count %}<br><small style="color:#38bdf8;">− {{ formatar_moeda(cli.total_withdrawn_value) }} retirado</small>{% endif %}
+        </td>
+        <td style="text-align:right;font-weight:700;color:#d4af37;font-size:16px;">{{ formatar_moeda(cli.total_income) }}</td>
+        <td style="text-align:center;">
+          <button type="button" class="btn btn-secondary btn-sm"
+                  onclick="toggleCotas({{ row_id }})" id="btn-{{ row_id }}">▶ Ver cotas</button>
+        </td>
+      </tr>
+      <tr id="detalhe-{{ row_id }}" style="display:none;background:rgba(0,0,0,0.25);">
+        <td colspan="10" style="padding:0;">
+          <div style="padding:12px 16px 16px;">
+            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">
+              Cotas de {{ cli.client_name }} · {{ cli.condominium_name }}
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+                  <th style="padding:6px 8px;text-align:left;color:#888;font-weight:500;">Nº Cota</th>
+                  <th style="padding:6px 8px;text-align:right;color:#888;font-weight:500;">Valor</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Aquisição</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Vencimento</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Ú. Renovação</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Período Apurado</th>
+                  <th style="padding:6px 8px;text-align:center;color:#888;font-weight:500;">Dias</th>
+                  <th style="padding:6px 8px;text-align:right;color:#888;font-weight:500;">Taxa</th>
+                  <th style="padding:6px 8px;text-align:right;color:#d4af37;font-weight:500;">Rendimento</th>
+                  <th style="padding:6px 8px;color:#888;font-weight:500;">Tipo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in cli["shares_detail"] %}
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                  <td style="padding:6px 8px;font-weight:700;color:#d4af37;">{{ it.share_number or '—' }}</td>
+                  <td style="padding:6px 8px;text-align:right;color:#ccc;">{{ formatar_moeda(it.share_value) }}</td>
+                  <td style="padding:6px 8px;color:#888;">{{ it.acquisition_date or '—' }}</td>
+                  <td style="padding:6px 8px;color:#888;">{{ it.maturity_date or '—' }}</td>
+                  <td style="padding:6px 8px;color:#888;">{{ it.last_renewal_date or '—' }}</td>
+                  <td style="padding:6px 8px;color:#888;font-size:11px;">{{ it.period_start }} → {{ it.period_end }}</td>
+                  <td style="padding:6px 8px;text-align:center;color:#888;">{{ it.active_days }}/{{ it.total_period_days }}</td>
+                  <td style="padding:6px 8px;text-align:right;color:#888;">{{ "%.2f"|format(it.applied_rate * 100) }}%</td>
+                  <td style="padding:6px 8px;text-align:right;font-weight:700;color:#d4af37;">{{ formatar_moeda(it.income_value) }}</td>
+                  <td style="padding:6px 8px;font-size:11px;">
+                    {% set ct = it.calculation_details or '' %}
+                    {% if 'RETIRADA em' in ct %}
+                      <span style="color:#38bdf8;" title="{{ ct }}">↩ Proporc. até retirada</span>
+                    {% elif it.active_days == it.total_period_days %}
+                      <span style="color:#4ade80;">✓ Integral</span>
+                    {% elif 'Especial' in ct %}
+                      <span style="color:#f97316;">★ Especial Agro</span>
+                    {% else %}
+                      <span style="color:#fbbf24;">⊘ Proporcional</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr style="border-top:1px solid rgba(212,175,55,0.3);">
+                  <td colspan="8" style="padding:8px;text-align:right;color:#888;font-weight:600;">Total {{ cli.client_name }}</td>
+                  <td style="padding:8px;text-align:right;font-weight:700;color:#d4af37;">{{ formatar_moeda(cli.total_income) }}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="border-top:2px solid rgba(212,175,55,0.3);">
+        <td colspan="7" style="font-weight:600;color:#d4af37;padding:10px 12px;">TOTAL GERAL</td>
+        <td style="text-align:right;font-weight:600;color:#aaa;padding:10px 12px;">
+          {{ formatar_moeda(clients | sum(attribute='total_share_value')) }}
+        </td>
+        <td style="text-align:right;font-weight:700;color:#d4af37;font-size:18px;padding:10px 12px;">
+          {{ formatar_moeda(total_geral) }}
+        </td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+<div style="font-size:11px;color:#555;margin-bottom:28px;text-align:right;">
+  {{ clients|length }} cliente(s) · {{ total_shares }} cota(s)
+</div>
+
+<!-- ═══ Arquivo bancário (remessa de pagamento) ═══ -->
+<div class="section-label" style="color:#d4af37;">🏦 Arquivo bancário</div>
+<div class="card" style="margin-bottom:24px;">
+  <div class="detail-grid" style="margin-bottom:18px;">
+    <div>
+      <div class="detail-item-label">Banco definido</div>
+      <div class="detail-item-value">{{ bank_info.bank_name or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Método</div>
+      <div class="detail-item-value">
+        {% if bank_info.method == 'pix' %}
+          <span class="badge badge-active">Pix — CNAB240</span>
+        {% elif bank_info.method == 'dados_bancarios' %}
+          <span class="badge badge-active">Dados Bancários — CNAB240</span>
+        {% else %}
+          <span class="badge badge-inactive">Layout pendente</span>
+        {% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="detail-item-label">Total da apuração</div>
+      <div class="detail-item-value" style="color:#d4af37;font-weight:700;">{{ formatar_moeda(total_geral) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Quantidade de clientes</div>
+      <div class="detail-item-value">{{ clients|length }}</div>
+    </div>
+  </div>
+
+  {% if bank_info.method in ('pix', 'dados_bancarios') %}
+    <div class="form-group" style="margin-bottom:14px;max-width:260px;">
+      <label style="color:#ccc;font-size:13px;font-weight:500;">Data de pagamento</label>
+      <input type="date" id="banco-payment-date" class="form-control"
+             value="{{ data_sugerida or '' }}">
+    </div>
+
+    <div class="page-actions" style="margin-bottom:14px;">
+      <button type="button" class="btn btn-secondary" onclick="validarPagamentosBanco({{ calc_id }})">
+        🔎 Validar pagamentos
+      </button>
+      <button type="button" class="btn btn-primary" onclick="confirmarGerarArquivoBanco({{ calc_id }})">
+        🏦 Gerar arquivo banco
+      </button>
+    </div>
+
+    <div id="banco-validacao-resultado" style="display:none;margin-bottom:14px;"></div>
+
+    <form id="form-gerar-banco" method="post"
+          action="{{ url_for('historico_banco_gerar', calc_id=calc_id) }}" style="display:none;">
+      <input type="hidden" name="payment_date" id="banco-payment-date-hidden">
+    </form>
+  {% else %}
+    <div class="note-box" style="margin-bottom:14px;color:#f87171;border-color:rgba(239,68,68,0.25);">
+      ⚠️ Banco pagador não configurado para este condomínio.
+    </div>
+    <button type="button" class="btn btn-secondary" disabled>Gerar arquivo banco</button>
+  {% endif %}
+
+  {% if remittance_files %}
+  <div style="margin-top:20px;">
+    <div class="section-label" style="font-size:12px;margin-bottom:8px;">Arquivos já gerados</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Arquivo</th><th>Gerado em</th><th style="text-align:right;">Total</th>
+            <th style="text-align:center;">Pagamentos</th><th>Status</th><th style="text-align:right;">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rf in remittance_files %}
+          <tr>
+            <td class="text-mono">{{ rf.file_name }}</td>
+            <td class="text-dim">{{ rf.created_at }}</td>
+            <td style="text-align:right;">{{ formatar_moeda(rf.total_amount) }}</td>
+            <td style="text-align:center;">{{ rf.total_payments }}</td>
+            <td>
+              {% if rf.status == 'generated' %}<span class="badge badge-active">Gerado</span>
+              {% elif rf.status == 'imported_to_bank' %}<span class="badge badge-active">Importado no banco</span>
+              {% elif rf.status == 'cancelled' %}<span class="badge badge-inactive">Cancelado</span>
+              {% else %}<span class="badge badge-inactive">Erro</span>{% endif %}
+            </td>
+            <td style="text-align:right;white-space:nowrap;">
+              <a class="btn btn-secondary btn-sm" href="{{ url_for('historico_banco_baixar', calc_id=calc_id, remittance_id=rf.id, tipo='rem') }}">.REM</a>
+              <a class="btn btn-secondary btn-sm" href="{{ url_for('historico_banco_baixar', calc_id=calc_id, remittance_id=rf.id, tipo='csv') }}">Conferência</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleCotas(idx) {
+  var row = document.getElementById('detalhe-' + idx);
+  var btn = document.getElementById('btn-' + idx);
+  if (!row) return;
+  var open = row.style.display === 'none' || row.style.display === '';
+  row.style.display = open ? 'table-row' : 'none';
+  btn.textContent = open ? '▼ Ocultar' : '▶ Ver cotas';
+}
+
+/* ── Conferência por pessoa (caixinhas do Consolidado por Cliente) ──
+   As marcações ficam guardadas no próprio navegador, separadas por
+   apuração, para você poder recarregar a página sem perder o que
+   já conferiu no banco. Nada é gravado no banco de dados do app. */
+var CONFER_KEY = 'confer_apuracao_{{ calc_id }}';
+
+function conferLer() {
+  try {
+    var raw = window.localStorage.getItem(CONFER_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) { return {}; }
+}
+
+function conferGravar(mapa) {
+  try { window.localStorage.setItem(CONFER_KEY, JSON.stringify(mapa)); } catch (e) {}
+}
+
+function conferAplicarLinha(chk) {
+  var linha = document.getElementById('linha-' + chk.dataset.row);
+  if (!linha) return;
+  if (chk.checked) { linha.classList.add('row-conferida'); }
+  else { linha.classList.remove('row-conferida'); }
+}
+
+function conferInit() {
+  var checks = Array.prototype.slice.call(document.querySelectorAll('.confer-check'));
+  if (!checks.length) return;
+  var marcados = conferLer();
+
+  checks.forEach(function (chk) {
+    chk.checked = marcados[chk.dataset.key] === true;
+    conferAplicarLinha(chk);
+
+    chk.addEventListener('change', function () {
+      var mapa = conferLer();
+      if (chk.checked) { mapa[chk.dataset.key] = true; }
+      else { delete mapa[chk.dataset.key]; }
+      conferGravar(mapa);
+      conferAplicarLinha(chk);
+    });
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', conferInit);
+} else {
+  conferInit();
+}
+
+var HOUVE_ARQUIVO_BANCO_GERADO = {{ 'true' if remittance_files else 'false' }};
+var ULTIMA_VALIDACAO_BANCO = null;
+
+function validarPagamentosBanco(calcId) {
+  var resultEl = document.getElementById('banco-validacao-resultado');
+  if (!resultEl) return;
+  resultEl.style.display = 'block';
+  resultEl.className = 'note-box';
+  resultEl.innerHTML = 'Validando...';
+
+  fetch('/erp/historico/' + calcId + '/banco/validar', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.success) {
+        resultEl.innerHTML = '✗ ' + (data.message || 'Não foi possível validar.');
+        return;
+      }
+      ULTIMA_VALIDACAO_BANCO = data;
+      var html = ''
+        + '<div style="margin-bottom:10px;">'
+        + '<strong>Total de clientes da apuração:</strong> ' + data.total_client_count + '<br>'
+        + '<strong style="color:#4ade80;">Incluídos no arquivo:</strong> ' + data.valid_count
+        + ' · Total incluído: <strong>' + data.total_amount + '</strong><br>'
+        + '<strong style="color:#f0ad4e;">Fora do arquivo por pendência:</strong> ' + data.pending_count
+        + ' · Total pendente: <strong>' + data.pending_total_amount + '</strong>'
+        + '</div>';
+      function listar(titulo, arr) {
+        if (arr && arr.length) {
+          html += '<br><strong>' + titulo + ' (' + arr.length + '):</strong> ' + arr.join(', ');
+        }
+      }
+      listar('Sem nome cadastrado', data.pending_no_name);
+      listar('Sem CPF/CNPJ', data.pending_no_document);
+      listar('CPF/CNPJ inválido', data.pending_invalid_document);
+      listar('Sem chave Pix', data.pending_no_pix);
+      listar('Chave Pix e-mail inválida', data.pending_invalid_pix_email);
+      listar('Dados bancários incompletos', data.pending_no_bank_data);
+      listar('Valor inválido (zerado/negativo)', data.pending_zero_amount);
+      if (data.config_missing && data.config_missing.length) {
+        html += '<br><strong style="color:#f87171;">Configuração do banco incompleta:</strong> ' +
+                data.config_missing.join(', ') + ' — preencha em Configurações.';
+      }
+      if (!data.can_generate) {
+        html += '<br><br><strong style="color:#f87171;">Geração bloqueada: ' +
+                (data.valid_count === 0 ? 'nenhum pagamento válido nesta apuração.' : 'configuração do banco incompleta.') +
+                '</strong>';
+      } else if (data.pending_count > 0) {
+        html += '<br><br><span style="color:#999;">As pendências acima NÃO bloqueiam a geração — ' +
+                'esses clientes só ficarão fora do .REM e aparecerão na conferência CSV.</span>';
+      }
+      resultEl.innerHTML = html;
+    })
+    .catch(function () {
+      resultEl.innerHTML = '✗ Não foi possível conectar ao servidor para validar.';
+    });
+}
+
+function confirmarGerarArquivoBanco(calcId) {
+  var dateEl = document.getElementById('banco-payment-date');
+  var paymentDate = dateEl ? dateEl.value : '';
+  if (!paymentDate) {
+    alert('Informe a data de pagamento antes de gerar o arquivo.');
+    return;
+  }
+
+  if (!ULTIMA_VALIDACAO_BANCO) {
+    alert('Clique em "Validar pagamentos" antes de gerar o arquivo.');
+    return;
+  }
+  if (!ULTIMA_VALIDACAO_BANCO.can_generate) {
+    var motivoBloqueio = ULTIMA_VALIDACAO_BANCO.valid_count === 0
+      ? 'Nenhum pagamento válido nesta apuração.'
+      : 'Cadastro do banco pagador incompleto em Configurações.';
+    alert('Geração bloqueada: ' + motivoBloqueio);
+    return;
+  }
+
+  var msg = 'Serão incluídos ' + ULTIMA_VALIDACAO_BANCO.valid_count + ' pagamentos no arquivo, totalizando ' +
+            ULTIMA_VALIDACAO_BANCO.total_amount + '. ' +
+            ULTIMA_VALIDACAO_BANCO.pending_count + ' clientes ficarão fora por pendências cadastrais ' +
+            'e aparecerão na conferência. Deseja continuar?';
+  if (!window.confirm(msg)) return;
+
+  if (HOUVE_ARQUIVO_BANCO_GERADO) {
+    if (!window.confirm('Já existe arquivo gerado. Deseja gerar nova versão (novo sequencial de remessa)?')) return;
+  }
+
+  document.getElementById('banco-payment-date-hidden').value = paymentDate;
+  document.getElementById('form-gerar-banco').submit();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,13 @@
+__pycache__/
+.venv*/
+*.sqlite
+*.sqlite-*
+*.csv
+.env*
+private/
+reports/
+*.zip
+*.db
+*.db-*
+MANIFESTO*
+CONFERENCIA_BASE*

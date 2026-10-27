@@ -1,0 +1,9 @@
+<script>
+document.querySelectorAll('form').forEach(function (f) {
+  var rec = f.querySelector('[data-op-rec]');
+  if (!rec) return;
+  f.querySelectorAll('[data-op-tipo]').forEach(function (r) {
+    r.addEventListener('change', function () { rec.hidden = f.querySelector('[data-op-tipo]:checked').value !== 'recorrente'; });
+  });
+});
+</script>

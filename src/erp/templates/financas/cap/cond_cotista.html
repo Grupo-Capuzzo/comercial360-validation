@@ -1,0 +1,58 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}{{ cli.full_name }}{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho(cli.full_name, cli.cpf ~ (' · ' ~ cli.email if cli.email else '') ~ (' · ' ~ cli.phone if cli.phone else ''), 'Cotista') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.cond_cotista_editar', slug=empresa.slug, cid=cli.id) }}">{{ fic('edit') }} Editar cadastro</a>
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.cond_cota_nova', slug=empresa.slug, client_id=cli.id, voltar=request.path) }}">{{ fic('add') }} Nova cota</a>
+  <form method="post" action="{{ url_for('financas.cond_cotista_acao', slug=empresa.slug, cid=cli.id, acao='reativar' if cli.status == 'inativo' else 'inativar') }}" onsubmit="return confirm('{{ 'Reativar' if cli.status == 'inativo' else 'Inativar' }} o cadastro de {{ cli.full_name }}?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ request.path }}">
+    <button class="btn-pill outline fin-btn">{{ 'Reativar cadastro' if cli.status == 'inativo' else 'Inativar cadastro' }}</button></form>
+{% endcall %}
+<div class="vg-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="vg-kpi escuro"><small>Patrimônio ativo</small><b>{{ reais(total_ativo) }}</b><em>{{ n_ativas }} cota(s) ativa(s)</em></div>
+  <div class="vg-kpi"><small>Último rendimento</small><b>{{ reais(rend[0].v) if rend else '—' }}</b><em>{{ ('%02d/%d'|format(rend[0].m, rend[0].a)) if rend else 'sem apuração' }}</em></div>
+  <div class="vg-kpi"><small>Recebido (12 apurações)</small><b>{{ reais(rend|sum(attribute='v')) }}</b><em>rendimentos apurados</em></div>
+  <div class="vg-kpi"><small>Pagamento</small><b style="font-size:1rem">{{ cli.pix_key or (cli.bank_name ~ ' ' ~ (cli.bank_account or '')) or '—' }}</b><em>{{ 'chave PIX' if cli.pix_key else 'conta bancária' }}</em></div>
+</div>
+<div class="vg-cols">
+  <section class="vg-box">
+    <header><h3>Cotas</h3><a href="{{ url_for('financas.cond_cota_nova', slug=empresa.slug, client_id=cli.id, voltar=request.path) }}">Nova cota</a></header>
+    <table class="pr-tabela">
+      <thead><tr><th>Produto</th><th>Cota</th><th class="num">Valor</th><th>Aquisição</th><th>Vencimento</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for s in cotas %}
+        <tr class="clic" onclick="location.href='{{ url_for('financas.cond_cota_editar', slug=empresa.slug, sid=s.id) }}'"><td>{{ COND_NOMES[s.code] }}</td><td class="mono">{{ s.share_number }}</td><td class="num">{{ reais(s.share_value) }}</td>
+          <td>{{ data_br(s.acquisition_date) if s.acquisition_date else '—' }}</td><td>{{ data_br(s.maturity_date) if s.maturity_date else '—' }}</td>
+          <td>{{ m.status_cota(s.status) }}</td></tr>
+      {% else %}<tr><td colspan="6" class="fin-vazio">Sem cotas.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <div>
+    <section class="vg-box" style="margin-bottom:1rem">
+      <header><h3>Dados para contrato</h3></header>
+      <div class="vg-linhas">
+        <div><span>Estado civil · profissão</span><b>{{ cli.marital_status or '—' }} · {{ cli.profession or '—' }}</b></div>
+        <div><span>Endereço</span><b style="white-space:normal;text-align:right">{{ [cli.address_street, cli.address_district, cli.address_city]|select|join(', ') or '—' }}{{ '-' ~ cli.address_state if cli.address_state }}</b></div>
+        <div><span>CEP</span><b>{{ cli.address_zip or '—' }}</b></div>
+      </div>
+    </section>
+    <section class="vg-box" style="margin-bottom:1rem">
+      <header><h3>Contratos</h3></header>
+      <div class="vg-linhas">
+        {% for c in contratos %}
+          <a href="{{ url_for('financas.cond_contrato', slug=empresa.slug, cid=c.id) }}"><span>Termo de Aquisição · {{ c.dados.qtd }} cota(s) · {{ data_br(c.criado_em[:10]) }}</span><b>{{ c.status }}</b></a>
+        {% else %}<div><span>Nenhum contrato emitido.</span></div>{% endfor %}
+      </div>
+    </section>
+    <section class="vg-box">
+      <header><h3>Rendimentos apurados</h3></header>
+      <div class="vg-linhas">
+        {% for r in rend %}<div><span>{{ '%02d/%d'|format(r.m, r.a) }}</span><b>{{ reais(r.v) }}</b></div>
+        {% else %}<div><span>Sem apurações.</span></div>{% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

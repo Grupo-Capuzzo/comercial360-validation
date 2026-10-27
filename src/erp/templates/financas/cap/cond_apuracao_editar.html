@@ -1,0 +1,41 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% set h = det.header %}
+{% block fin_titulo %}Editar apuração{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Editar apuração ' ~ MESES[h.calculation_month] ~ '/' ~ h.calculation_year, 'Ajuste valores linha a linha. O total é recalculado ao salvar e a alteração fica no log de auditoria.') %}
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_apuracao_detalhe', slug=empresa.slug, calc_id=calc_id) }}">{{ ic('arrow_back') }} Voltar</a>
+{% endcall %}
+{% if erro %}<div class="flash flash-error" style="margin-bottom:.8rem">{{ erro }}</div>{% endif %}
+<form method="post" class="fin-form" id="f-ed">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <section class="vg-box">
+    <label class="lbl">Observação da apuração</label><input class="inp" name="notes" value="{{ h.notes or '' }}">
+    <div style="overflow-x:auto;margin-top:.8rem">
+    <table class="pr-tabela ap-ed">
+      <thead><tr><th>Cotista</th><th>Produto</th><th>Cota</th><th class="num">Valor cota</th><th class="num">Dias ativos</th><th class="num">Dias período</th><th class="num">Taxa</th><th class="num">Rendimento</th><th>Detalhe do cálculo</th></tr></thead>
+      <tbody>
+      {% for it in det['items'] %}
+        <tr><td>{{ it.client_name }}</td><td>{{ COND_NOMES.get(it.condominium_code, '') }}</td><td class="mono">{{ it.share_number }}</td>
+          <td><input class="inp num" type="number" step="0.01" min="0" name="sv_{{ it.id }}" value="{{ '%.2f'|format(it.share_value) }}"></td>
+          <td><input class="inp num" type="number" min="0" name="ad_{{ it.id }}" value="{{ it.active_days }}"></td>
+          <td><input class="inp num" type="number" min="1" name="tpd_{{ it.id }}" value="{{ it.total_period_days }}"></td>
+          <td><input class="inp num" type="number" step="0.00001" min="0" name="ar_{{ it.id }}" value="{{ '%.5f'|format(it.applied_rate) }}"></td>
+          <td><input class="inp num ap-iv" type="number" step="0.01" min="0" name="iv_{{ it.id }}" value="{{ '%.2f'|format(it.income_value) }}"></td>
+          <td><input class="inp" name="cd_{{ it.id }}" value="{{ it.calculation_details or '' }}"></td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="7"><b>Total</b></td><td class="num"><b id="ap-tot"></b></td><td></td></tr></tfoot>
+    </table>
+    </div>
+  </section>
+  <div class="lf-barra co-barra"><span class="co-barra-info">{{ det['items']|length }} linha(s)</span>
+    <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_apuracao_detalhe', slug=empresa.slug, calc_id=calc_id) }}">Cancelar</a>
+    <button class="btn-pill fin-btn" type="submit">{{ ic('check') }} Salvar</button></div>
+</form>
+<script>
+(function () { function t() { var s = 0; document.querySelectorAll('.ap-iv').forEach(function (i) { s += parseFloat(i.value) || 0; });
+  document.getElementById('ap-tot').textContent = 'R$ ' + s.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+  document.getElementById('f-ed').addEventListener('input', t); t(); })();
+</script>
+{% endblock %}

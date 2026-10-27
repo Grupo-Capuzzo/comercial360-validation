@@ -1,0 +1,67 @@
+<section class="folha termo">
+  <img class="cab-termo" src="{{ cab }}" alt="Capuzzo">
+  <h1 class="t-titulo">Termo de Aquisição de Cotas</h1>
+
+  <p class="t-abre">Por meio deste instrumento,</p>
+
+  <p class="t-just"><b>{{ d.investidor.nome }}</b>, {{ d.investidor.nacionalidade }}, {{ d.investidor.estado_civil }},
+    {{ d.investidor.profissao }}, portador(a) do {{ d.investidor.documento_tipo }} nº {{ d.investidor.documento }},
+    residente e domiciliado(a) em {{ d.investidor.endereco }}, CEP: {{ d.investidor.cep }},
+    (“<b>Investidor(a)</b>”), formaliza a aquisição de {{ d.qtd }}({{ d.qtd_extenso }}) cota(s) do
+    <b>CONDOMÍNIO PRIVADO DE INVESTIMENTOS</b> (“<b>CONDOMÍNIO</b>”) administrado por
+    <b>{{ d.empresa.empresa_nome }}</b>, inscrita no CNPJ: {{ d.empresa.empresa_cnpj }}, com sede na
+    {{ d.empresa.empresa_endereco }}, neste ato representada na forma de seu Contrato Social (“<b>Contratada</b>”)
+    e <b>ADERE</b> para todos os fins e efeitos de direito ao <b>REGULAMENTO DO CONDOMÍNIO DE INVESTIMENTO
+    PRIVADO FECHADO</b> (“<b>Regulamento</b>”), do qual este instrumento é parte integrante e indissociável e
+    declara que:</p>
+
+  <ol class="t-lista">
+    <li>Adquire as cotas descritas abaixo, com as seguintes condições:
+      <table class="t-cotas">
+        <thead><tr><th>Cota(s) nº</th><th>Rentabilidade</th><th>Valor total</th><th>Prazo mínimo resgate</th><th>Tipo</th></tr></thead>
+        <tbody>
+        {% for ct in d.cotas %}
+          <tr><td>{{ ct.numero }}</td><td>{{ d.rentabilidade }}</td><td>{{ valor_br(ct.valor) }}</td>
+              <td>{{ d.prazo_meses }} meses</td><td>{{ d.tipo_cota }}</td></tr>
+        {% endfor %}
+        {% if d.cotas|length > 1 %}
+          <tr class="tot"><td>{{ d.qtd }} cotas</td><td></td><td>{{ valor_br(d.valor_total) }}</td><td></td><td></td></tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </li>
+    <li>Tem consciência de que a Contratada tem amplos poderes para exercer a total administração do CONDOMÍNIO;</li>
+    <li>Recebeu uma cópia, leu, compreendeu e está plenamente de acordo com os termos e condições do Regulamento e
+      reitera, assim, as declarações dispostas no referido documento;</li>
+    <li>Teve a oportunidade de questionar e de esclarecer dúvidas sobre o conteúdo dos termos e condições do
+      Regulamento;</li>
+    <li>Está ciente de que a remuneração mensal e o resgate da cota serão pagos apenas para contas bancárias de sua
+      própria titularidade {{ d.investidor.pagamento }};</li>
+    <li>As remunerações serão pagas na modalidade pro rata die, sendo fixado o dia 6 (seis) dos meses subsequentes,
+      podendo ou não, a critério da gestora, ser antecipado em caso de dia não útil;</li>
+    <li>Está ciente de que o prazo mínimo para resgate começa a contar a partir do dia 6 (seis) do mês subsequente
+      à assinatura deste termo;</li>
+    <li>Autoriza a Contratada a representar o CONDOMÍNIO perante administradores, custodiantes, escrituradores e
+      gestores de fundos de investimentos, inclusive com poderes para dar e receber quitação, celebrar acordos e
+      transigir, solicitar informações, sempre nos limites necessários para a prestação dos serviços objeto do
+      Regulamento;</li>
+    <li>Sua concordância, por escrito, via e-mail ou WhatsApp, é válida também como assinatura deste termo;</li>
+    <li>Autoriza a Contratada a representar o CONDOMÍNIO perante quaisquer corretoras de câmbio, títulos, ativos e
+      valores mobiliários, nacionais e/ou internacionais, inclusive com poderes para elaborar cadastros, obter e
+      prestar informações, podendo negociar, comprar, vender, endossar, ceder, onerar, transferir, resgatar,
+      reinvestir, tomar emprestado e emprestar títulos, valores mobiliários e ativos financeiros, incluindo-se ações,
+      títulos de dívida, cotas de fundos, derivativos ou quaisquer outros ativos disponíveis nos Mercados; a requerer
+      a emissão de cautelas e títulos múltiplos, depositar, custodiar ou solicitar a custódia, agrupar, desdobrar,
+      subscrever ações ou quaisquer outros ativos; a resgatar títulos, retirar cautelas e títulos múltiplos
+      representativos de ações e debêntures; aplicar e resgatar valores em fundos de renda fixa ou variável ou
+      qualquer outro tipo de investimento; abrir, movimentar e encerrar contas de custódia; fechar operações de
+      compra e venda de moeda estrangeira; executar quaisquer operações de mercado à vista, disponível, a termo, a
+      futuro, de índice e de opções, sendo os custos relacionados ao exercício de tais direitos suportados
+      integralmente pela própria Contratada.</li>
+  </ol>
+
+  <p class="t-just">Este Termo de Adesão e seus anexos são parte integrante e indissociável do Regulamento. Na
+    hipótese de qualquer conflito entre as disposições, prevalecerão as disposições do Regulamento.</p>
+
+  <p class="t-data">{{ d.local_data }}.</p>
+</section>

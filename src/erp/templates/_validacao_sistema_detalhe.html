@@ -1,0 +1,122 @@
+{# ═══════════════════════════════════════════════════════════════
+   NÍVEL 3 — DETALHAMENTO DE UM CONDOMÍNIO DE UM CLIENTE
+   Parcial carregado sob demanda (AJAX) pela tela Validação Sistema.
+   Recebe: b (bloco do condomínio), meses, inicio_label, agro_special_label
+   ═══════════════════════════════════════════════════════════════ #}
+{% import "_validacao_sistema_macros.html" as vsm with context %}
+
+<div style="padding:14px 16px 18px;border-left:2px solid rgba(212,175,55,.35);margin-left:8px;">
+
+  <div class="note-box" style="margin-bottom:14px;font-size:12px;">
+    <strong style="color:#d4af37;">Regra aplicada:</strong> {{ b.withdrawal_rule }}
+    {% if b.shares_without_maturity %}
+      <br><span style="color:#f0ad4e;">⚠️ {{ b.shares_without_maturity }} cota(s) sem
+      vencimento cadastrado — consideradas ativas em todo o horizonte, com a taxa normal.</span>
+    {% endif %}
+  </div>
+
+  {# ── 3.1 · Cotas do cliente neste condomínio ── #}
+  <div class="section-label" style="margin-bottom:8px;">
+    Cotas · {{ b.shares_count }} cota(s) · {{ formatar_moeda(b.total_invested) }}
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px;">
+    <thead>
+      <tr style="border-bottom:1px solid rgba(255,255,255,.1);">
+        <th style="padding:6px 8px;text-align:left;color:#777;font-weight:500;">Nº Cota</th>
+        <th style="padding:6px 8px;text-align:right;color:#777;font-weight:500;">Valor</th>
+        <th style="padding:6px 8px;text-align:center;color:#777;font-weight:500;">Aquisição</th>
+        <th style="padding:6px 8px;text-align:center;color:#777;font-weight:500;">Vencimento</th>
+        <th style="padding:6px 8px;text-align:center;color:#777;font-weight:500;">Status</th>
+        <th style="padding:6px 8px;text-align:left;color:#777;font-weight:500;">Regra de retirada</th>
+        <th style="padding:6px 8px;text-align:center;color:#777;font-weight:500;">Último mês c/ rend.</th>
+        <th style="padding:6px 8px;text-align:left;color:#777;font-weight:500;">Observações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in b.shares %}
+      <tr style="border-bottom:1px solid rgba(255,255,255,.04);">
+        <td style="padding:6px 8px;font-weight:700;color:#d4af37;font-size:14px;">{{ s.share_number }}</td>
+        <td style="padding:6px 8px;text-align:right;color:#ddd;font-weight:600;">{{ formatar_moeda(s.share_value) }}</td>
+        <td style="padding:6px 8px;text-align:center;color:#888;">{{ vsm.data_br(s.acquisition_date) }}</td>
+        <td style="padding:6px 8px;text-align:center;font-weight:600;color:{{ '#f0ad4e' if s.has_maturity else '#f87171' }};">
+          {% if s.has_maturity %}{{ vsm.data_br(s.maturity_date) }}
+          {% else %}<span class="badge badge-extended">Sem vencimento</span>{% endif %}
+        </td>
+        <td style="padding:6px 8px;text-align:center;">
+          {% if s.withdrawal_requested %}
+            <span class="badge badge-retirada">Em retirada</span>
+          {% else %}
+            <span class="badge badge-active">{{ s.status }}</span>
+          {% endif %}
+        </td>
+        <td style="padding:6px 8px;color:#999;font-size:11px;">{{ s.withdrawal_rule }}</td>
+        <td style="padding:6px 8px;text-align:center;color:#a78bfa;font-weight:600;">{{ s.last_yield_month_label }}</td>
+        <td style="padding:6px 8px;color:#888;font-size:11px;">
+          {% if s.notes %}{{ s.notes | join(' · ') }}{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# ── 3.2 · Previsão mês a mês ── #}
+  <div class="section-label" style="margin-bottom:8px;">
+    Previsão mês a mês · {{ meses }} meses a partir de {{ inicio_label }}
+    <span style="color:#4ade80;font-weight:700;margin-left:8px;">
+      Total no horizonte: {{ formatar_moeda(b.yield_horizon) }}
+    </span>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead>
+      <tr style="border-bottom:1px solid rgba(255,255,255,.1);">
+        <th style="padding:6px 8px;text-align:left;color:#777;font-weight:500;">Mês/Ano</th>
+        <th style="padding:6px 8px;text-align:right;color:#777;font-weight:500;">Valor base</th>
+        <th style="padding:6px 8px;text-align:center;color:#777;font-weight:500;">Taxa aplicada</th>
+        <th style="padding:6px 8px;text-align:right;color:#777;font-weight:500;">Rendimento previsto</th>
+        <th style="padding:6px 8px;text-align:center;color:#777;font-weight:500;">Cotas consideradas</th>
+        <th style="padding:6px 8px;text-align:center;color:#777;font-weight:500;">Cotas vencendo</th>
+        <th style="padding:6px 8px;text-align:left;color:#777;font-weight:500;">Regra aplicada no mês</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in b.monthly_projection %}
+      <tr style="border-bottom:1px solid rgba(255,255,255,.04);
+                 {% if m.shares_included == 0 %}opacity:.45;{% endif %}
+                 {% if m.shares_maturing %}background:rgba(240,173,78,.06);{% endif %}">
+        <td style="padding:6px 8px;font-weight:700;color:#F5F5F5;">{{ m.month_label }}</td>
+        <td style="padding:6px 8px;text-align:right;color:#ccc;">{{ formatar_moeda(m.base_amount) }}</td>
+        <td style="padding:6px 8px;text-align:center;color:#d4af37;font-weight:600;">
+          {{ m.rates_applied | join(' + ') if m.rates_applied else '—' }}
+        </td>
+        <td style="padding:6px 8px;text-align:right;font-weight:700;
+                   color:{{ '#4ade80' if m.yield_amount > 0 else '#555' }};">
+          {{ formatar_moeda(m.yield_amount) }}
+          {% if m.special_yield_amount > 0 %}
+            <div style="font-size:10px;color:#fbbf24;font-weight:500;">
+              especial: {{ formatar_moeda(m.special_yield_amount) }}
+            </div>
+          {% endif %}
+        </td>
+        <td style="padding:6px 8px;text-align:center;color:#aaa;">{{ m.shares_included }}</td>
+        <td style="padding:6px 8px;text-align:center;color:{{ '#f0ad4e' if m.shares_maturing else '#555' }};font-weight:600;">
+          {% if m.maturing_shares %}
+            {{ m.shares_maturing }}
+            <div style="font-size:10px;font-weight:500;color:#f0ad4e;line-height:1.5;">
+              nº {{ m.maturing_shares | map(attribute='share_number') | join(', nº ') }}
+            </div>
+          {% else %}—{% endif %}
+        </td>
+        <td style="padding:6px 8px;">
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:3px;">
+            {% for bg in m.badges %}{{ vsm.proj_badge(bg, agro_special_label) }}{% endfor %}
+          </div>
+          {% if m.notes %}
+            <div style="color:#888;font-size:10px;line-height:1.5;">{{ m.notes | join(' · ') }}</div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>

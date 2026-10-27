@@ -1,0 +1,35 @@
+{% extends "portal/base.html" %}
+{% block brand %}
+  <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt=""></span>
+  <span class="tb-name"><b>{{ empresa.nome }}</b><small>Grupo Capuzzo</small></span>
+{% endblock %}
+{% block tb_links %}
+  <a class="tb-btn" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">{{ ic('grid_view') }}<span class="lbl">Módulos</span></a>
+  {% include "operacao/_barra_empresa.html" %}
+{% endblock %}
+{% block content %}
+<div class="mod-layout op-layout">
+  <aside class="side">
+    <div class="side-title">Meu dia</div>
+    <a class="side-link {{ 'on' if op_ativo == 'demandas' }}" href="{{ url_for('operacao.demandas', slug=empresa.slug) }}">
+      {{ oic('tarefas') }}Demandas
+      {% if cont.atrasadas %}<span class="op-badge op-badge-risco" title="Atrasadas">{{ cont.atrasadas }}</span>
+      {% elif cont.abertas %}<span class="op-badge">{{ cont.abertas }}</span>{% endif %}</a>
+    <a class="side-link {{ 'on' if op_ativo == 'chamados' }}" href="{{ url_for('operacao.chamados', slug=empresa.slug) }}">
+      {{ oic('chamados') }}Chamados
+      {% if cont.chamados %}<span class="op-badge">{{ cont.chamados }}</span>{% endif %}</a>
+    <div class="side-sep"></div>
+    <div class="side-title">Módulos</div>
+    {% for m in modulos %}
+      <a class="side-link" href="{{ url_for('portal_modulo', slug=empresa.slug, modulo_id=m.id) }}">{{ ic(m.icone) }}{{ m.nome }}</a>
+    {% else %}
+      <span class="side-vazio">Nenhum módulo publicado ainda.</span>
+    {% endfor %}
+    <div class="side-sep"></div>
+    <a class="side-link" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">{{ ic('arrow_back') }}Voltar à empresa</a>
+  </aside>
+  <section class="mod-main op-main">
+    {% block op_content %}{% endblock %}
+  </section>
+</div>
+{% endblock %}

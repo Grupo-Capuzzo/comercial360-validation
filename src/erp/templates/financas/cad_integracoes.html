@@ -1,0 +1,165 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Integrações (API){% endblock %}
+{% block fin_conteudo %}
+<div class="fin-head"><div><div class="eyebrow-line">Cadastros · somente administradores</div><h1>Integrações (API)</h1>
+  <p>Conecte o ERP a outros sistemas para que as informações entrem sozinhas, sem digitação.</p></div></div>
+
+<form method="post" class="api-card fin-box" id="f-api" autocomplete="off">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <header class="api-head">
+    <div class="api-logo">Omie</div>
+    <div><h3>Omie ERP</h3><small>Traz o que está <b>conciliado</b> no Omie: recebimentos, pagamentos e transferências de cada conta, com categorias e clientes/fornecedores.</small></div>
+    <div class="api-st" id="api-st">
+      {% if rodando %}<span class="pr-st aviso">sincronizando…</span>
+      {% elif cfg.status == 'ok' %}<span class="pr-st ok">conectado</span>
+      {% elif cfg.status == 'erro' %}<span class="pr-st risco">erro</span>
+      {% else %}<span class="pr-st neutro">não configurado</span>{% endif %}
+      <small>{% if cfg.ultima_sync %}última: {{ data_br(cfg.ultima_sync[:10]) }} {{ cfg.ultima_sync[11:16] }}{% endif %}
+        {% if cfg.ativo and cfg.proxima_sync %} · próxima: {{ data_br(cfg.proxima_sync[:10]) }} {{ cfg.proxima_sync[11:16] }}{% endif %}</small>
+    </div>
+  </header>
+  {% if cfg.mensagem and cfg.mensagem.startswith('ADDON:') %}
+  <div class="api-addon" id="api-msg">
+    <b>A API do Omie ainda não está liberada nesta conta.</b>
+    <p>O Omie só permite que outros sistemas leiam os dados depois que o administrador da conta contrata o add-on
+      <b>“APIs Omie”</b> na Omie.Store (hoje R$ 49,90/mês por aplicativo, cobrado na mensalidade do Omie). Sem ele, qualquer integração recebe essa mesma recusa —
+      não é um problema da chave nem do nosso sistema.</p>
+    <p>Para conferir se já está contratado: no Omie, <i>Meus Aplicativos</i> → engrenagem do app → <i>Resumo do App</i> →
+      “Adicionais contratados na Omie.Store” deve mostrar <b>APIs Omie – Plano Padrão</b>.</p>
+    <a class="fin-link" href="https://store.omie.com.br/apps/apis-omie" target="_blank" rel="noopener">Abrir a página do add-on na Omie.Store ↗</a>
+  </div>
+  {% elif cfg.mensagem %}<p class="api-msg {{ 'erro' if cfg.status == 'erro' }}" id="api-msg">{{ cfg.mensagem }}</p>{% endif %}
+
+  <div class="api-grid">
+    <section>
+      <div class="pe-sec">Acesso <small>Omie → Configurações → Aplicativos (Desenvolvedor) → chave de integração</small></div>
+      <label class="lbl">App Key</label>
+      <input class="inp mono" name="app_key" placeholder="{{ mascarar(cfg.app_key) if cfg.app_key else 'cole a App Key' }}">
+      <label class="lbl">App Secret</label>
+      <input class="inp mono" name="app_secret" type="password" placeholder="{{ mascarar(cfg.app_secret) if cfg.app_secret else 'cole o App Secret' }}">
+      <p class="co-dica">Por segurança a chave não é mostrada depois de salva. Deixe em branco para manter a atual.</p>
+
+      <div class="pe-sec">O que trazer</div>
+      <div class="fin-2col">
+        <div><label class="lbl">Histórico a partir de</label><input class="inp" type="date" name="data_inicial" value="{{ cfg.data_inicial }}"></div>
+        <div><label class="lbl">Reprocessar nas atualizações</label>
+          <select class="inp" name="janela_dias" id="api-janela">
+            <option value="0" {{ 'selected' if not cfg.janela_dias }}>Manualmente (pelo botão)</option>
+            {% for n in [30, 60, 90, 180] %}<option value="{{ n }}" {{ 'selected' if cfg.janela_dias == n }}>últimos {{ n }} dias</option>{% endfor %}</select></div>
+      </div>
+      <div class="api-rep">
+        <div><label class="lbl">Reprocessar de</label><input class="inp" type="date" name="rep_de" value="{{ rep_de }}"></div>
+        <div><label class="lbl">até</label><input class="inp" type="date" name="rep_ate" value="{{ hoje_iso }}"></div>
+        <button class="btn-pill outline fin-btn" name="acao" value="reprocessar" {{ 'disabled' if rodando or not cfg.app_key }}>{{ ic('autorenew') }} Reprocessar período</button>
+      </div>
+      <p class="co-dica" id="api-janela-dica">Em <b>Manualmente</b>, a atualização automática só traz a última semana; períodos antigos (alterações e
+        desconciliações feitas no Omie) entram quando você clicar em <b>Reprocessar período</b>.</p>
+      <label class="co-chk"><input type="checkbox" name="importar_clientes" value="1" {{ 'checked' if cfg.importar_clientes }}>
+        <span><b>Cadastro completo de clientes e fornecedores</b><small>Além dos que aparecem no extrato, traz e-mail, telefone e cidade.</small></span></label>
+      <label class="co-chk"><input type="checkbox" name="criar_contas" value="1" {{ 'checked' if cfg.criar_contas }}>
+        <span><b>Criar aqui as contas que ainda não existem</b><small>Contas do Omie sem ligação viram contas novas no ERP, com o saldo do Omie.</small></span></label>
+    </section>
+
+    <section>
+      <div class="pe-sec">Atualização automática</div>
+      <label class="api-toggle"><input type="checkbox" name="ativo" value="1" {{ 'checked' if cfg.ativo }}>
+        <span class="api-sw"></span><span><b>Atualizar sozinho</b><small>enquanto o app estiver aberto neste computador</small></span></label>
+      <label class="lbl">A cada</label>
+      <select class="inp" name="intervalo_horas" style="max-width:220px">{% for h in INTERVALOS %}<option value="{{ h }}" {{ 'selected' if cfg.intervalo_horas == h }}>{{ h }} hora{{ 's' if h > 1 }}</option>{% endfor %}</select>
+
+      <div class="pe-sec">Importado até agora</div>
+      <div class="vg-linhas">
+        <div><span>Lançamentos conciliados</span><b>{{ (totais.n or 0) - (totais.transf or 0) }}</b></div>
+        <div><span>Transferências entre contas</span><b>{{ totais.transf or 0 }}</b></div>
+        <div><span>Histórico completo</span><b>{{ 'sim, desde ' ~ data_br(cfg.data_inicial) if cfg.carga_completa else 'ainda não' }}</b></div>
+      </div>
+    </section>
+  </div>
+
+  {% if contas_omie %}
+  <div class="pe-sec">Ligação das contas <small>cada conta do Omie com a conta do ERP onde os movimentos vão entrar</small></div>
+  <table class="pr-tabela api-contas">
+    <thead><tr><th>Conta no Omie</th><th>Banco · agência · conta</th><th>Conta no ERP</th></tr></thead>
+    <tbody>
+    {% for c in contas_omie %}
+      <tr class="{{ 'gt-inativo' if c.inativa }}"><td><b>{{ c.nome }}</b>{% if c.inativa %} <small>(inativa no Omie)</small>{% endif %}</td>
+        <td class="mono">{{ c.banco }} · {{ c.agencia }} · {{ c.numero }}</td>
+        <td><select class="inp" name="conta_{{ c.id }}">
+          <option value="">{{ 'Criar conta nova automaticamente' if cfg.criar_contas else '— não ligar —' }}</option>
+          <option value="0" {{ 'selected' if c.local_id == 0 }}>Não importar esta conta</option>
+          {% for x in contas %}<option value="{{ x.id }}" {{ 'selected' if c.local_id == x.id }}>{{ x.nome }}</option>{% endfor %}
+        </select></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="co-dica">Ao ligar a uma conta que já existe, o saldo inicial dela passa a ser o saldo do Omie no dia anterior ao início do histórico,
+    para o saldo final bater com o do Omie. Movimentos digitados à mão nessa conta continuam e podem duplicar.</p>
+  {% endif %}
+
+  <div class="api-acoes">
+    <button class="btn-pill outline fin-btn" name="acao" value="testar">{{ fic('conciliar') }} Testar conexão</button>
+    <button class="btn-pill outline fin-btn" name="acao" value="sincronizar" {{ 'disabled' if rodando or not cfg.app_key }}>{{ ic('autorenew') }} Sincronizar agora</button>
+    <button class="btn-pill outline fin-btn" name="acao" value="completa" {{ 'disabled' if rodando or not cfg.app_key }}
+      onclick="return confirm('Reprocessar todo o histórico desde {{ data_br(cfg.data_inicial) }}? Pode levar alguns minutos.')">Reprocessar tudo</button>
+    <button class="btn-pill fin-btn" name="acao" value="salvar">{{ ic('check') }} Salvar</button>
+  </div>
+</form>
+
+<section class="api-card fin-box api-web" style="margin-top:1rem">
+  <header class="api-head">
+    <div class="api-logo">Omie</div>
+    <div><h3>Omie pelo navegador <span class="pr-st ok">sem custo</span></h3>
+      <small>Não precisa do add-on pago: um favorito lê a tela do Omie com o <b>seu</b> login e traz o que está conciliado para cá, com as mesmas regras da API (sem duplicar, atualiza o que mudou e remove o que foi desconciliado).</small></div>
+  </header>
+  <div class="api-grid">
+    <section>
+      <div class="pe-sec">1 · Instalar o favorito (uma vez só)</div>
+      <p class="co-dica">Mostre a barra de favoritos do Chrome (<b>Ctrl+Shift+B</b>) e <b>arraste</b> o botão abaixo para ela.</p>
+      <a class="btn-pill fin-btn api-fav" href="{{ favorito }}" onclick="alert('Arraste este botão para a barra de favoritos e use-o dentro do Omie.'); return false;">{{ ic('autorenew') }} Enviar ao ERP</a>
+    </section>
+    <section>
+      <div class="pe-sec">2 · Sempre que quiser atualizar</div>
+      <ol class="api-passos">
+        <li>No Omie (app <b>CAPUZZO NEGOCIOS</b>), abra <b>Finanças → Movimentação da Conta Corrente</b>.</li>
+        <li>Em Conta Corrente escolha <b>Todas as Contas Correntes</b>, informe o período e clique em <b>Atualizar</b>.</li>
+        <li>Clique no favorito <b>Enviar ao ERP</b>. Ele lê todas as páginas (aparece o andamento no canto da tela) e, no fim, clique em <b>Clique aqui para enviar ao ERP</b>.</li>
+      </ol>
+      <p class="co-dica">Só o período lido é conferido: o que sumiu ou foi desconciliado nele é removido daqui; o resto não muda.
+        Você precisa estar logado no ERP neste mesmo navegador.</p>
+    </section>
+  </div>
+</section>
+
+<section class="vg-box" style="margin-top:1rem">
+  <header><h3>Histórico de sincronizações</h3><span>{{ logs|length }} mais recentes</span></header>
+  <table class="pr-tabela api-log">
+    <thead><tr><th>Início</th><th>Origem</th><th>Situação</th><th>Resultado</th><th class="num">Novos</th><th class="num">Atualiz.</th><th class="num">Removidos</th><th></th></tr></thead>
+    <tbody>
+    {% for l in logs %}{% set c = l.det.contagem or {} %}
+      <tr><td>{{ data_br(l.inicio[:10]) }} {{ l.inicio[11:16] }}</td><td>{{ l.origem }}</td>
+        <td>{% if l.status == 'ok' %}<span class="pr-st ok">ok</span>{% elif l.status == 'erro' %}<span class="pr-st risco">erro</span>{% else %}<span class="pr-st aviso">{{ l.status }}</span>{% endif %}</td>
+        <td class="api-res">{{ l.resumo }}</td><td class="num">{{ c.novos or 0 }}</td><td class="num">{{ c.atualizados or 0 }}</td><td class="num">{{ c.removidos or 0 }}</td>
+        <td><details class="api-det"><summary>detalhes</summary>
+          <div><b>Contagem:</b> {{ c.recebimentos or 0 }} recebimento(s), {{ c.pagamentos or 0 }} pagamento(s), {{ c.transferencias or 0 }} transferência(s),
+            {{ c.nao_conciliadas or 0 }} linha(s) não conciliada(s) ignorada(s), {{ c.categorias or 0 }} categoria(s), {{ c.clientes or 0 }} cadastro(s), {{ c.chamadas or 0 }} chamada(s) à API.</div>
+          {% for a in l.det.chamadas or [] %}<pre>{{ a.call or 'erro' }} {{ (a.param|tojson) if a.param }}
+{{ a.amostra or a.erro }}</pre>{% endfor %}
+        </details></td></tr>
+    {% else %}<tr><td colspan="8" class="fin-vazio">Nenhuma sincronização ainda.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if rodando %}
+<script>
+(function () {
+  var t = setInterval(function () {
+    fetch('{{ url_for("financas.cad_integracoes_status", slug=empresa.slug) }}', {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+      var m = document.getElementById('api-msg'); if (m) m.textContent = j.mensagem || '';
+      if (!j.rodando && j.status !== 'rodando') { clearInterval(t); location.reload(); }
+    }).catch(function () {});
+  }, 4000);
+})();
+</script>
+{% endif %}
+{% endblock %}

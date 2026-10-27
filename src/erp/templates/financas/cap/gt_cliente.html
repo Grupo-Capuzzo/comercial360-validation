@@ -1,0 +1,89 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}GT · {{ c.nome if c else 'Novo cliente' }}{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho(c.nome if c else 'Novo cliente', ('Cliente desde ' ~ rotulo(hist[-1].competencia) if hist else 'Cadastro do cliente da Gestão Tática'), 'Gestão Tática') %}
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.gt_clientes', slug=empresa.slug) }}">{{ ic('arrow_back') }} Clientes</a>
+{% endcall %}
+
+{% if c %}
+<div class="vg-kpis">
+  <div class="vg-kpi escuro"><small>Saldo atual</small><b>{{ reais(ult.saldo_final if ult and ult.competencia == uc else 0) }}</b><em>{{ rotulo(ult.competencia) if ult else '—' }}</em></div>
+  <div class="vg-kpi"><small>Aportado</small><b>{{ reais(tot.aporte) }}</b><em>total</em></div>
+  <div class="vg-kpi"><small>Saques recebidos</small><b>{{ reais(tot.saque) }}</b><em>rendimentos pagos</em></div>
+  <div class="vg-kpi"><small>Rendimento líquido</small><b>{{ reais(tot.resultado_liquido) }}</b><em>bruto {{ reais(tot.resultado_bruto) }}</em></div>
+  <div class="vg-kpi"><small>Taxa de gestão</small><b>{{ reais(tot.taxa_gestao) }}</b><em>+ {{ reais(tot.tarifa) }} de tarifas</em></div>
+  <div class="vg-kpi"><small>Rentabilidade média</small><b>{{ pct(rent12) }}</b><em>bruta, últimos 12 meses</em></div>
+</div>
+{% endif %}
+
+<div class="co-grid co-grid-ed">
+  <section class="vg-box">
+    {% if cong %}
+      <div class="gt-cong-cli">{{ fic('relogio') }}<div><b>Congelado aguardando saque</b>
+        {% for p in cong %}<span>{{ reais(p.valor) }} · congelado em {{ data_br(p.congelado_em.isoformat()) }} · saque em {{ data_br(p.libera_em.isoformat()) }}
+          ({{ 'faltam ' ~ p.dias ~ ' dias' if p.dias > 0 else 'liberado' }})</span>{% endfor %}</div></div>
+    {% endif %}
+    {% if serie|length > 1 %}
+      {% set mx = serie|map(attribute=1)|max %}{% set mn = serie|map(attribute=1)|min %}
+      <header><h3>Saldo da banca</h3><span>últimos {{ serie|length }} meses</span></header>
+      <svg class="gt-graf" viewBox="0 0 600 160" preserveAspectRatio="none">
+        {% set n = serie|length %}
+        <polyline fill="none" stroke="var(--accent, #C7A955)" stroke-width="2.5" vector-effect="non-scaling-stroke"
+          points="{% for s in serie %}{{ 600 * loop.index0 / (n - 1) }},{{ 150 - 140 * ((s[1] - mn) / ((mx - mn) or 1)) }} {% endfor %}"/>
+      </svg>
+      <div class="gt-graf-x"><span>{{ rotulo(serie[0][0], True) }}</span><span>{{ reais(mn) }} – {{ reais(mx) }}</span><span>{{ rotulo(serie[-1][0], True) }}</span></div>
+    {% endif %}
+    <header style="margin-top:.6rem"><h3>Histórico mensal</h3><span>igual à aba do cliente na planilha</span></header>
+    <div class="mv-wrap">
+    <table class="pr-tabela gt-hist">
+      <thead><tr><th>Mês</th><th class="num">Banca inicial</th><th class="num">Aporte</th><th class="num">Saque</th><th class="num">Congelado</th><th class="num">Retirada</th>
+        <th class="num">Peso</th><th class="num">Montante × peso</th><th class="num">% banca</th><th class="num">Bruto</th><th class="num">Rentab.</th><th class="num">Taxa</th><th class="num">Tarifa</th><th class="num">Líquido</th><th class="num">Saldo final</th></tr></thead>
+      <tbody>
+      {% for h in hist %}
+        <tr class="clic {{ '' if h.calculado else 'gt-pend' }}" onclick="location.href='{{ url_for('financas.gt_mes', slug=empresa.slug, comp=h.competencia) }}'">
+          <td><b>{{ rotulo(h.competencia, True) }}</b></td><td class="num">{{ reais(h.banca_inicial) }}</td>
+          <td class="num">{{ (reais(h.aporte) ~ (' (d' ~ h.dia_aporte ~ ')' if h.dia_aporte else '')) if h.aporte else '—' }}</td>
+          <td class="num">{{ (reais(h.saque) ~ (' (d' ~ h.dia_saque ~ ')' if h.dia_saque else '')) if h.saque else '—' }}</td>
+          <td class="num">{{ (reais(h.congelado) ~ (' (d' ~ h.dia_congel ~ ')' if h.dia_congel else '')) if h.congelado else '—' }}</td>
+          <td class="num">{{ (reais(h.retirada) ~ (' (d' ~ h.dia_retirada ~ ')' if h.dia_retirada else '')) if h.retirada else '—' }}</td><td class="num">{{ '%g'|format(h.peso or 0) }}</td>
+          <td class="num">{{ reais(h.base_calculo) if h.base_calculo is not none else '—' }}</td>
+          <td class="num">{{ pct(h.percentual) if h.percentual is not none else '—' }}</td><td class="num">{{ reais(h.resultado_bruto) if h.resultado_bruto is not none else '—' }}</td>
+          <td class="num">{{ pct(h.rentab) if h.rentab is not none else '—' }}</td><td class="num">{{ reais(h.taxa_gestao) if h.taxa_gestao is not none else '—' }}</td>
+          <td class="num">{{ reais(h.tarifa) if h.tarifa is not none else '—' }}</td><td class="num">{{ reais(h.resultado_liquido) if h.resultado_liquido is not none else '—' }}</td>
+          <td class="num"><b>{{ reais(h.saldo_final) if h.saldo_final is not none else '—' }}</b></td></tr>
+      {% else %}<tr><td colspan="15" class="fin-vazio">Sem movimentos.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <form method="post" class="fin-box fin-form co-lado">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <h3>{{ 'Parâmetros' if c else 'Cadastro' }}</h3>
+    <label class="lbl">Nome *</label><input class="inp" name="nome" required value="{{ c.nome if c else '' }}">
+    <div class="pe-3col">
+      <div><label class="lbl">Peso</label><input class="inp num" name="peso" value="{{ ('%g'|format(c.peso if c else 1)).replace('.', ',') }}"></div>
+      <div><label class="lbl">Taxa gestão %</label><input class="inp num" name="taxa" value="{{ ('%g'|format((c.taxa_pct if c else 0.25) * 100)).replace('.', ',') }}"></div>
+      <div><label class="lbl">Tarifa R$</label><input class="inp num" name="tarifa" value="{{ ('%g'|format(c.tarifa if c else 67)).replace('.', ',') }}"></div>
+    </div>
+    <div class="fin-2col">
+      <div><label class="lbl">Dia do saque</label><input class="inp" name="dia_saque" value="{{ c.dia_saque if c else 10 }}"></div>
+      <div><label class="lbl">Situação</label><select class="inp" name="ativo"><option value="1" {{ 'selected' if not c or c.ativo }}>Ativo</option><option value="0" {{ 'selected' if c and not c.ativo }}>Inativo</option></select></div>
+    </div>
+    <label class="lbl">É cotista dos Condomínios?</label>
+    <select class="inp" name="client_id"><option value="">— não —</option>{% for x in cotistas %}<option value="{{ x.id }}" {{ 'selected' if c and c.client_id == x.id }}>{{ x.full_name }}</option>{% endfor %}</select>
+    {% if not c %}
+      <div class="pe-sec">Entrada</div>
+      <div class="pe-3col">
+        <div><label class="lbl">Mês</label><input class="inp" type="month" name="comp" value="{{ request.args.get('comp') or trabalho }}"></div>
+        <div><label class="lbl">Dia do aporte</label><input class="inp" name="dia_aporte"></div>
+        <div><label class="lbl">Aporte R$</label><input class="inp num" name="aporte"></div>
+      </div>
+    {% endif %}
+    <label class="lbl">Observações</label><textarea class="inp" name="obs" rows="2">{{ c.obs if c and c.obs else '' }}</textarea>
+    <p class="co-dica">Peso: 1 = participa com a banca inteira; 0,9 = 90%. Os parâmetros novos valem nos próximos cálculos — os meses já calculados não mudam.</p>
+    <button class="btn-pill fin-btn" style="margin-top:.6rem">{{ ic('check') }} {{ 'Salvar' if c else 'Cadastrar' }}</button>
+  </form>
+</div>
+{% endblock %}

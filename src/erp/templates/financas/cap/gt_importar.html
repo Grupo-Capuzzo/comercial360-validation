@@ -1,0 +1,46 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}GT · Importar planilha{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Importar planilha da GT', 'Traz clientes, meses e resultados da planilha “NOVO MODELO GT.xlsx”.', 'Gestão Tática') %}
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.tatica_painel', slug=empresa.slug) }}">{{ ic('arrow_back') }} Painel</a>
+{% endcall %}
+{% if encerrada %}
+<section class="vg-box gt-vazio">
+  <h3>{{ ic('lock') }} Planilha encerrada</h3>
+  <p class="fin-sub">A Gestão Tática agora é feita só no sistema. A importação está bloqueada para não sobrescrever os meses apurados aqui.</p>
+  <form method="post" action="{{ url_for('financas.gt_planilha', slug=empresa.slug, acao='reativar') }}" onsubmit="return confirm('Liberar a importação da planilha de novo?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn-pill outline fin-btn">Liberar importação</button></form>
+</section>
+{% else %}
+{% if ja_tem %}
+<section class="vg-box gt-encerrar">
+  <div><b>Já importou e conferiu?</b> Encerre a planilha: daqui em diante a apuração é feita só no sistema e a importação fica bloqueada.</div>
+  <form method="post" action="{{ url_for('financas.gt_planilha', slug=empresa.slug, acao='encerrar') }}" onsubmit="return confirm('Encerrar a planilha? A importação fica bloqueada (dá para liberar depois).')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn-pill fin-btn">{{ ic('lock') }} Encerrar planilha</button></form>
+</section>
+{% endif %}
+<div class="co-grid">
+  <form method="post" enctype="multipart/form-data" class="fin-box fin-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <h3 style="margin-top:0">Escolha o arquivo</h3>
+    <input class="inp" type="file" name="arquivo" accept=".xlsx,.xlsm" required>
+    {% if ja_tem %}<p class="co-aviso">Já existem {{ ja_tem }} registros mensais. Importar de novo <b>atualiza</b> os meses que estão na planilha
+      (mesmo cliente e mês) e mantém os meses criados aqui no app que não existem na planilha.</p>{% endif %}
+    <button class="btn-pill fin-btn" style="margin-top:.8rem">{{ fic('abrir') }} Importar</button>
+  </form>
+  <section class="fin-box">
+    <h3 style="margin-top:0">O que é importado</h3>
+    <ul class="gt-lista">
+      <li><b>Cada aba de cliente</b> (FLAVIA, LUCIANA…) vira um cliente, com o nome completo que está na aba RESUMO / PERCENTUAL DA BANCA.</li>
+      <li><b>Cada linha (competência)</b> vira um mês do cliente: banca inicial, aporte, saque, retirada, congelamento (com os dias), peso, base,
+        % da banca, resultado bruto, tarifa, taxa de gestão, líquido e saldo final — <b>com os valores exatamente como o Excel calculou</b>.</li>
+      <li><b>Aba ADM</b>: resultado de cada origem (XP, XM, títulos privados, complemento…) e o valor repassado.</li>
+      <li>Abas <b>vermelhas</b> = investidores inativos; as demais entram como ativos.</li>
+      <li>Meses totalmente calculados ficam <b>fechados</b>. Linhas só com lançamentos (ex.: retirada já marcada para o mês seguinte) ficam abertas.</li>
+      <li>Abas RESUMO e PERCENTUAL DA BANCA não precisam ser importadas: o app monta esses totais sozinho.</li>
+    </ul>
+  </section>
+</div>
+{% endif %}
+{% endblock %}

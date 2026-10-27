@@ -1,0 +1,32 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}GT · Clientes{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Clientes da Gestão Tática', 'Banca atual, aportes, rendimentos pagos e parâmetros de cada cliente.', 'Gestão Tática') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.gt_cliente', slug=empresa.slug) }}">{{ fic('add') }} Novo cliente</a>
+{% endcall %}
+<section class="vg-box">
+  <header><h3>{{ lista|selectattr('ativo')|list|length }} ativo(s) · {{ lista|length }} no total</h3><span>Patrimônio {{ reais(total) }}{{ ' em ' ~ rotulo(uc) if uc }}</span></header>
+  <div class="mv-wrap">
+  <table class="pr-tabela">
+    <thead><tr><th>Cliente</th><th>Situação</th><th>Desde</th><th class="num">Saldo atual</th><th class="num">% da banca</th><th class="num">Aportes</th>
+      <th class="num">Saques</th><th class="num">Rendimento líquido</th><th class="num">Taxa paga</th><th class="num">Congelado a pagar</th><th class="num">Peso · taxa · tarifa</th></tr></thead>
+    <tbody>
+    {% for c in lista %}
+      <tr class="clic {{ '' if c.ativo else 'gt-inativo' }}" onclick="location.href='{{ url_for('financas.gt_cliente', slug=empresa.slug, cid=c.id) }}'">
+        <td><b>{{ c.nome }}</b></td>
+        <td>{% if c.ativo %}<span class="pr-st ok">Ativo</span>{% else %}<span class="pr-st neutro">Inativo</span>{% endif %}</td>
+        <td>{{ rotulo(c.primeiro, True) if c.primeiro else '—' }}</td>
+        <td class="num"><b>{{ reais(c.saldo) if c.saldo else '—' }}</b></td>
+        <td class="num">{{ pct(c.ult.percentual) if c.saldo and c.ult else '—' }}</td>
+        <td class="num">{{ reais(c.aportes) }}</td><td class="num">{{ reais(c.saques) }}</td><td class="num">{{ reais(c.liquido) }}</td>
+        <td class="num">{{ reais(c.taxa_total) }}</td>
+        <td class="num">{{ reais(c.congelado_pagar) if (c.congelado_pagar or 0) > 0.5 else '—' }}</td>
+        <td class="num">{{ '%g'|format(c.peso) }} · {{ pct(c.taxa_pct, 0) }} · {{ reais(c.tarifa) }}</td>
+      </tr>
+    {% else %}<tr><td colspan="11" class="fin-vazio">Nenhum cliente. <a href="{{ url_for('financas.gt_importar', slug=empresa.slug) }}">Importe a planilha</a>.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

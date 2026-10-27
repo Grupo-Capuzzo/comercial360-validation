@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block title %}Configurações — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">⚙️</div>
+  <div class="page-header-title">Configurações</div>
+  <div class="page-header-sub">Parâmetros do sistema e integrações</div>
+</div>
+
+<!-- ═══ Integração Gmail ═══ -->
+<div class="section-label" style="color:#d4af37;">✉️ Status da integração Gmail</div>
+<div class="card" style="margin-bottom:24px;">
+  <div class="detail-grid" style="margin-bottom:18px;">
+    <div>
+      <div class="detail-item-label">Credenciais encontradas</div>
+      <div class="detail-item-value">
+        {% if gmail_status.credentials_found %}
+          <span class="badge badge-active">✓ Sim</span>
+        {% else %}
+          <span class="badge badge-inactive">✗ Não</span>
+        {% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="detail-item-label">Token autorizado</div>
+      <div class="detail-item-value">
+        {% if gmail_status.token_valid %}
+          <span class="badge badge-active">✓ Sim</span>
+        {% elif gmail_status.token_found %}
+          <span class="badge badge-pending">⚠ Expirado</span>
+        {% else %}
+          <span class="badge badge-inactive">✗ Não</span>
+        {% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="detail-item-label">Método de integração</div>
+      <div class="detail-item-value">
+        <span class="badge badge-active">{{ gmail_status.auth_method or 'REST OAuth manual' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-box" style="margin-bottom:16px;">
+    ℹ️ Integração Gmail: OAuth REST manual, sem bibliotecas Google externas.
+  </div>
+
+  {% if not gmail_status.credentials_found %}
+  <div class="note-box" style="margin-bottom:16px;color:#f87171;border-color:rgba(239,68,68,0.25);">
+    ⚠️ Arquivo config/gmail_credentials.json não encontrado. Configure
+    <span class="text-mono">config/gmail_credentials.json</span>.<br>
+    Baixe o arquivo de credenciais OAuth (tipo "App para computador") no
+    <strong>Google Cloud Console</strong> → APIs e serviços → Credenciais, e salve exatamente
+    nesse caminho, dentro da pasta do projeto.
+  </div>
+  {% elif not gmail_status.token_valid %}
+  <div class="note-box" style="margin-bottom:16px;">
+    ℹ️ Gmail ainda não autenticado. Autentique com sua conta Gmail para poder criar rascunhos
+    de e-mail diretamente na tela Vencimentos e Retiradas. Nenhum e-mail é enviado no processo.
+  </div>
+  {% else %}
+  <div class="note-box" style="margin-bottom:16px;color:#4ade80;border-color:rgba(74,222,128,0.2);">
+    ✓ Gmail autenticado. Os rascunhos criados na tela Vencimentos e Retiradas sairão da sua
+    própria caixa de e-mail — nada é enviado automaticamente, apenas o rascunho fica pronto
+    para revisão no Gmail.
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('configuracoes_gmail_autenticar') }}">
+    <button type="submit" class="btn btn-primary"
+            {{ 'disabled' if not gmail_status.credentials_found else '' }}>
+      🔐 {{ 'Reautenticar Gmail' if gmail_status.token_valid else 'Autenticar Gmail' }}
+    </button>
+  </form>
+  <p class="text-dim" style="font-size:12px;margin-top:10px;">
+    Ao clicar, uma janela do navegador será aberta para você fazer login e autorizar o acesso
+    — somente para <strong>criar rascunhos</strong> (escopo
+    <span class="text-mono">gmail.compose</span>). O app nunca envia e-mails automaticamente,
+    e o conteúdo do token de acesso nunca é exibido na tela.
+  </p>
+</div>
+
+<!-- ═══ Configuração Banco Inter - Remessa CNAB ═══ -->
+<div class="section-label" style="color:#d4af37;">🏦 Configuração Banco Inter - Remessa CNAB</div>
+<div class="card" style="margin-bottom:24px;">
+  <div class="detail-grid" style="margin-bottom:18px;">
+    <div>
+      <div class="detail-item-label">Código do banco</div>
+      <div class="detail-item-value text-mono">077</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Próximo sequencial de remessa</div>
+      <div class="detail-item-value text-mono">{{ bank_inter_config.remittance_sequence if bank_inter_config else 1 }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Cadastro completo</div>
+      <div class="detail-item-value">
+        {% if bank_inter_config and bank_inter_config.company_name and bank_inter_config.company_document and bank_inter_config.account_number and bank_inter_config.account_digit %}
+          <span class="badge badge-active">✓ Sim</span>
+        {% else %}
+          <span class="badge badge-inactive">✗ Incompleto</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="note-box" style="margin-bottom:16px;">
+    ℹ️ Esses dados identificam a empresa pagadora no arquivo de remessa CNAB240 (Pix) do Inter,
+    usado para agendar o pagamento dos rendimentos de Construção Civil e Saúde. O sequencial de
+    remessa só avança quando um arquivo é gerado com sucesso. Enquanto os campos obrigatórios
+    abaixo não estiverem preenchidos, a geração do arquivo bancário fica bloqueada.
+  </div>
+
+  <form method="post" action="{{ url_for('configuracoes_banco_inter_salvar') }}">
+    <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:14px;">
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Nome da empresa <span style="color:#f87171;">*</span></label>
+        <input type="text" name="company_name" class="form-control"
+               value="{{ bank_inter_config.company_name if bank_inter_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">CNPJ da empresa <span style="color:#f87171;">*</span></label>
+        <input type="text" name="company_document" class="form-control"
+               value="{{ bank_inter_config.company_document if bank_inter_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Agência</label>
+        <input type="text" name="agency" class="form-control"
+               value="{{ bank_inter_config.agency if bank_inter_config else '00001' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Dígito agência</label>
+        <input type="text" name="agency_digit" class="form-control" maxlength="1"
+               value="{{ bank_inter_config.agency_digit if bank_inter_config else '9' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Conta <span style="color:#f87171;">*</span></label>
+        <input type="text" name="account_number" class="form-control"
+               value="{{ bank_inter_config.account_number if bank_inter_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Dígito conta <span style="color:#f87171;">*</span></label>
+        <input type="text" name="account_digit" class="form-control" maxlength="1"
+               value="{{ bank_inter_config.account_digit if bank_inter_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Endereço (rua/av)</label>
+        <input type="text" name="address_street" class="form-control"
+               value="{{ bank_inter_config.address_street if bank_inter_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Número</label>
+        <input type="text" name="address_number" class="form-control"
+               value="{{ bank_inter_config.address_number if bank_inter_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Complemento</label>
+        <input type="text" name="address_complement" class="form-control"
+               value="{{ bank_inter_config.address_complement if bank_inter_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Cidade</label>
+        <input type="text" name="city" class="form-control"
+               value="{{ bank_inter_config.city if bank_inter_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">CEP</label>
+        <input type="text" name="zip_code" class="form-control"
+               value="{{ bank_inter_config.zip_code if bank_inter_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">UF</label>
+        <input type="text" name="state" class="form-control" maxlength="2"
+               value="{{ bank_inter_config.state if bank_inter_config else '' }}">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">💾 Salvar dados do Inter</button>
+  </form>
+</div>
+
+<!-- ═══ Configuração Banco Itaú (Agronegócio) ═══ -->
+<div class="section-label" style="color:#d4af37;">🏦 Configuração Banco Itaú - Remessa CNAB (Agronegócio)</div>
+<div class="card" style="margin-bottom:24px;">
+  <div class="detail-grid" style="margin-bottom:18px;">
+    <div>
+      <div class="detail-item-label">Código do banco</div>
+      <div class="detail-item-value text-mono">341</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Próximo sequencial de remessa</div>
+      <div class="detail-item-value text-mono">{{ bank_itau_config.remittance_sequence if bank_itau_config else 1 }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Cadastro completo</div>
+      <div class="detail-item-value">
+        {% if bank_itau_config and bank_itau_config.company_name and bank_itau_config.company_document and bank_itau_config.agency and bank_itau_config.account_number and bank_itau_config.account_digit %}
+          <span class="badge badge-active">✓ Sim</span>
+        {% else %}
+          <span class="badge badge-inactive">✗ Incompleto</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="note-box" style="margin-bottom:16px;">
+    ℹ️ Esses dados identificam a empresa pagadora no arquivo de remessa CNAB240 SISPAG do Itaú,
+    usado para agendar o pagamento por dados bancários (crédito em conta corrente) dos rendimentos
+    do Agronegócio. O sequencial de remessa só avança quando um arquivo é gerado com sucesso.
+    Enquanto os campos obrigatórios abaixo não estiverem preenchidos, a geração do arquivo bancário
+    fica bloqueada.
+  </div>
+
+  <form method="post" action="{{ url_for('configuracoes_banco_itau_salvar') }}">
+    <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:14px;">
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Nome da empresa <span style="color:#f87171;">*</span></label>
+        <input type="text" name="company_name" class="form-control"
+               value="{{ bank_itau_config.company_name if bank_itau_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">CNPJ da empresa <span style="color:#f87171;">*</span></label>
+        <input type="text" name="company_document" class="form-control"
+               value="{{ bank_itau_config.company_document if bank_itau_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Agência <span style="color:#f87171;">*</span></label>
+        <input type="text" name="agency" class="form-control"
+               value="{{ bank_itau_config.agency if bank_itau_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Dígito agência</label>
+        <input type="text" name="agency_digit" class="form-control" maxlength="1"
+               value="{{ bank_itau_config.agency_digit if bank_itau_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Conta <span style="color:#f87171;">*</span></label>
+        <input type="text" name="account_number" class="form-control"
+               value="{{ bank_itau_config.account_number if bank_itau_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Dígito conta <span style="color:#f87171;">*</span></label>
+        <input type="text" name="account_digit" class="form-control" maxlength="1"
+               value="{{ bank_itau_config.account_digit if bank_itau_config else '' }}">
+      </div>
+      <div class="form-group">
+        <label style="color:#ccc;font-size:13px;font-weight:500;">Convênio/código da empresa no Itaú</label>
+        <input type="text" name="agreement_code" class="form-control"
+               value="{{ bank_itau_config.agreement_code if bank_itau_config else '' }}">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">💾 Salvar dados do Itaú</button>
+  </form>
+
+  <div class="note-box" style="margin-top:16px;color:#f0ad4e;border-color:rgba(240,173,78,0.25);">
+    ⚠️ Este layout segue o padrão público Febraban CNAB240 para pagamento por dados bancários
+    (crédito em conta corrente) que o Itaú documenta seguir no SISPAG — nenhum manual técnico
+    específico do Itaú foi anexado para conferência campo a campo. Rode um arquivo de teste e
+    valide no ambiente de homologação do Itaú (ou com o gerente da conta) antes de transmitir um
+    arquivo real.
+  </div>
+</div>
+
+<!-- ═══ Parâmetros dos condomínios ═══ -->
+<div class="section-label" style="color:#d4af37;">🏛️ Parâmetros dos condomínios</div>
+<div class="table-wrap" style="margin-bottom:24px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Produto</th><th>Taxa padrão</th><th>Dia de pagamento</th>
+        <th>Início do período</th><th>Fim do período</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in conds %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ formatar_percentual(c.default_monthly_rate) }}</td>
+        <td>Dia {{ c.payment_day }}</td>
+        <td>Dia {{ c.accrual_start_day }}</td>
+        <td>Dia {{ c.accrual_end_day }}</td>
+        <td>
+          {% if c.active %}
+            <span class="badge badge-active">Ativo</span>
+          {% else %}
+            <span class="badge badge-inactive">Inativo</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

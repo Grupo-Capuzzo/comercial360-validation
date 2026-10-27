@@ -1,0 +1,49 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Fluxo de caixa {{ ano }}{% endblock %}
+{% block fin_conteudo %}
+<div class="fin-head">
+  <div>
+    <div class="eyebrow-line">Relatórios</div>
+    <h1>Fluxo de caixa</h1>
+    <p>Realizado (pagamentos e recebimentos efetivos) e previsto (em aberto, pelo vencimento), mês a mês.</p>
+  </div>
+  <div class="fin-ano">
+    <a class="fin-seta-mes" href="{{ url_for('financas.rel_fluxo', slug=empresa.slug, ano=ano - 1) }}">‹</a><b>{{ ano }}</b>
+    <a class="fin-seta-mes" href="{{ url_for('financas.rel_fluxo', slug=empresa.slug, ano=ano + 1) }}">›</a>
+  </div>
+</div>
+<section class="fin-box">
+  <div class="fin-leg"><span><i class="ent"></i>Entradas realizadas</span><span><i class="ent prev"></i>Entradas previstas</span>
+    <span><i class="sai"></i>Saídas realizadas</span><span><i class="sai prev"></i>Saídas previstas</span></div>
+  <svg class="fin-barras" viewBox="0 0 1200 260" role="img" aria-label="Fluxo de caixa mensal">
+    {% for m in meses %}
+      {% set x = 20 + loop.index0 * 98 %}
+      {% set he = (m.entradas * 210 / maior) %}{% set hpe = (m.prev_entradas * 210 / maior) %}
+      {% set hs = (m.saidas * 210 / maior) %}{% set hps = (m.prev_saidas * 210 / maior) %}
+      <rect class="ent" x="{{ x }}" y="{{ 225 - he }}" width="36" height="{{ he }}"><title>{{ m.nome }}: entradas {{ moeda(m.entradas) }}</title></rect>
+      <rect class="ent prev" x="{{ x }}" y="{{ 225 - he - hpe }}" width="36" height="{{ hpe }}"><title>{{ m.nome }}: a receber {{ moeda(m.prev_entradas) }}</title></rect>
+      <rect class="sai" x="{{ x + 40 }}" y="{{ 225 - hs }}" width="36" height="{{ hs }}"><title>{{ m.nome }}: saídas {{ moeda(m.saidas) }}</title></rect>
+      <rect class="sai prev" x="{{ x + 40 }}" y="{{ 225 - hs - hps }}" width="36" height="{{ hps }}"><title>{{ m.nome }}: a pagar {{ moeda(m.prev_saidas) }}</title></rect>
+      <text x="{{ x + 38 }}" y="248" text-anchor="middle">{{ m.nome }}</text>
+    {% endfor %}
+    <line x1="10" x2="1190" y1="225" y2="225" class="base"/>
+  </svg>
+</section>
+<div class="fin-tabela-wrap">
+  <table class="fin-tabela fin-rel">
+    <thead><tr><th>Mês</th><th class="num">Entradas</th><th class="num">A receber</th><th class="num">Saídas</th><th class="num">A pagar</th><th class="num">Resultado do mês</th><th class="num">Acumulado</th></tr></thead>
+    <tbody>
+      {% for m in meses %}{% set r = m.entradas + m.prev_entradas - m.saidas - m.prev_saidas %}
+      <tr><td><b>{{ m.nome }}/{{ ano }}</b></td>
+        <td class="num pos">{{ moeda(m.entradas) if m.entradas else '—' }}</td><td class="num">{{ moeda(m.prev_entradas) if m.prev_entradas else '—' }}</td>
+        <td class="num risco">{{ moeda(m.saidas) if m.saidas else '—' }}</td><td class="num">{{ moeda(m.prev_saidas) if m.prev_saidas else '—' }}</td>
+        <td class="num {{ 'neg' if r < 0 }}"><b>{{ moeda(r) if r else '—' }}</b></td><td class="num {{ 'neg' if acum[loop.index0] < 0 }}">{{ moeda(acum[loop.index0]) }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td>Total</td>
+      <td class="num">{{ moeda(meses|sum(attribute='entradas')) }}</td><td class="num">{{ moeda(meses|sum(attribute='prev_entradas')) }}</td>
+      <td class="num">{{ moeda(meses|sum(attribute='saidas')) }}</td><td class="num">{{ moeda(meses|sum(attribute='prev_saidas')) }}</td>
+      <td class="num">{{ moeda(acum[-1]) }}</td><td></td></tr></tfoot>
+  </table>
+</div>
+{% endblock %}

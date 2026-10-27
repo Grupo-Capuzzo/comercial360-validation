@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Calculadora Price — Títulos Privados{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">🧮</div>
+  <div class="page-header-title">Calculadora Price</div>
+  <div class="page-header-sub">Simulação de empréstimo pelo Sistema Price (parcelas fixas) — independente de qualquer empréstimo cadastrado.</div>
+</div>
+
+<div class="card-gold" style="margin-bottom:24px;">
+  <form method="post">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Valor Financiado (R$) *</label>
+        <input type="text" name="principal" value="{{ entrada.get('principal','') }}"
+               class="form-control" required placeholder="30.000,00" data-mask="currency">
+      </div>
+      <div class="form-group">
+        <label>Taxa Mensal (%) *</label>
+        <input type="text" name="monthly_rate" value="{{ entrada.get('monthly_rate','') }}"
+               class="form-control" required placeholder="Ex: 3,5 ou 3,5%">
+      </div>
+      <div class="form-group">
+        <label>Quantidade de Parcelas *</label>
+        <input type="number" name="installments" min="1" value="{{ entrada.get('installments','') }}"
+               class="form-control" required placeholder="12">
+      </div>
+      <div class="form-group">
+        <label>Data da Primeira Parcela *</label>
+        <input type="date" name="first_due_date" value="{{ entrada.get('first_due_date','') }}"
+               class="form-control" required>
+      </div>
+    </div>
+    <div class="page-actions" style="justify-content:flex-start;">
+      <button type="submit" class="btn btn-primary">🧮 Calcular</button>
+    </div>
+  </form>
+</div>
+
+{% if resultado %}
+<div class="metrics-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px;">
+  <div class="metric-card">
+    <div class="metric-value" style="color:#d4af37;">{{ formatar_moeda(resultado.installment_amount) }}</div>
+    <div class="metric-label">Valor da Parcela</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">{{ formatar_moeda(resultado.total_paid) }}</div>
+    <div class="metric-label">Total Pago</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#f0ad4e;">{{ formatar_moeda(resultado.total_interest) }}</div>
+    <div class="metric-label">Total de Juros</div>
+  </div>
+</div>
+
+<div class="page-actions" style="justify-content:flex-start;margin-bottom:16px;">
+  <button type="button" class="btn btn-secondary" onclick="copiarResultado()">📋 Copiar Resultado</button>
+  <a class="btn btn-primary"
+     href="{{ url_for('titulos_privados_emprestimos_novo',
+                       calculation_method='price',
+                       original_amount=resultado.principal,
+                       contracted_amount=resultado.total_paid,
+                       interest_rate_monthly=entrada.get('monthly_rate',''),
+                       installments_count=resultado.installments_count,
+                       first_due_date=resultado.first_due_date) }}">
+    ➕ Gerar Empréstimo a partir desta Simulação
+  </a>
+</div>
+
+<div class="section-label">📋 &nbsp;Tabela Price Completa</div>
+<div class="table-wrap" id="tabela-price">
+  <table>
+    <thead>
+      <tr>
+        <th>Parcela</th><th>Vencimento</th>
+        <th style="text-align:right;">Saldo Inicial</th><th style="text-align:right;">Juros</th>
+        <th style="text-align:right;">Amortização</th><th style="text-align:right;">Parcela</th>
+        <th style="text-align:right;">Saldo Final</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in resultado.schedule %}
+      <tr>
+        <td>{{ row.installment_number }}</td>
+        <td class="text-dim">{{ formatar_data(row.due_date) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(row.opening_balance) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(row.interest) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(row.principal) }}</td>
+        <td style="text-align:right;font-weight:600;">{{ formatar_moeda(row.installment_amount) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(row.closing_balance) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copiarResultado() {
+  var tabela = document.getElementById('tabela-price');
+  if (!tabela) return;
+  var linhas = [['Parcela','Vencimento','Saldo Inicial','Juros','Amortização','Parcela','Saldo Final']];
+  tabela.querySelectorAll('tbody tr').forEach(function (tr) {
+    var cols = [];
+    tr.querySelectorAll('td').forEach(function (td) { cols.push(td.textContent.trim()); });
+    linhas.push(cols);
+  });
+  var texto = linhas.map(function (l) { return l.join('\t'); }).join('\n');
+  navigator.clipboard.writeText(texto).then(function () {
+    alert('Tabela Price copiada para a área de transferência.');
+  }).catch(function () {
+    alert('Não foi possível copiar automaticamente. Selecione a tabela manualmente.');
+  });
+}
+</script>
+{% endblock %}

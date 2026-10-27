@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Parcelas / Recebimentos — Títulos Privados{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">🧾</div>
+  <div class="page-header-title">Parcelas / Recebimentos</div>
+  <div class="page-header-sub">Visão consolidada das parcelas de todos os empréstimos privados.</div>
+</div>
+
+<form method="get" class="toolbar">
+  <div class="toolbar-left">
+    <select name="status" class="form-control form-control-sm" style="width:200px;" onchange="this.form.submit()">
+      <option value="">Todos os status</option>
+      <option value="open"         {% if status_filtro == 'open' %}selected{% endif %}>Aberta</option>
+      <option value="paid"         {% if status_filtro == 'paid' %}selected{% endif %}>Paga</option>
+      <option value="partial"      {% if status_filtro == 'partial' %}selected{% endif %}>Parcial</option>
+      <option value="overdue"      {% if status_filtro == 'overdue' %}selected{% endif %}>Vencida</option>
+      <option value="renegotiated" {% if status_filtro == 'renegotiated' %}selected{% endif %}>Renegociada</option>
+      <option value="cancelled"    {% if status_filtro == 'cancelled' %}selected{% endif %}>Cancelada</option>
+    </select>
+    {% if status_filtro %}
+      <a href="{{ url_for('titulos_privados_parcelas') }}" class="btn btn-secondary btn-sm">Limpar</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if parcelas %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th><th>Empréstimo</th><th>#</th><th>Vencimento</th>
+        <th style="text-align:right;">Parcela</th><th style="text-align:right;">Pago</th><th>Status</th><th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in parcelas %}
+      <tr>
+        <td>{{ p.client_name }}</td>
+        <td class="text-mono">{{ p.loan_number or ('#' ~ p.loan_id) }}</td>
+        <td>{{ p.installment_number }}</td>
+        <td class="text-dim">{{ formatar_data(p.due_date) }}</td>
+        <td style="text-align:right;font-weight:600;">{{ formatar_moeda(p.installment_amount) }}</td>
+        <td style="text-align:right;">{{ formatar_moeda(p.paid_amount) }}</td>
+        <td>
+          {% if p.status == 'paid' %}<span class="badge badge-active">Pago</span>
+          {% elif p.status == 'partial' %}<span class="badge badge-pending">Parcial</span>
+          {% elif p.status == 'overdue' %}<span class="badge badge-inactive">Vencida</span>
+          {% elif p.status == 'renegotiated' %}<span class="badge badge-pending">Renegociada</span>
+          {% elif p.status == 'cancelled' %}<span class="badge badge-inactive">Cancelada</span>
+          {% else %}<span class="badge badge-pending">Aberta</span>{% endif %}
+        </td>
+        <td style="text-align:right;">
+          <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=p.loan_id) }}" class="btn btn-secondary btn-sm">Ver Empréstimo</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="text-dim" style="font-size:12px;margin-top:10px;text-align:right;">
+  {{ parcelas | length }} parcela(s) encontrada(s)
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">🧾</div>
+  <div class="empty-state-title">Nenhuma parcela cadastrada</div>
+</div>
+{% endif %}
+
+{% endblock %}

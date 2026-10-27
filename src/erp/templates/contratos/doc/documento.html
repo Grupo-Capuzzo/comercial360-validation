@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{{ d.arquivo or 'contrato' }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400&family=Great+Vibes&display=swap" rel="stylesheet">
+<style>
+  :root{--ouro:#B8962E;--tinta:#141414;--cinza:#5f5f5f;--linha:#d9d4c7}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#e9e6df;color:var(--tinta)}
+  body{font-family:Calibri,Carlito,"Segoe UI",Arial,sans-serif;font-size:14.5px;line-height:1.45}
+  .barra{position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;justify-content:space-between;
+         padding:10px 16px;background:#111;color:#eee;font:13px "Segoe UI",Arial,sans-serif}
+  .barra b{color:#d4af37}
+  .barra button{background:#d4af37;color:#111;border:0;border-radius:6px;padding:8px 14px;font-weight:700;cursor:pointer}
+  .folha{position:relative;width:210mm;min-height:297mm;margin:18px auto;background:#fff;padding:16mm 20mm 22mm;
+         box-shadow:0 2px 14px rgba(0,0,0,.18);overflow:hidden}
+  .folha.termo{min-height:auto;padding-bottom:2mm;margin-bottom:0;box-shadow:0 -2px 14px rgba(0,0,0,.12)}
+  .folha.continua{min-height:auto;margin-top:0;padding-top:2mm;padding-bottom:26mm;box-shadow:0 8px 14px -6px rgba(0,0,0,.18)}
+  .rodape{position:absolute;left:20mm;right:20mm;bottom:7mm;font:9px/1.35 Arial,sans-serif;color:#8a8a8a;
+          border-top:1px solid #eee;padding-top:4px}
+  /* termo */
+  .cab-termo{display:block;width:100%;max-width:165mm;margin:-6mm auto 6mm}
+  .t-titulo{font-size:27px;margin:8mm 0 7mm;font-weight:700;letter-spacing:-.3px}
+  .t-abre{font-family:"Times New Roman",serif;font-size:15.5px;margin:0 0 5mm}
+  .t-just{text-align:justify;margin:0 0 4mm}
+  .t-lista{padding-left:0;margin:0 0 5mm;counter-reset:it;list-style:none}
+  .t-lista>li{counter-increment:it;text-align:justify;margin:0 0 1.5mm;padding-left:0}
+  .t-lista>li::before{content:counter(it) ".";display:inline-block;min-width:11mm;padding-left:2mm}
+  .t-cotas{border-collapse:collapse;margin:5mm auto 5mm;width:92%;font-size:13.5px}
+  .t-cotas th{background:#cfe2cf;color:#3b5b3b;font-weight:700;border:1px solid #333;padding:3px 6px;text-align:center}
+  .t-cotas td{border:1px solid #333;padding:2px 6px;text-align:center}
+  .t-cotas tr.tot td{font-weight:700;background:#f6f6f6}
+  .t-cotas td.t-rent{font-size:12px;max-width:62mm}
+  .t-data{text-align:right;font-weight:700;margin:6mm 0 0}
+  /* assinaturas */
+  .assin{margin:6mm 0 0 6mm;max-width:120mm}
+  .assin .bloco{margin:0 0 7mm}
+  .assin .visual{height:20mm;display:flex;align-items:flex-end;gap:10px;position:relative}
+  .assin .visual img{max-height:19mm;max-width:80mm}
+  .assin .cursiva{font-family:"Great Vibes","Segoe Script","Brush Script MT",cursive;font-size:28px;line-height:1.1;color:#1d2a5a;white-space:nowrap}
+  .assin .selo{display:inline-flex;align-items:center;gap:6px;border:1.5px solid #3aa35b;border-left-width:5px;color:#2d7d46;
+               border-radius:4px;padding:2px 7px;font:10px/1.25 Arial,sans-serif;background:#f4fbf6;white-space:nowrap}
+  .assin .selo.pend{border-color:#c9a227;color:#8a6d0f;background:#fffaf0}
+  .assin .linha{border-top:1px solid #222;padding-top:1mm;font-weight:700}
+  .assin .meta{font:10px Arial,sans-serif;color:#777}
+  .testemunhas{margin:4mm 0 0 6mm}
+  .testemunhas p{margin:0}
+  /* regulamento */
+  .regulamento{font-family:Tahoma,Verdana,"Segoe UI",sans-serif;font-size:12.6px;line-height:1.55}
+  .regulamento::before{content:"";position:absolute;inset:45mm 0 20mm;background-image:var(--marca);background-repeat:repeat-y;
+                       background-size:150mm auto;background-position:center top;opacity:.32;pointer-events:none}
+  .regulamento>*{position:relative}
+  .cab-reg{display:block;width:62mm;margin:-6mm auto 8mm}
+  .r-titulo{font-size:15px;margin:6mm 0 10mm;line-height:1.6}
+  .regulamento h2{font-size:13px;margin:7mm 0 3mm}
+  .regulamento p{text-align:justify;margin:0 0 3mm}
+  .regulamento p.inc{margin-left:6mm}
+  .regulamento ul{margin:0 0 3mm 16mm;padding:0}
+  .regulamento ul.sub{margin-left:12mm}
+  .regulamento li{margin:0 0 1.2mm}
+  .r-series{border-collapse:collapse;width:100%;font-size:10px;margin:2mm 0 5mm;background:#fff}
+  .r-series th,.r-series td{border:1px solid #333;padding:2px 4px}
+  .r-series th{font-weight:700;text-align:center}
+  .r-data{margin-top:10mm;font-size:14px}
+  /* certificado */
+  .cert{font-family:"Segoe UI",Arial,sans-serif;font-size:12.5px;border:9px double #c9b46a;padding:12mm 14mm 22mm}
+  .cert h1{font-size:20px;margin:0}
+  .cert .topo{display:flex;justify-content:space-between;gap:12px;border-bottom:2px solid #eee;padding-bottom:4mm;margin-bottom:5mm}
+  .cert .topo small{color:#777;display:block}
+  .cert h2{font-size:16px;font-weight:600;margin:6mm 0 3mm}
+  .cert .sig{display:flex;gap:10px;align-items:flex-start;margin:0 0 3mm}
+  .cert .bola{width:22px;height:22px;border-radius:50%;border:2.5px solid #bbb;flex:none;display:grid;place-items:center;font-size:12px;color:#fff}
+  .cert .bola.ok{border-color:#3aa35b;background:#3aa35b}
+  .cert .ev{margin:0 0 3.5mm}
+  .cert .ev b{display:block}
+  .cert .ev span{color:#555}
+  .cert .hash{font:9.5px/1.4 Consolas,"Courier New",monospace;word-break:break-all;color:#444}
+  .cert .aviso{margin-top:6mm;font-size:11px;color:#555;border-top:1px solid #eee;padding-top:3mm}
+  .cancelado-aviso{max-width:210mm;margin:14px auto 0;background:#fdecec;border:2px solid #b42318;color:#7a1610;
+                   border-radius:6px;padding:10px 14px;font:14px "Segoe UI",Arial,sans-serif}
+  body.cancelado .folha::after{content:"CANCELADO";position:absolute;top:38%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);
+       font:800 120px/1 Arial,sans-serif;color:rgba(180,35,24,.16);letter-spacing:10px;pointer-events:none;white-space:nowrap}
+  @page{size:A4;margin:0}
+  @media print{
+    html,body{background:#fff}
+    .barra{display:none}
+    .folha{margin:0;box-shadow:none;page-break-after:always;break-after:page}
+    .folha.continua{margin:0;page-break-before:avoid}
+    .termo{page-break-after:avoid;break-after:avoid;min-height:auto}
+    .folha:last-child{page-break-after:auto}
+  }
+  @media (max-width:820px){
+    .folha{width:auto;min-height:0;margin:10px;padding:18px 16px 40px}
+    .rodape{left:16px;right:16px}
+    .t-cotas{width:100%;font-size:12px}
+  }
+</style>
+</head>
+<body class="{{ 'cancelado' if c.status == 'cancelado' }}">
+{% set cli = c.signatarios | selectattr('papel','equalto','cliente') | first %}
+{% set emps = c.signatarios | selectattr('papel','equalto','empresa') | list %}{% set emp = emps[0] if emps else none %}
+<div class="barra">
+  <span>📄 <b>{{ d.investidor.nome }}</b> · {{ TIPOS[c.tipo] }}{{ ' + Regulamento' if c.html_anexo }}</span>
+  <button type="button" onclick="window.print()">⬇ Baixar PDF / Imprimir</button>
+</div>
+
+{% if c.status == 'cancelado' %}
+<div class="cancelado-aviso"><b>⛔ DOCUMENTO CANCELADO em {{ c.cancelado_em | ct_data(True) }}</b> — sem validade; assinaturas invalidadas.
+  {% if c.motivo_cancelamento and not publico %}Motivo: {{ c.motivo_cancelamento }}{% endif %}</div>
+{% endif %}
+{# ═══ 1. Termo (conteúdo original, protegido por hash) ═══ #}
+{{ c.html_termo | safe }}
+
+{# ═══ Assinaturas ═══ #}
+<section class="folha continua">
+  <div class="assin">
+    {% for s in [cli, emp] if s %}
+    <div class="bloco">
+      <div class="visual">
+        {% if s.status == 'assinado' %}
+          {% if s.assinatura_img %}<img src="{{ s.assinatura_img }}" alt="Assinatura">{% else %}<span class="cursiva">{{ s.assinatura_texto }}</span>{% endif %}
+          <span class="selo">✔ Assinado eletronicamente<br>{{ s.assinado_em | ct_data(True) }}</span>
+        {% else %}
+          <span class="selo pend">⏳ Aguardando assinatura</span>
+        {% endif %}
+      </div>
+      <div class="linha">{{ s.nome if s.papel == 'cliente' else d.empresa.empresa_nome }}</div>
+      <div class="meta">{{ mascarar(s.email) if publico else s.email }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if d.testemunhas %}
+  <div class="testemunhas">
+    <p><b>Testemunhas:</b></p><br>
+    {% for t in d.testemunhas %}<p>Nome: {{ t.nome }}</p><p>CPF: {{ t.cpf }}</p>{% endfor %}
+  </div>
+  {% endif %}
+  <div class="rodape">Documento {{ c.codigo }} · Assinatura eletrônica conforme MP 2.200-2/2001, art. 10, §2º, e Lei 14.063/2020.
+    Verificação no certificado de assinaturas ao final deste documento.</div>
+</section>
+
+{# ═══ 2. Regulamento (anexo) ═══ #}
+{{ c.html_anexo | safe }}
+
+{# ═══ 3. Certificado de assinaturas ═══ #}
+<section class="folha cert">
+  <div class="topo">
+    <div><h1>Certificado de Assinaturas</h1><small>Capuzzo Assessoria Empresarial · horários de Brasília</small></div>
+    <div style="text-align:right"><small>Gerado em</small>{{ c.assinado_em | ct_data(True) if c.assinado_em else '—' }}</div>
+  </div>
+  <div style="font-size:15px">{{ d.arquivo }}</div>
+  <div>Código do documento <b>{{ c.codigo }}</b></div>
+  {% if d.anexo_nome %}<div style="font-size:11px;color:#666;margin-top:2mm">Anexo: {{ d.anexo_nome }}</div>{% endif %}
+
+  <h2>Assinaturas</h2>
+  {% for s in [cli, emp] if s %}
+  <div class="sig">
+    <div class="bola {{ 'ok' if s.status == 'assinado' }}">{{ '✔' if s.status == 'assinado' }}</div>
+    <div><b>{{ s.nome }}</b><br>{{ mascarar(s.email) if publico else s.email }}<br>
+      {% if s.status == 'assinado' %}Assinou em {{ s.assinado_em | ct_data(True) }} · IP {{ s.ip or '—' }}
+        <br><span style="color:#666;font-size:11px">Verificação: {{ s.verificacao }}</span>
+      {% else %}<span style="color:#8a6d0f">Assinatura pendente</span>{% endif %}</div>
+  </div>
+  {% endfor %}
+
+  <h2>Eventos do documento</h2>
+  {% for e in c.eventos if e.tipo not in ('codigo_invalido', 'email_erro') %}
+  <div class="ev"><b>{{ e.criado_em | ct_data(True) }}</b>
+    <span>{{ EVENTOS.get(e.tipo, e.tipo) }}{% if e.descricao and not publico %} — {{ e.descricao }}{% endif %}{% if e.ip %} · IP {{ e.ip }}{% endif %}</span></div>
+  {% endfor %}
+
+  <h2>Hash do documento original ({{ 'Termo + Regulamento' if c.html_anexo else 'Termo' }})</h2>
+  <div class="hash">(SHA256) {{ c.hash_original }}</div>
+  {% if c.hash_final %}
+  <h2>Hash do registro de assinatura</h2>
+  <div class="hash">(SHA256) {{ c.hash_final }}</div>
+  {% endif %}
+  <div class="aviso">Documento assinado eletronicamente. A autoria e a integridade são comprovadas pelos registros acima
+    (e-mail com código de verificação, confirmação do CPF/CNPJ, data, hora e IP), nos termos da MP 2.200-2/2001,
+    art. 10, §2º, e da Lei 14.063/2020. Este log pertence única e exclusivamente ao documento de hash acima.</div>
+</section>
+
+<script>if(window.self !== window.top){ var b=document.querySelector('.barra'); if(b) b.style.display='none'; }</script>
+{% if imprimir %}<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},400)})</script>{% endif %}
+</body>
+</html>

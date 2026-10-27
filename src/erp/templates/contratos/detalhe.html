@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}{{ c.cliente_nome }} · Contrato — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+{% include "contratos/_estilo.html" %}
+{% set st = STATUS[c.status] %}
+<style>
+.ct-dlg{margin:auto;border:1px solid #333;border-radius:10px;background:#141414;color:#eee;padding:0;width:min(520px,94vw)}
+.ct-dlg::backdrop{background:rgba(0,0,0,.7)}
+.ct-dlg form{padding:22px}
+.ct-dlg h3{margin:0 0 6px;font-size:18px}
+.ct-dlg p{color:#aaa;font-size:13px;margin:0 0 12px}
+.ct-dlg .opc{display:flex;gap:10px;align-items:flex-start;font-size:13px;margin:10px 0;cursor:pointer}
+.ct-dlg .opc input{width:16px;height:16px;margin-top:2px;accent-color:#d4af37}
+.ct-dlg .bts{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:16px}
+</style>
+
+<a href="{{ url_for('contratos.painel') }}" class="back-link">← Voltar para Contratos</a>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+  <div>
+    <div class="page-header-title">{{ TIPOS[c.tipo] }} · {{ c.cliente_nome }}</div>
+    <div class="page-header-sub" style="margin-top:6px;">
+      <span class="ct-badge" style="--c:{{ st.cor }}">{{ st.nome }}</span>
+      &nbsp;{{ c.produto_nome }} · {{ c.dados.qtd }} cota(s) · <span class="text-gold">{{ moeda(c.dados.valor_total) }}</span>
+      · <span class="text-mono text-dim" style="font-size:11px">{{ c.codigo }}</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="{{ url_for('contratos.documento', cid=c.id) }}" target="_blank" class="btn btn-secondary">↗ Abrir documento</a>
+    <a href="{{ url_for('contratos.documento', cid=c.id, imprimir=1) }}" target="_blank" class="btn btn-secondary">⬇ PDF</a>
+    <a href="{{ url_for('clientes_detalhe', cid=c.client_id) }}" class="btn btn-secondary">👤 Cliente</a>
+    {% if c.status in ('rascunho', 'aguardando', 'assinado') %}
+    <button type="button" class="btn btn-danger" data-abrir="dlg-cancelar">⛔ Cancelar envio</button>
+    {% endif %}
+    {% if c.status != 'concluido' %}
+    <button type="button" class="btn btn-secondary" data-abrir="dlg-excluir" title="Apagar contrato de teste ou gerado por engano">🗑️ Apagar</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="ct-grid">
+  <div class="ct-doc"><iframe src="{{ url_for('contratos.documento', cid=c.id) }}" title="Documento"></iframe></div>
+
+  <div class="ct-side">
+
+    {# ── Ações por etapa ── #}
+    <div class="card-gold">
+      {% if c.status in ('rascunho', 'aguardando') %}
+        <div class="form-section-title" style="margin-bottom:10px;">
+          {{ '1. Enviar para assinatura' if c.status == 'rascunho' else 'Aguardando assinatura do cliente' }}</div>
+        {% if link_local %}
+          <div class="alert alert-warning" style="font-size:12px;margin-bottom:10px;"><span>O link ainda aponta para este computador — o cliente não conseguirá abrir de fora.
+            Configure o <a class="text-gold" href="{{ url_for('contratos.configuracoes') }}">link público</a>.</span></div>
+        {% endif %}
+        <div class="ct-acoes">
+          <form method="post" action="{{ url_for('contratos.enviar', cid=c.id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button class="btn btn-primary" style="width:100%" {{ 'disabled' if not cli.email }}>
+              ✉️ {{ 'Enviar para assinatura' if c.status == 'rascunho' else 'Reenviar e-mail' }}</button>
+            <div class="text-dim" style="font-size:11px;margin-top:4px;text-align:center">para {{ cli.email or 'cliente sem e-mail' }}</div>
+          </form>
+          {% if fone_wpp %}
+          <a class="btn btn-secondary js-manual" data-canal="WhatsApp" target="_blank" rel="noopener"
+             href="https://wa.me/{{ fone_wpp }}?text={{ msg_wpp | urlencode }}">🟢 Enviar link pelo WhatsApp</a>
+          {% endif %}
+          <div class="ct-link">
+            <input class="form-control form-control-sm" id="ct-link" value="{{ link }}" readonly>
+            <button type="button" class="btn btn-secondary btn-sm" id="ct-copiar">Copiar</button>
+          </div>
+        </div>
+      {% elif c.status == 'assinado' %}
+        <div class="form-section-title" style="margin-bottom:8px;">2. Confirmar depósito e ativar cotas</div>
+        <p class="text-dim" style="font-size:12.5px;margin-bottom:10px;">O cliente assinou. As cotas seguem <b>pendentes</b> até você confirmar o depósito.</p>
+        <form method="post" action="{{ url_for('contratos.ativar', cid=c.id) }}" id="f-ativar">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <div class="form-group"><label>Data do depósito</label>
+            <input type="date" name="data_deposito" id="dt-dep" value="{{ hoje }}" class="form-control"></div>
+          <table class="ct-cotas" style="width:100%;margin:6px 0 12px;">
+            <thead><tr><th>Cota</th><th>Aquisição</th><th>Vencimento</th></tr></thead>
+            <tbody>
+            {% for ct in c.cotas %}
+              <tr><td class="text-mono">{{ ct.share_number }}</td>
+                <td><input type="date" name="aq_{{ ct.id }}" value="{{ aq_sugerida }}" class="form-control form-control-sm js-aq"></td>
+                <td><input type="date" name="venc_{{ ct.id }}" value="{{ venc_sugerido }}" class="form-control form-control-sm js-venc"></td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          <div class="text-dim" style="font-size:11px;margin-bottom:10px;">Vencimento sugerido = aquisição + {{ c.dados.prazo_meses }} meses (prazo mínimo do termo).</div>
+          <button class="btn btn-success" style="width:100%" data-confirm="Confirmar o depósito e ativar {{ c.cotas|length }} cota(s)?">✔ Confirmar depósito e ativar cotas</button>
+        </form>
+      {% elif c.status == 'concluido' %}
+        <div class="form-section-title" style="margin-bottom:8px;">✅ Concluído</div>
+        <p class="text-dim" style="font-size:13px;">Depósito confirmado e cotas ativadas em {{ c.concluido_em | ct_data(True) }}.</p>
+      {% else %}
+        <div class="form-section-title" style="margin-bottom:8px;">Contrato cancelado</div>
+        <p class="text-dim" style="font-size:13px;">{{ c.cancelado_em | ct_data(True) }}{% if c.motivo_cancelamento %} — {{ c.motivo_cancelamento }}{% endif %}</p>
+        <a href="{{ url_for('contratos.novo', client_id=c.client_id) }}" class="btn btn-secondary btn-sm" style="margin-top:8px">Gerar novo contrato</a>
+      {% endif %}
+    </div>
+
+    {# ── Signatários ── #}
+    <div class="card-gold">
+      <div class="form-section-title" style="margin-bottom:6px;">Signatários</div>
+      {% for s in c.signatarios %}
+      <div class="ct-sig">
+        <span class="ct-dot {{ 'ok' if s.status == 'assinado' }}">{{ '✔' if s.status == 'assinado' }}</span>
+        <div style="min-width:0">
+          <b>{{ s.nome }}</b> <span class="text-dim" style="font-size:11px">· {{ 'Empresa' if s.papel == 'empresa' else 'Investidor(a)' }}</span>
+          <div class="text-dim" style="font-size:12px">{{ s.email or '—' }}</div>
+          <div style="font-size:12px;color:{{ '#4ade80' if s.status == 'assinado' else '#fbbf24' }}">
+            {{ 'Assinou em ' ~ (s.assinado_em | ct_data(True)) ~ (' · IP ' ~ s.ip if s.ip else '') if s.status == 'assinado' else 'Aguardando assinatura' }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {# ── Cotas ── #}
+    <div class="card-gold">
+      <div class="form-section-title" style="margin-bottom:6px;">Cotas deste contrato</div>
+      {% for ct in c.cotas %}
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-top:1px solid #222">
+        <span class="text-mono">nº {{ ct.share_number }}</span>
+        <span>{{ moeda(ct.share_value) }}</span>
+        <span class="badge {{ 'badge-active' if ct.status == 'ativa' else ('badge-pending' if ct.status == 'pendente' else 'badge-inactive') }}">{{ ct.status }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    {# ── Histórico ── #}
+    <div class="card-gold">
+      <div class="form-section-title" style="margin-bottom:10px;">Histórico</div>
+      {% for e in c.eventos | reverse %}
+      <div class="ct-ev {{ 'erro' if e.tipo in ('email_erro', 'codigo_invalido', 'cancelado') }}">
+        <b>{{ EVENTOS.get(e.tipo, e.tipo) }}</b>
+        <span>{{ e.criado_em | ct_data(True) }}{% if e.ip %} · IP {{ e.ip }}{% endif %}</span>
+        {% if e.descricao %}<div style="font-size:12px;color:#aaa">{{ e.descricao }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+</div>
+
+
+{# ── Cancelar envio ── #}
+<dialog class="ct-dlg" id="dlg-cancelar">
+  <form method="post" action="{{ url_for('contratos.cancelar', cid=c.id) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <h3>⛔ Cancelar envio do contrato</h3>
+    <p>O link de assinatura deixa de funcionar e o documento passa a mostrar <b>CANCELADO</b>.
+      {% if c.status == 'assinado' %}<b style="color:#f87171">A assinatura já feita pelo cliente perde a validade.</b>{% endif %}
+      As cotas continuam pendentes.</p>
+    <div class="form-group"><label>Motivo</label>
+      <input name="motivo" class="form-control" placeholder="Ex.: CPF digitado errado, valor incorreto…" maxlength="300"></div>
+    {% if c.status in ('aguardando', 'assinado') and cli.email %}
+    <label class="opc"><input type="checkbox" name="avisar" value="1" checked>
+      <span>Avisar o cliente por e-mail que o documento foi cancelado ({{ cli.email }})</span></label>
+    {% endif %}
+    <div class="note-box" style="font-size:12px;margin-top:8px">💡 Se o erro é no cadastro do cliente, primeiro
+      <a class="text-gold" href="{{ url_for('clientes_editar', cid=c.client_id) }}#secao-contrato">corrija o cadastro</a>
+      e depois use <b>Cancelar e gerar novo</b>: o novo contrato sai com as mesmas cotas e os dados atualizados.</div>
+    <div class="bts">
+      <button type="button" class="btn btn-secondary" data-fechar>Voltar</button>
+      <button name="acao" value="cancelar" class="btn btn-danger">Só cancelar</button>
+      <button name="acao" value="regerar" class="btn btn-primary">Cancelar e gerar novo</button>
+    </div>
+  </form>
+</dialog>
+
+{# ── Apagar ── #}
+<dialog class="ct-dlg" id="dlg-excluir">
+  <form method="post" action="{{ url_for('contratos.excluir', cid=c.id) }}" id="f-excluir">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <h3>🗑️ Apagar contrato</h3>
+    <p>Use para contratos de <b>teste</b> ou gerados por engano. O contrato e todo o histórico de assinatura são
+      apagados definitivamente (fica só o registro na Auditoria). O link enviado para o cliente deixa de existir.</p>
+    {% set pend = c.cotas | selectattr('status','equalto','pendente') | list %}
+    {% if pend %}
+    <label class="opc"><input type="checkbox" name="excluir_cotas" value="1">
+      <span>Apagar também as cotas pendentes deste contrato ({{ pend | map(attribute='share_number') | join(', ') }})</span></label>
+    {% endif %}
+    <div class="form-group" style="margin-top:10px"><label>Digite <b>APAGAR</b> para confirmar</label>
+      <input class="form-control" id="conf-apagar" autocomplete="off"></div>
+    <div class="bts">
+      <button type="button" class="btn btn-secondary" data-fechar>Voltar</button>
+      <button class="btn btn-danger" id="bt-apagar" disabled>Apagar definitivamente</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(function(){
+  document.querySelectorAll('[data-abrir]').forEach(function(b){ b.addEventListener('click', function(){
+    var dl = document.getElementById(b.dataset.abrir); if(dl && dl.showModal) dl.showModal(); }); });
+  document.querySelectorAll('[data-fechar]').forEach(function(b){ b.addEventListener('click', function(){ b.closest('dialog').close(); }); });
+  var ca = document.getElementById('conf-apagar'), ba = document.getElementById('bt-apagar');
+  if(ca) ca.addEventListener('input', function(){ ba.disabled = ca.value.trim().toUpperCase() !== 'APAGAR'; });
+  var csrf = '{{ csrf_token() }}';
+  function manual(canal){
+    var fd = new FormData(); fd.append('_csrf', csrf); fd.append('canal', canal);
+    fetch('{{ url_for("contratos.enviado_manual", cid=c.id) }}', {method:'POST', body:fd, credentials:'same-origin'});
+  }
+  var cp = document.getElementById('ct-copiar');
+  if(cp) cp.addEventListener('click', function(){
+    var i = document.getElementById('ct-link'); i.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(i.value) : Promise.resolve(document.execCommand('copy')))
+      .then(function(){ cp.textContent = 'Copiado ✓'; manual('link copiado'); });
+  });
+  document.querySelectorAll('.js-manual').forEach(function(a){ a.addEventListener('click', function(){ manual(a.dataset.canal); }); });
+
+
+  /* datas de ativação: aquisição = depósito; vencimento = aquisição + prazo */
+  var dep = document.getElementById('dt-dep'), prazo = {{ c.dados.prazo_meses | int }};
+  function somaMeses(iso, n){
+    var p = iso.split('-').map(Number), d = new Date(p[0], p[1]-1+n, 1), ult = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    d.setDate(Math.min(p[2], ult));
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  if(dep) dep.addEventListener('change', function(){
+    if(!dep.value) return;
+    document.querySelectorAll('.js-aq').forEach(function(i){ i.value = dep.value; });
+    document.querySelectorAll('.js-venc').forEach(function(i){ i.value = somaMeses(dep.value, prazo); });
+  });
+  document.querySelectorAll('.js-aq').forEach(function(i){
+    i.addEventListener('change', function(){
+      var v = i.closest('tr').querySelector('.js-venc'); if(i.value) v.value = somaMeses(i.value, prazo);
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }} — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">{{ icon }}</div>
+  <div class="page-header-title">{{ titulo }}</div>
+</div>
+
+<div class="placeholder-box">
+  <div class="placeholder-icon">🚧</div>
+  <div class="placeholder-title">Módulo em desenvolvimento</div>
+  <div class="placeholder-sub">{{ subtitulo }}</div>
+</div>
+
+{% endblock %}

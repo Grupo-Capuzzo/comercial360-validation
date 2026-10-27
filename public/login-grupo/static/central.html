@@ -1,0 +1,2310 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grupo Capuzzo — Central de Operações</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231C1815'/%3E%3Ctext x='16' y='21' font-family='Segoe UI,Arial' font-size='13' font-weight='700' fill='%23F4F2ED' text-anchor='middle'%3EGC%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --paper:#F4F2ED; --surface:#FFFDFA; --surface-2:#EDEAE3; --surface-3:#E4E0D7;
+    --ink:#1C1815; --muted:#78716A; --rule:#DFDAD1; --rule-strong:#C9C2B6;
+    --accent:#8A4B2A; --pos:#2F6B50; --warn:#9A6B12; --crit:#A23B2B;
+    --shadow:0 1px 2px rgba(28,24,21,.06);
+    --shadow-lg:0 8px 30px rgba(28,24,21,.13);
+    --feito:#2F6B50; --pendente:#8C857A;
+    --c-assessoria:#8A4B2A; --c-cred:#2F4F7A; --c-terceiriza:#2E6F6A;
+    --c-hort:#4A7A32; --c-health:#7A3355; --c-grao:#9A6B12; --c-plano:#4A4640;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#151210; --surface:#1E1A16; --surface-2:#272219; --surface-3:#332C23;
+      --ink:#F1ECE4; --muted:#A29A90; --rule:#332C25; --rule-strong:#4A4036;
+      --accent:#DB8E5C; --pos:#71C096; --warn:#D8A73F; --crit:#E0806E;
+      --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 8px 30px rgba(0,0,0,.55);
+    --feito:#71C096; --pendente:#6E675C;
+      --feito:#71C096; --pendente:#6E675C;
+      --c-assessoria:#DB8E5C; --c-cred:#7EA5DC; --c-terceiriza:#63BFB6;
+      --c-hort:#8FC268; --c-health:#D284A8; --c-grao:#D8A73F; --c-plano:#BDB4A8;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#151210; --surface:#1E1A16; --surface-2:#272219; --surface-3:#332C23;
+    --ink:#F1ECE4; --muted:#A29A90; --rule:#332C25; --rule-strong:#4A4036;
+    --accent:#DB8E5C; --pos:#71C096; --warn:#D8A73F; --crit:#E0806E;
+    --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 8px 30px rgba(0,0,0,.55);
+    --c-assessoria:#DB8E5C; --c-cred:#7EA5DC; --c-terceiriza:#63BFB6;
+    --c-hort:#8FC268; --c-health:#D284A8; --c-grao:#D8A73F; --c-plano:#BDB4A8;
+  }
+
+  *{box-sizing:border-box}
+  html{color-scheme:light dark}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Segoe UI Variable Text","Segoe UI",system-ui,Helvetica,Arial,sans-serif;
+    font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .num,.mono{font-family:"Cascadia Mono","Consolas",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .eyebrow{margin:0;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  button{font-family:inherit;font-size:inherit;color:inherit}
+  input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+  /* ============ chrome ============ */
+  .topbar{
+    position:sticky;top:0;z-index:40;
+    background:var(--surface);border-bottom:1px solid var(--rule);
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:12px 20px;
+  }
+  .topbar .logo{display:flex;align-items:center;gap:10px;cursor:pointer;background:none;border:0;padding:0;text-align:left}
+  .logo .mark{
+    width:30px;height:30px;border-radius:6px;background:var(--ink);color:var(--paper);
+    display:grid;place-items:center;font-weight:700;font-size:13px;letter-spacing:-.02em;flex:none;
+  }
+  .logo .nome{font-weight:700;letter-spacing:-.02em;line-height:1.1}
+  .logo .nome small{display:block;font-size:10.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .crumbs{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);flex-wrap:wrap;min-width:0}
+  .crumbs button{background:none;border:0;padding:0;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+  .crumbs button:hover{color:var(--ink)}
+  .crumbs .sep{opacity:.5}
+  .crumbs .cur{color:var(--ink);font-weight:500}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .btn-voltar-grupo{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--ink);text-decoration:none;border:1px solid var(--rule-strong);background:var(--surface);padding:6px 12px;border-radius:6px;white-space:nowrap}
+  .btn-voltar-grupo:hover{border-color:var(--accent);color:var(--accent)}
+  .badge-admin{
+    font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    border:1px solid var(--rule-strong);color:var(--muted);padding:3px 9px;border-radius:99px;white-space:nowrap;
+  }
+
+  main{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:32px 72px}
+  .page-head{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:flex-end;justify-content:space-between;margin-bottom:26px}
+  .page-head h1{margin:0;font-size:clamp(26px,4.6vw,38px);font-weight:700;letter-spacing:-.028em;line-height:1.05;text-wrap:balance}
+  .page-head p.sub{margin:6px 0 0;color:var(--muted);font-size:14px;max-width:62ch}
+
+  /* ============ cards de empresa ============ */
+  .grid-emp{display:grid;grid-template-columns:repeat(auto-fill,minmax(318px,1fr));gap:14px}
+  .emp{
+    --c:var(--accent);position:relative;text-align:left;cursor:pointer;
+    background:var(--surface);border:1px solid var(--rule);border-radius:6px;
+    padding:18px 18px 16px;display:flex;flex-direction:column;gap:12px;
+    box-shadow:var(--shadow);transition:transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+  }
+  .emp:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--rule-strong)}
+  .emp.dev{cursor:default;opacity:.92}
+  .emp.dev:hover{transform:none;box-shadow:var(--shadow)}
+  .emp .topo{display:flex;align-items:flex-start;gap:12px}
+  .mono-sigla{
+    width:42px;height:42px;border-radius:8px;flex:none;display:grid;place-items:center;
+    background:color-mix(in srgb, var(--c) 14%, transparent);
+    color:var(--c);font-weight:700;font-size:15px;letter-spacing:-.02em;
+    border:1px solid color-mix(in srgb, var(--c) 32%, transparent);
+  }
+  .emp h3{margin:0;font-size:16.5px;font-weight:600;letter-spacing:-.015em;line-height:1.2;text-wrap:balance}
+  .emp .ramo{font-size:12.5px;color:var(--muted);display:block;margin-top:2px}
+  .pill{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:99px;white-space:nowrap;border:1px solid}
+  .pill.on{color:var(--pos);border-color:color-mix(in srgb,var(--pos) 45%,transparent);background:color-mix(in srgb,var(--pos) 10%,transparent)}
+  .pill.dev{color:var(--muted);border-color:var(--rule-strong)}
+  .emp .rodape{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--rule);padding-top:11px;margin-top:auto}
+  .emp .modcount{font-size:12.5px;color:var(--muted)}
+  .emp .ir{font-size:13px;font-weight:600;color:var(--c)}
+
+  .secao-titulo{display:flex;align-items:baseline;gap:14px;margin:38px 0 14px}
+  .secao-titulo h2{margin:0;font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+  .secao-titulo .linha{flex:1;height:1px;background:var(--rule)}
+
+  .plano-card{
+    width:100%;text-align:left;cursor:pointer;background:var(--surface);
+    border:1.5px solid var(--ink);border-radius:6px;padding:20px;
+    display:flex;flex-wrap:wrap;gap:18px 26px;align-items:center;justify-content:space-between;
+    box-shadow:var(--shadow);transition:transform .14s ease, box-shadow .14s ease;
+  }
+  .plano-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+  .plano-card .txt{max-width:56ch;display:flex;flex-direction:column;gap:5px}
+  .plano-card h3{margin:0;font-size:19px;font-weight:600;letter-spacing:-.02em}
+  .plano-card p{margin:0;font-size:13.5px;color:var(--muted)}
+  .plano-card .mini{display:flex;gap:22px;flex-wrap:wrap}
+  .mini .m{display:flex;flex-direction:column;gap:1px}
+  .mini .m b{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:20px;font-weight:600;letter-spacing:-.02em}
+  .mini .m span{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+  /* ============ módulos ============ */
+  .grid-mod{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+  .mod{
+    text-align:left;background:var(--surface);border:1px solid var(--rule);border-radius:6px;
+    padding:17px;display:flex;flex-direction:column;gap:9px;box-shadow:var(--shadow);cursor:pointer;
+    transition:transform .14s ease, box-shadow .14s ease;
+  }
+  .mod:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+  .mod.dev{cursor:default;opacity:.9}
+  .mod.dev:hover{transform:none;box-shadow:var(--shadow)}
+  .mod h3{margin:0;font-size:15.5px;font-weight:600;letter-spacing:-.01em}
+  .mod p{margin:0;font-size:13px;color:var(--muted)}
+  .mod .linha1{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .mod .abre-app{font-size:12px;font-weight:600;color:var(--accent);margin-top:auto}
+
+  .vazio{
+    border:1px dashed var(--rule-strong);border-radius:6px;padding:26px;text-align:center;
+    color:var(--muted);font-size:13.5px;background:color-mix(in srgb,var(--surface) 55%,transparent);
+  }
+  .vazio b{display:block;color:var(--ink);font-size:15px;margin-bottom:5px;font-weight:600}
+
+  /* ============ tabelas de relatório (uso futuro dos módulos) ============ */
+  .rel{display:flex;flex-direction:column;gap:28px;max-width:860px}
+  .rel section{display:flex;flex-direction:column;gap:12px}
+  .rel h2{margin:0;font-size:18px;font-weight:600;letter-spacing:-.015em}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .sec-head .hint{font-size:12.5px;color:var(--muted)}
+  .panel{background:var(--surface);border:1px solid var(--rule);border-radius:5px;overflow:hidden;box-shadow:var(--shadow)}
+  .scroll{overflow-x:auto}
+  table.rel-t{width:100%;border-collapse:collapse;min-width:440px}
+  table.rel-t th,table.rel-t td{padding:11px 16px;text-align:left}
+  table.rel-t thead th{font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);border-bottom:1px solid var(--rule);white-space:nowrap}
+  table.rel-t tbody tr+tr td{border-top:1px solid var(--rule)}
+  table.rel-t td.v,table.rel-t th.v{text-align:right;white-space:nowrap}
+  table.rel-t td.v{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-weight:500}
+  .who{font-weight:500}
+  .tag{display:block;font-size:12px;color:var(--muted);font-weight:400}
+  table.rel-t tfoot td{border-top:1.5px solid var(--ink);font-weight:600;background:var(--surface-2)}
+  table.rel-t tfoot td.v{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .daygroup td{background:var(--surface-2);border-top:1px solid var(--rule);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+  .daygroup em{font-style:normal;letter-spacing:0;text-transform:none;font-weight:400;color:var(--muted);font-size:12px;margin-left:8px}
+  .subtotal td{border-top:1px solid var(--rule);font-size:12.5px;color:var(--muted);font-weight:500}
+  .subtotal td.v{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;color:var(--ink)}
+  .chip-ret{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:99px;border:1px solid var(--warn);color:var(--warn);white-space:nowrap}
+  .hold td.v{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+  .resumo{background:var(--surface);border:1.5px solid var(--ink);border-radius:5px;padding:6px 18px 14px}
+  .linha{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--rule)}
+  .linha:last-child{border-bottom:0;padding-bottom:4px}
+  .linha .rot{font-size:14px}
+  .linha .val{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:17px;font-weight:600;letter-spacing:-.01em}
+  .linha.final{border-top:1.5px solid var(--ink);margin-top:4px;padding-top:12px}
+  .linha.final .rot{font-weight:600;font-size:15px}
+  .linha.final .val{font-size:22px}
+  .out{color:var(--accent)} .in{color:var(--pos)}
+  .notas{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+  .nota{border-left:3px solid var(--accent);background:var(--surface);border-radius:0 5px 5px 0;padding:13px 16px;font-size:13.5px;color:var(--muted)}
+  .nota.ok{border-left-color:var(--pos)} .nota.warn{border-left-color:var(--warn)}
+  .nota b{display:block;color:var(--ink);font-size:13.5px;margin-bottom:3px}
+  .rel-foot{border-top:1px solid var(--rule);padding-top:14px;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 20px;justify-content:space-between}
+
+  /* ============ plano de ação ============ */
+  .aviso{border:1px solid var(--crit);background:color-mix(in srgb,var(--crit) 9%,transparent);border-radius:5px;padding:11px 14px;font-size:13px;color:var(--ink);margin-bottom:18px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+  .kpi{background:var(--surface);border:1px solid var(--rule);border-radius:5px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow)}
+  .kpi b{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:24px;font-weight:600;letter-spacing:-.025em;line-height:1}
+  .kpi span{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .kpi.alerta b{color:var(--crit)}
+
+  .barra-ferramentas{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px}
+  .campo{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--rule);border-radius:5px;padding:7px 11px}
+  .campo label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .campo input,.campo select{border:0;background:transparent;outline:none;min-width:120px;padding:0}
+  .btn{border:1px solid var(--rule-strong);background:var(--surface);border-radius:5px;padding:8px 14px;font-weight:600;font-size:13.5px;cursor:pointer;box-shadow:var(--shadow)}
+  .btn:hover{border-color:var(--ink)}
+  .btn.primario{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .btn.primario:hover{opacity:.88}
+  .btn.perigo{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 45%,transparent)}
+  .btn.pequeno{padding:5px 10px;font-size:12.5px;font-weight:500}
+
+  .quadro{display:grid;grid-template-columns:repeat(4,minmax(230px,1fr));gap:14px;align-items:start}
+  .coluna{background:var(--surface-2);border:1px solid var(--rule);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:120px}
+  .coluna.drop{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface-2))}
+  .coluna > header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .coluna h3{margin:0;font-size:11.5px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)}
+  .coluna .cont{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--rule);border-radius:99px;padding:1px 8px}
+  .coluna .faixa{height:3px;border-radius:99px;background:var(--rule-strong)}
+  .coluna[data-st="todo"] .faixa{background:var(--muted)}
+  .coluna[data-st="doing"] .faixa{background:var(--accent)}
+  .coluna[data-st="review"] .faixa{background:var(--warn)}
+  .coluna[data-st="done"] .faixa{background:var(--pos)}
+  .pilha{display:flex;flex-direction:column;gap:10px;min-height:20px}
+
+  .tarefa{
+    text-align:left;width:100%;background:var(--surface);border:1px solid var(--rule);border-radius:5px;
+    padding:12px 13px;display:flex;flex-direction:column;gap:9px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .tarefa:hover{border-color:var(--rule-strong)}
+  .tarefa.arrastando{opacity:.45}
+  .tarefa h4{margin:0;font-size:14px;font-weight:600;letter-spacing:-.01em;line-height:1.3;overflow-wrap:anywhere}
+  .tarefa .meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted);align-items:center}
+  .resp{display:inline-flex;align-items:center;gap:5px;max-width:100%}
+  .av{width:19px;height:19px;border-radius:50%;background:var(--surface-3);color:var(--ink);display:grid;place-items:center;font-size:9.5px;font-weight:700;flex:none}
+  .prazo.atrasado{color:var(--crit);font-weight:600}
+  .prog{display:flex;align-items:center;gap:9px}
+  .prog .trilho{flex:1;height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+  .prog .trilho i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .2s ease}
+  .prog .trilho i.full{background:var(--pos)}
+  .prog .pct{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:12px;font-weight:600;width:38px;text-align:right}
+  .etapas-mini{font-size:11.5px;color:var(--muted)}
+  .tarefa{border-left:3px solid var(--rule)}
+  .tarefa[data-p="urgente"]{border-left-color:var(--crit)}
+  .tarefa[data-p="alta"]{border-left-color:var(--warn)}
+  .tarefa[data-p="media"]{border-left-color:var(--accent)}
+  .tarefa[data-p="baixa"]{border-left-color:var(--rule-strong)}
+  .selo{
+    display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:99px;
+    border:1px solid;white-space:nowrap;
+  }
+  .selo i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+  .selo.urgente{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 45%,transparent);background:color-mix(in srgb,var(--crit) 10%,transparent)}
+  .selo.alta{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent)}
+  .selo.media{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+  .selo.baixa{color:var(--muted);border-color:var(--rule-strong)}
+  .tarefa .cab-card{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+
+  .fundo{position:fixed;inset:0;background:rgba(20,17,14,.42);z-index:50}
+  .painel{
+    position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);z-index:51;
+    background:var(--paper);border-left:1px solid var(--rule);box-shadow:var(--shadow-lg);
+    display:flex;flex-direction:column;
+  }
+  .painel > header{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--rule);background:var(--surface)}
+  .painel > header .t{flex:1;min-width:0}
+  .painel > header .t p{margin:0;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .salvo{font-size:12px;color:var(--muted);white-space:nowrap}
+  .salvo.ok{color:var(--pos)}
+  .salvo.erro{color:var(--crit)}
+  .fechar{background:none;border:1px solid var(--rule-strong);border-radius:5px;width:30px;height:30px;cursor:pointer;line-height:1;font-size:16px}
+  .corpo{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:18px}
+  .bloco{display:flex;flex-direction:column;gap:9px}
+  .bloco > .rotulo{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .f{display:flex;flex-direction:column;gap:4px}
+  .f label{font-size:11.5px;font-weight:600;color:var(--muted)}
+  .f input,.f select,.f textarea{background:var(--surface);border:1px solid var(--rule);border-radius:5px;padding:8px 10px;width:100%}
+  .f input:focus,.f select:focus,.f textarea:focus{border-color:var(--accent);outline:none}
+  .f textarea{resize:vertical;min-height:54px;line-height:1.45}
+  .linha2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .total-box{background:var(--surface);border:1.5px solid var(--ink);border-radius:5px;padding:14px 16px;display:flex;flex-direction:column;gap:9px}
+  .total-box .cab{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .total-box .cab b{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:26px;font-weight:600;letter-spacing:-.025em}
+  .total-box .cab span{font-size:11px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)}
+  .total-box .nota-calc{font-size:12px;color:var(--muted)}
+
+  .etapa{background:var(--surface);border:1px solid var(--rule);border-radius:5px;padding:13px;display:flex;flex-direction:column;gap:10px}
+  .etapa > .cab{display:flex;align-items:center;gap:9px}
+  .etapa .idx{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11px;font-weight:600;color:var(--muted);background:var(--surface-2);border:1px solid var(--rule);border-radius:4px;padding:2px 7px;flex:none}
+  .etapa .cab input.nome{flex:1;background:transparent;border:0;border-bottom:1px solid transparent;padding:3px 0;font-weight:600}
+  .etapa .cab input.nome:focus{border-bottom-color:var(--accent);outline:none}
+  .etapa .rm{background:none;border:0;color:var(--muted);cursor:pointer;font-size:15px;padding:2px 5px;border-radius:4px;flex:none}
+  .etapa .rm:hover{color:var(--crit);background:var(--surface-2)}
+  .etapa .pcte{display:flex;align-items:center;gap:10px}
+  .etapa .pcte input[type=range]{flex:1;accent-color:var(--accent)}
+  .etapa .pcte .n{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-weight:600;width:44px;text-align:right}
+  .sub-bloco{display:flex;flex-direction:column;gap:7px}
+  .sub-bloco > .cab-sub{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .sub-bloco .rot-sub{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .sub-bloco .contagem{
+    font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;
+    font-size:11.5px;color:var(--muted);
+  }
+  .sub-lista{display:flex;flex-direction:column;gap:2px}
+  .sub{display:flex;align-items:center;gap:9px;padding:5px 7px;border-radius:4px}
+  .sub:hover{background:var(--surface-2)}
+  .sub input[type=checkbox]{width:16px;height:16px;flex:none;accent-color:var(--pos);cursor:pointer;margin:0}
+  .sub input.nome-sub{
+    flex:1;background:transparent;border:0;border-bottom:1px solid transparent;
+    padding:2px 0;font-size:13.5px;min-width:0;
+  }
+  .sub input.nome-sub:focus{border-bottom-color:var(--accent);outline:none}
+  .sub.feito input.nome-sub{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+  .sub .rm-sub{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:0 4px;border-radius:4px;flex:none;opacity:0}
+  .sub:hover .rm-sub,.sub .rm-sub:focus{opacity:1}
+  .sub .rm-sub:hover{color:var(--crit)}
+  .exec-auto{
+    display:flex;align-items:center;gap:10px;background:var(--surface-2);
+    border:1px solid var(--rule);border-radius:5px;padding:8px 11px;
+  }
+  .exec-auto .trilho{flex:1;height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+  .exec-auto .trilho i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .2s ease}
+  .exec-auto .trilho i.full{background:var(--pos)}
+  .exec-auto .n{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-weight:600;width:44px;text-align:right}
+  .exec-auto .porque{font-size:11.5px;color:var(--muted);white-space:nowrap}
+  .add-sub{align-self:flex-start;background:none;border:0;color:var(--accent);font-size:12.5px;font-weight:600;cursor:pointer;padding:3px 0}
+  .add-sub:hover{text-decoration:underline}
+  .painel > footer{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--rule);background:var(--surface);flex-wrap:wrap}
+  .painel > footer .espaco{flex:1}
+
+  /* ============ plano: abas ============ */
+  .abas{display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--rule);border-radius:7px;padding:3px;margin-bottom:20px;overflow-x:auto}
+  .abas button{
+    border:0;background:none;padding:8px 15px;border-radius:5px;cursor:pointer;
+    font-size:13.5px;font-weight:600;color:var(--muted);white-space:nowrap;
+  }
+  .abas button:hover{color:var(--ink)}
+  .abas button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .abas .cont-aba{
+    font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11px;
+    margin-left:6px;color:var(--muted);font-weight:500;
+  }
+
+  /* ============ painel ============ */
+  .faixa-kpi{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .kpi-heroi{
+    background:var(--surface);border:1.5px solid var(--ink);border-radius:7px;padding:16px 18px;
+    display:flex;flex-direction:column;gap:9px;box-shadow:var(--shadow);
+  }
+  .kpi-heroi .topo{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .kpi-heroi .numerao{
+    font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;
+    font-size:44px;font-weight:600;letter-spacing:-.04em;line-height:.95;
+  }
+  .kpi-heroi .rotulo{font-size:10.5px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)}
+  .kpi-heroi .detalhe{font-size:12.5px;color:var(--muted)}
+  .medidor{height:8px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+  .medidor i{display:block;height:100%;border-radius:99px;background:var(--feito)}
+
+  .kpi2{
+    background:var(--surface);border:1px solid var(--rule);border-radius:7px;padding:14px 15px;
+    display:flex;flex-direction:column;gap:5px;box-shadow:var(--shadow);justify-content:center;
+  }
+  .kpi2 b{
+    font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;
+    font-size:26px;font-weight:600;letter-spacing:-.03em;line-height:1;
+  }
+  .kpi2 .rotulo{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .kpi2 .apoio{font-size:12px;color:var(--muted)}
+  .kpi2.risco b{color:var(--crit)}
+  .kpi2.risco{border-color:color-mix(in srgb,var(--crit) 35%,var(--rule))}
+
+  .malha-cartoes{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-bottom:14px;align-items:start}
+  .malha-cartoes > *{min-width:0}
+  /* Duas colunas que empilham sozinhas — cada cartão fica colado no de cima,
+     sem o vão que uma grade de linhas iguais abriria. */
+  .painel-colunas{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:start}
+  .coluna-painel{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .cartao{
+    background:var(--surface);border:1px solid var(--rule);border-radius:7px;
+    box-shadow:var(--shadow);display:flex;flex-direction:column;min-width:0;
+  }
+  .cartao > .conteudo{min-width:0}
+  .cartao > header{
+    padding:15px 17px 11px;border-bottom:1px solid var(--rule);
+    display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  }
+  .cartao h3{margin:0;font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+  .cartao .legenda-titulo{font-size:12px;color:var(--muted)}
+  .cartao > .conteudo{padding:15px 17px 17px}
+
+  /* legenda de séries */
+  .legenda{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .legenda span{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .legenda i{width:9px;height:9px;border-radius:2px;flex:none}
+  .legenda i.feito{background:var(--feito)}
+  .legenda i.pendente{background:var(--pendente)}
+
+  /* barras horizontais: execução por tarefa */
+  .barras{display:flex;flex-direction:column;gap:13px}
+  .barra-linha{display:flex;flex-direction:column;gap:5px}
+  .barra-linha .rot{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .barra-linha .nome{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .barra-linha .valor{
+    font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;
+    font-size:12.5px;font-weight:600;flex:none;
+  }
+  .barra-linha .trilha{height:14px;border-radius:0 4px 4px 0;background:var(--surface-3);overflow:hidden;position:relative}
+  .barra-linha .trilha i{display:block;height:100%;background:var(--feito);border-radius:0 4px 4px 0}
+  .barra-linha .sub{font-size:11.5px;color:var(--muted)}
+  .barra-linha .sub .atraso{color:var(--crit);font-weight:600}
+
+  /* colunas: entregas por semana */
+  .grafico-semanas{width:100%;overflow-x:auto;min-width:0}
+  .grafico-semanas svg{display:block;min-width:460px;width:100%;height:auto}
+  .eixo-txt{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:10px;fill:var(--muted)}
+  .eixo-mes{font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;font-size:11px;fill:var(--muted);font-weight:600}
+  .grade{stroke:var(--rule);stroke-width:1}
+  .col-feito{fill:var(--feito)}
+  .col-pendente{fill:var(--pendente)}
+  .rotulo-col{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:10.5px;font-weight:600;fill:var(--ink)}
+  .marca-hoje{stroke:var(--crit);stroke-width:1.5}
+  .zona-passada{fill:var(--surface-2)}
+
+  /* tabela de responsáveis */
+  .tab-resp{width:100%;border-collapse:collapse}
+  .tab-resp th{
+    text-align:left;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);padding:0 0 9px;
+  }
+  .tab-resp th.dir,.tab-resp td.dir{text-align:right}
+  .tab-resp td{padding:9px 0;border-top:1px solid var(--rule);font-size:13px;vertical-align:middle}
+  .tab-resp td.dir{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-weight:600}
+  .tab-resp .pessoa{display:flex;align-items:center;gap:8px}
+  .tab-resp .medidor{width:100%;min-width:70px}
+
+  /* lista de próximas entregas */
+  .lista-entregas{display:flex;flex-direction:column}
+  .lista-entregas.rolante{max-height:560px;overflow-y:auto}
+  .entrega{
+    display:flex;align-items:flex-start;gap:11px;padding:10px 0;border-top:1px solid var(--rule);
+  }
+  .lista-entregas .entrega:first-child{border-top:0}
+  .entrega .quando{
+    font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;
+    font-size:11.5px;font-weight:600;width:52px;flex:none;padding-top:1px;
+  }
+  .entrega.atrasado .quando{color:var(--crit)}
+  .entrega.hoje .quando{color:var(--warn)}
+  .entrega .txt{flex:1;min-width:0}
+  .entrega .txt b{display:block;font-size:13px;font-weight:500;overflow-wrap:anywhere}
+  .entrega .txt span{font-size:11.5px;color:var(--muted)}
+  .marcador{width:8px;height:8px;border-radius:50%;flex:none;margin-top:5px;background:var(--pendente)}
+  .marcador.atrasado{background:var(--crit)}
+  .marcador.hoje{background:var(--warn)}
+  .marcador.feito{background:var(--feito)}
+  .vazio-mini{font-size:13px;color:var(--muted);padding:6px 0}
+
+  /* ============ cronograma ============ */
+  .crono{background:var(--surface);border:1px solid var(--rule);border-radius:7px;box-shadow:var(--shadow);overflow:hidden}
+  .crono-rolagem{overflow-x:auto}
+  .crono-grade{min-width:760px}
+  .crono-cab{
+    display:grid;grid-template-columns:var(--col-nome) 1fr;
+    border-bottom:1px solid var(--rule);background:var(--surface-2);position:sticky;top:0;z-index:2;
+  }
+  .crono-cab .celula-nome{padding:9px 14px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .crono-linha{display:grid;grid-template-columns:var(--col-nome) 1fr;border-bottom:1px solid var(--rule)}
+  .crono-linha:last-child{border-bottom:0}
+  .crono-linha.tarefa{background:var(--surface-2)}
+  .crono-linha .nome-cel{padding:9px 14px;min-width:0;display:flex;align-items:center;gap:8px}
+  .crono-linha.tarefa .nome-cel{font-weight:600;font-size:13.5px}
+  .crono-linha.etapa .nome-cel{padding-left:26px;font-size:13px}
+  .crono-linha.sub .nome-cel{padding-left:44px;font-size:12.5px;color:var(--muted)}
+  .crono-linha .nome-cel .rotulo-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+  .crono-linha .faixa{position:relative;height:38px}
+  .crono-linha.sub .faixa{height:28px}
+  .crono-linha .faixa .divisor{position:absolute;top:0;bottom:0;width:1px;background:var(--rule)}
+  .crono-linha .faixa .hoje-linha{position:absolute;top:0;bottom:0;width:1.5px;background:var(--crit);opacity:.75}
+  .crono-barra{
+    position:absolute;top:50%;transform:translateY(-50%);height:16px;border-radius:4px;
+    background:var(--surface-3);overflow:hidden;min-width:8px;
+  }
+  .crono-barra i{display:block;height:100%;background:var(--feito);border-radius:4px 0 0 4px}
+  .crono-barra.completa i{border-radius:4px}
+  .crono-barra.atrasada{outline:1.5px solid var(--crit);outline-offset:1px}
+  .crono-ponto{
+    position:absolute;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;
+    background:var(--pendente);box-shadow:0 0 0 2px var(--surface);
+  }
+  .crono-ponto.feito{background:var(--feito)}
+  .crono-ponto.atrasado{background:var(--crit)}
+  .crono-mes{
+    padding:7px 8px;font-size:11px;font-weight:600;color:var(--muted);border-left:1px solid var(--rule);
+    white-space:nowrap;overflow:hidden;
+  }
+  .crono-meses{display:flex;position:relative}
+  .expandir{
+    background:none;border:1px solid var(--rule-strong);border-radius:4px;width:19px;height:19px;
+    line-height:1;font-size:11px;cursor:pointer;color:var(--muted);flex:none;padding:0;
+  }
+  .expandir:hover{color:var(--ink);border-color:var(--ink)}
+  .crono-info{
+    font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11px;color:var(--muted);flex:none;
+  }
+
+  /* ============ calendário ============ */
+  .cal-topo{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .cal-topo h3{margin:0;font-size:17px;font-weight:600;letter-spacing:-.015em;min-width:170px}
+  .nav-mes{display:flex;gap:4px}
+  .nav-mes button{
+    border:1px solid var(--rule-strong);background:var(--surface);border-radius:5px;
+    width:30px;height:30px;cursor:pointer;line-height:1;font-size:14px;
+  }
+  .nav-mes button:hover{border-color:var(--ink)}
+  .cal-malha{
+    display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;
+    background:var(--rule);border:1px solid var(--rule);border-radius:7px;overflow:hidden;
+  }
+  .cal-cab{background:var(--surface-2);padding:8px 6px;text-align:center;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .dia{background:var(--surface);min-height:104px;padding:7px;display:flex;flex-direction:column;gap:4px;text-align:left;border:0;cursor:pointer;align-items:stretch}
+  .dia:hover{background:var(--surface-2)}
+  .dia.fora{background:var(--paper);opacity:.5}
+  .dia.hoje{outline:1.5px solid var(--ink);outline-offset:-1.5px}
+  .dia.selecionado{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+  .dia .n{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11.5px;font-weight:600;color:var(--muted)}
+  .dia.hoje .n{color:var(--ink)}
+  .fita{
+    font-size:10.5px;line-height:1.3;padding:2px 5px;border-radius:3px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:2.5px solid;
+    background:var(--surface-2);
+  }
+  .fita.etapa{font-weight:600}
+  .fita.pendente{border-left-color:var(--pendente);color:var(--ink)}
+  .fita.atrasado{border-left-color:var(--crit);color:var(--crit)}
+  .fita.feito{border-left-color:var(--feito);color:var(--muted);text-decoration:line-through}
+  .dia .mais{font-size:10.5px;color:var(--muted);padding-left:5px}
+  .dia-detalhe{margin-top:14px}
+
+  @media (max-width:1100px){
+    .faixa-kpi{grid-template-columns:repeat(2,1fr)}
+    .kpi-heroi{grid-column:1 / -1}
+    .malha-cartoes{grid-template-columns:1fr}
+    .painel-colunas{grid-template-columns:1fr}
+  }
+  @media (max-width:620px){
+    .faixa-kpi{grid-template-columns:1fr}
+    .dia{min-height:74px}
+    .cal-malha{font-size:11px}
+  }
+
+  @media (max-width:980px){ .quadro{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  @media (max-width:620px){
+    .quadro{grid-template-columns:1fr}
+    .linha2{grid-template-columns:1fr}
+    main{padding-block:24px 60px}
+  }
+  /* ---------- aba: ACOMPANHAMENTO (previsto x feito x pendente) ---------- */
+  .acomp-filtros{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-bottom:16px}
+  .acomp-filtros .f{min-width:170px}
+  .acomp-filtros .seg{display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--rule);border-radius:7px;padding:3px}
+  .acomp-filtros .seg button{border:0;background:none;border-radius:5px;padding:6px 12px;font-weight:600;font-size:12.5px;color:var(--muted);cursor:pointer}
+  .acomp-filtros .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .acomp-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+  .acomp-kpis .kpi2.bom b{color:var(--pos)}
+  .acomp-kpis .medidor{height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden;margin-top:6px}
+  .acomp-kpis .medidor i{display:block;height:100%;background:var(--feito)}
+  .acomp-aviso{border:1px solid color-mix(in srgb,var(--warn) 55%,transparent);background:color-mix(in srgb,var(--warn) 9%,transparent);border-radius:5px;padding:9px 13px;font-size:13px;margin-bottom:14px}
+  .acomp-lista{display:flex;flex-direction:column}
+  .acomp-item{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) 92px 100px minmax(0,1.8fr);gap:12px;align-items:center;padding:10px 6px;border-top:1px solid var(--rule);cursor:pointer;border-radius:4px}
+  .acomp-item:first-child{border-top:0}
+  .acomp-item:hover{background:var(--surface-2)}
+  .acomp-item.cab{cursor:default;font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-top:0}
+  .acomp-item.cab:hover{background:none}
+  .acomp-item.cab span{letter-spacing:.05em;overflow-wrap:anywhere}
+  .acomp-item .motivo-cel{min-width:0}
+  .acomp-item .o-que b{display:block;font-size:13px;font-weight:500;overflow-wrap:anywhere}
+  .acomp-item .o-que span{font-size:11.5px;color:var(--muted)}
+  .acomp-item .resp{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acomp-item .dt{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:12px}
+  .acomp-item .sit{font-size:12px;font-weight:600}
+  .acomp-item .sit.atraso{color:var(--crit)}
+  .acomp-item .sit.ok{color:var(--pos)}
+  .acomp-item .sit.aviso{color:var(--warn)}
+  .acomp-item input.motivo{width:100%;background:var(--surface);border:1px solid var(--rule);border-radius:5px;padding:6px 8px;font-size:12.5px}
+  .acomp-item input.motivo:focus{border-color:var(--accent);outline:none}
+  .acomp-item input.motivo.sem-motivo{border-color:color-mix(in srgb,var(--crit) 45%,transparent)}
+  .acomp-item .motivo-txt{font-size:12.5px}
+  .acomp-item .motivo-txt.sem-motivo{color:var(--crit)}
+  .acomp-item .rot-movel{display:none}
+  .destaque-item{outline:2px solid var(--accent);outline-offset:2px;border-radius:5px;animation:piscaDestaque 1.6s ease-out 1}
+  @keyframes piscaDestaque{0%{background:color-mix(in srgb,var(--accent) 22%,transparent)}100%{background:transparent}}
+  .sub-motivo{margin:0 0 4px 32px;display:flex;gap:6px;align-items:center}
+  .sub-motivo label{font-size:11px;font-weight:600;color:var(--crit);white-space:nowrap}
+  .sub-motivo input{flex:1;background:var(--surface);border:1px solid color-mix(in srgb,var(--crit) 35%,transparent);border-radius:4px;padding:4px 7px;font-size:12px}
+  @media (max-width:1100px){ .acomp-kpis{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:760px){
+    .acomp-kpis{grid-template-columns:1fr}
+    .acomp-item{grid-template-columns:1fr 1fr;gap:6px 12px}
+    .acomp-item .o-que,.acomp-item .motivo-cel{grid-column:1 / -1}
+    .acomp-item.cab{display:none}
+    .acomp-item .rot-movel{display:inline;color:var(--muted);font-weight:400}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="logo" id="btn-home">
+    <span class="mark">GC</span>
+    <span class="nome">Grupo Capuzzo<small>Central de operações</small></span>
+  </button>
+  <nav class="crumbs" id="crumbs" aria-label="Navegação"></nav>
+  <div class="right"><a class="btn-voltar-grupo" href="/erp/grupo" title="Voltar para as empresas do Grupo">&#8592; Voltar às empresas</a><span class="badge-admin">Administrador</span></div>
+</div>
+
+<main id="app"></main>
+
+<script>
+(function(){
+  "use strict";
+
+  var PRIORIDADES = [
+    { id:"urgente", nome:"Urgente" },
+    { id:"alta",    nome:"Alta" },
+    { id:"media",   nome:"Média" },
+    { id:"baixa",   nome:"Baixa" }
+  ];
+  var ORDEM_PRIORIDADE = { urgente:0, alta:1, media:2, baixa:3 };
+
+  function nomePrioridade(id){
+    for(var i=0;i<PRIORIDADES.length;i++){ if(PRIORIDADES[i].id === id) return PRIORIDADES[i].nome; }
+    return "Média";
+  }
+  function prioridadeDe(t){
+    var p = (t && t.prioridade) || "media";
+    return ORDEM_PRIORIDADE[p] === undefined ? "media" : p;
+  }
+
+  var COLUNAS = [
+    { id:"todo",   nome:"A fazer" },
+    { id:"doing",  nome:"Em andamento" },
+    { id:"review", nome:"Em revisão" },
+    { id:"done",   nome:"Concluída" }
+  ];
+
+  var rota = { tela:"home", empresa:null, modulo:null };
+  var EMPRESAS = [];
+  var tarefas = [];
+  var erroServidor = "";
+  var rascunho = null;
+  var timerSalvar = null;
+  var filtro = { resp:"", busca:"", prio:"" };
+
+  var app = document.getElementById("app");
+  var crumbs = document.getElementById("crumbs");
+  document.getElementById("btn-home").addEventListener("click", function(){ irPara({tela:"home"}); });
+
+  /* ---------------- utilidades ---------------- */
+  function esc(s){
+    return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function novoId(){ return "t" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function hoje(){
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+  function dataBR(iso){
+    if(!iso) return "";
+    var p = String(iso).split("-");
+    return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : iso;
+  }
+  function iniciais(nome){
+    var n = String(nome||"").trim();
+    if(!n) return "?";
+    var ps = n.split(/\s+/);
+    return (ps[0].charAt(0) + (ps.length>1 ? ps[ps.length-1].charAt(0) : "")).toUpperCase();
+  }
+  function atrasada(t){
+    if(!t.prazoTotal || t.status === "done") return false;
+    return t.prazoTotal < hoje();
+  }
+  // Com subetapas, o percentual da etapa é o check: concluídas / total.
+  // Sem subetapas, vale o que foi posto na régua.
+  function percentualEtapa(e){
+    var subs = (e && e.subetapas) || [];
+    if(!subs.length) return Number(e.percentual) || 0;
+    var feitas = subs.filter(function(s){ return !!s.feito; }).length;
+    return Math.round(feitas * 100 / subs.length);
+  }
+  function progresso(t){
+    var e = t.etapas || [];
+    if(!e.length) return t.status === "done" ? 100 : 0;
+    var soma = 0;
+    for(var i=0;i<e.length;i++){ soma += percentualEtapa(e[i]); }
+    return Math.round(soma / e.length);
+  }
+  function empresaPorId(id){
+    for(var i=0;i<EMPRESAS.length;i++){ if(EMPRESAS[i].id === id) return EMPRESAS[i]; }
+    return null;
+  }
+
+  /* ---------------- conversa com o servidor ---------------- */
+  function api(caminho, opcoes){
+    return fetch(caminho, opcoes).then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+  function carregarEmpresas(){
+    return api("/erp/central/api/empresas").then(function(d){ EMPRESAS = d.empresas || []; });
+  }
+  function carregarTarefas(){
+    return api("/erp/central/api/tarefas").then(function(d){
+      tarefas = d.tarefas || [];
+      erroServidor = "";
+    }, function(e){
+      erroServidor = "Não consegui falar com o servidor local (" + e.message + ").";
+    });
+  }
+  function gravar(t){
+    var i = -1;
+    for(var k=0;k<tarefas.length;k++){ if(tarefas[k].id === t.id){ i = k; break; } }
+    if(i >= 0) tarefas[i] = t; else tarefas.push(t);
+    return api("/erp/central/api/tarefas", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(t)
+    }).then(function(d){
+      tarefas = d.tarefas || tarefas;
+      erroServidor = "";
+    });
+  }
+  function apagar(id){
+    return api("/erp/central/api/tarefas/" + encodeURIComponent(id), { method:"DELETE" })
+      .then(function(d){ tarefas = d.tarefas || []; });
+  }
+
+  /* ---------------- roteador ---------------- */
+  function irPara(r){
+    rota = { tela:r.tela, empresa:r.empresa||null, modulo:r.modulo||null };
+    fecharPainel();
+    window.scrollTo(0,0);
+    repintar();
+  }
+  function repintar(){
+    pintarCrumbs();
+    if(rota.tela === "home") pintarHome();
+    else if(rota.tela === "empresa") pintarEmpresa();
+    else if(rota.tela === "modulo") pintarModulo();
+    else if(rota.tela === "plano") pintarPlano();
+  }
+  function pintarCrumbs(){
+    if(rota.tela === "home"){ crumbs.innerHTML = ""; return; }
+    var partes = ['<button data-nav="home">Empresas</button>'];
+    if(rota.tela === "plano"){
+      partes.push('<span class="sep">/</span><span class="cur">Plano de Ação</span>');
+    } else {
+      var e = empresaPorId(rota.empresa);
+      if(e){
+        if(rota.tela === "empresa"){
+          partes.push('<span class="sep">/</span><span class="cur">' + esc(e.nome) + '</span>');
+        } else {
+          var nomeMod = rota.modulo;
+          (e.modulos || []).forEach(function(x){ if(x.id === rota.modulo) nomeMod = x.nome; });
+          partes.push('<span class="sep">/</span><button data-nav="empresa">' + esc(e.nome) + '</button>');
+          partes.push('<span class="sep">/</span><span class="cur">' + esc(nomeMod) + '</span>');
+        }
+      }
+    }
+    crumbs.innerHTML = partes.join("");
+    Array.prototype.forEach.call(crumbs.querySelectorAll("button"), function(b){
+      b.addEventListener("click", function(){
+        if(b.dataset.nav === "home") irPara({tela:"home"});
+        else irPara({tela:"empresa", empresa:rota.empresa});
+      });
+    });
+  }
+
+  /* ---------------- tela: home ---------------- */
+  function pintarHome(){
+    var total = tarefas.length;
+    var concl = tarefas.filter(function(t){ return t.status === "done"; }).length;
+    var atras = tarefas.filter(atrasada).length;
+
+    var cards = EMPRESAS.map(function(e){
+      var ativa = e.status === "ativa";
+      var nMod = (e.modulos || []).length;
+      return '' +
+        '<button class="emp ' + (ativa ? "" : "dev") + '" style="--c:' + e.cor + '" data-emp="' + e.id + '"' + (ativa ? "" : " disabled") + '>' +
+          '<div class="topo">' +
+            '<span class="mono-sigla">' + esc(e.sigla) + '</span>' +
+            '<div style="flex:1;min-width:0">' +
+              '<h3>' + esc(e.nome) + '</h3>' +
+              '<span class="ramo">' + esc(e.ramo) + '</span>' +
+            '</div>' +
+            '<span class="pill ' + (ativa ? "on" : "dev") + '">' + (ativa ? "Ativa" : "Em dev") + '</span>' +
+          '</div>' +
+          '<div class="rodape">' +
+            '<span class="modcount">' + (nMod ? nMod + (nMod>1 ? " módulos" : " módulo") : "Sem módulos ainda") + '</span>' +
+            (ativa ? '<span class="ir">Abrir →</span>' : '') +
+          '</div>' +
+        '</button>';
+    }).join("");
+
+    app.innerHTML = '' +
+      '<div class="page-head"><div>' +
+        '<p class="eyebrow">Modo administrador · acesso total</p>' +
+        '<h1>Empresas do grupo</h1>' +
+        '<p class="sub">Cada empresa abre seus próprios módulos. Capuzzo Assessoria já opera com o sistema de Condomínios; as demais entram conforme forem desenvolvidas.</p>' +
+      '</div></div>' +
+      (erroServidor ? '<div class="aviso">' + esc(erroServidor) + '</div>' : '') +
+      '<div class="grid-emp">' + cards + '</div>' +
+      '<div class="secao-titulo"><h2>Gestão do grupo</h2><div class="linha"></div></div>' +
+      '<button class="plano-card" id="abrir-plano">' +
+        '<div class="txt">' +
+          '<p class="eyebrow">Transversal a todas as empresas</p>' +
+          '<h3>Plano de Ação</h3>' +
+          '<p>Tarefas com responsável, etapas, prazo por etapa e percentual de execução que alimenta o andamento total.</p>' +
+        '</div>' +
+        '<div class="mini">' +
+          '<div class="m"><b>' + total + '</b><span>Tarefas</span></div>' +
+          '<div class="m"><b>' + concl + '</b><span>Concluídas</span></div>' +
+          '<div class="m"><b>' + atras + '</b><span>Atrasadas</span></div>' +
+        '</div>' +
+      '</button>';
+
+    Array.prototype.forEach.call(app.querySelectorAll("[data-emp]"), function(b){
+      b.addEventListener("click", function(){ irPara({tela:"empresa", empresa:b.dataset.emp}); });
+    });
+    document.getElementById("abrir-plano").addEventListener("click", function(){ irPara({tela:"plano"}); });
+  }
+
+  /* ---------------- tela: empresa ---------------- */
+  function pintarEmpresa(){
+    var e = empresaPorId(rota.empresa);
+    if(!e){ irPara({tela:"home"}); return; }
+    var mods = (e.modulos || []).map(function(m){
+      var externo = m.destino && m.destino.indexOf("/central") !== 0;
+      return '<button class="mod" data-mod="' + m.id + '" data-destino="' + esc(m.destino || "") + '">' +
+        '<div class="linha1"><h3>' + esc(m.nome) + '</h3><span class="pill on">Ativo</span></div>' +
+        '<p>' + esc(m.desc) + '</p>' +
+        (externo ? '<span class="abre-app">Abre o sistema de condomínios →</span>' : '') +
+        '</button>';
+    }).join("");
+    var placeholder = '<div class="mod dev">' +
+      '<div class="linha1"><h3>Próximos módulos</h3><span class="pill dev">Em dev</span></div>' +
+      '<p>Espaço reservado para os próximos módulos desta empresa.</p></div>';
+
+    app.innerHTML = '' +
+      '<div class="page-head"><div>' +
+        '<p class="eyebrow">' + esc(e.ramo) + '</p>' +
+        '<h1>' + esc(e.nome) + '</h1>' +
+        '<p class="sub">' + ((e.modulos||[]).length
+          ? "Módulos disponíveis para esta empresa."
+          : "Esta empresa ainda não tem módulos publicados. A área já está criada e recebe os módulos conforme forem desenvolvidos.") + '</p>' +
+      '</div></div>' +
+      ((e.modulos||[]).length
+        ? '<div class="grid-mod">' + mods + placeholder + '</div>'
+        : '<div class="vazio"><b>Em desenvolvimento</b>Layout e área criados. Os módulos desta empresa serão adicionados nas próximas etapas.</div>');
+
+    Array.prototype.forEach.call(app.querySelectorAll("[data-mod]"), function(b){
+      b.addEventListener("click", function(){
+        var destino = b.dataset.destino || "";
+        if(destino && destino.indexOf("/central") !== 0){ window.location.href = destino; return; }
+        irPara({tela:"modulo", empresa:e.id, modulo:b.dataset.mod});
+      });
+    });
+  }
+
+  /* ---------------- tela: módulo ---------------- */
+  function pintarModulo(){
+    var e = empresaPorId(rota.empresa);
+    var m = null;
+    if(e){
+      (e.modulos || []).forEach(function(x){ if(x.id === rota.modulo) m = x; });
+    }
+    app.innerHTML =
+      '<div class="page-head"><div>' +
+        '<p class="eyebrow">' + esc(e ? e.nome : "") + '</p>' +
+        '<h1>' + esc(m ? m.nome : "Módulo") + '</h1>' +
+      '</div></div>' +
+      '<div class="vazio"><b>Em desenvolvimento</b>' +
+      'Este módulo ainda não tem tela própria na central.</div>';
+  }
+
+  function pintarPlano(){
+    var m = metricas();
+    app.innerHTML =
+      '<div class="page-head">' +
+        '<div>' +
+          '<p class="eyebrow">Gestão do grupo</p>' +
+          '<h1>Plano de Ação</h1>' +
+          '<p class="sub">' + m.itens + ' entregas em ' + m.etapasTotal + ' etapas e ' +
+            m.tarefas + ' tarefas. A execução sobe pelas subtarefas marcadas.</p>' +
+        '</div>' +
+        '<button class="btn primario" id="nova">+ Nova tarefa</button>' +
+      '</div>' +
+      (erroServidor ? '<div class="aviso">' + esc(erroServidor) + '</div>' : '') +
+      '<div class="abas" role="tablist">' +
+        ABAS.map(function(a){
+          var cont = a.id === "acompanhamento" ? (m.atrasados || null)
+                   : a.id === "quadro" ? m.tarefas
+                   : a.id === "cronograma" ? m.etapasTotal
+                   : a.id === "calendario" ? m.itens : null;
+          return '<button role="tab" data-aba="' + a.id + '" class="' + (aba === a.id ? "on" : "") + '">' +
+            a.nome + (cont !== null ? '<span class="cont-aba">' + cont + '</span>' : '') + '</button>';
+        }).join("") +
+      '</div>' +
+      '<div id="aba-conteudo"></div>';
+
+    document.getElementById("nova").addEventListener("click", criarTarefa);
+    Array.prototype.forEach.call(app.querySelectorAll("[data-aba]"), function(b){
+      b.addEventListener("click", function(){
+        aba = b.dataset.aba;
+        pintarPlano();
+      });
+    });
+    pintarAba();
+  }
+
+  function pintarAba(){
+    var alvo = document.getElementById("aba-conteudo");
+    if(!alvo) return;
+    if(aba === "painel") pintarPainel(alvo);
+    else if(aba === "acompanhamento") pintarAcompanhamento(alvo);
+    else if(aba === "quadro") pintarAbaQuadro(alvo);
+    else if(aba === "cronograma") pintarCronograma(alvo);
+    else if(aba === "calendario") pintarCalendario(alvo);
+  }
+
+  function pintarAbaQuadro(alvo){
+    alvo.innerHTML =
+      '<div class="barra-ferramentas">' +
+        '<div class="campo"><label for="f-busca">Buscar</label>' +
+          '<input id="f-busca" type="search" placeholder="tarefa, etapa ou subtarefa" value="' + esc(filtro.busca) + '"></div>' +
+        '<div class="campo"><label for="f-resp">Responsável</label>' +
+          '<select id="f-resp"><option value="">Todos</option></select></div>' +
+        '<div class="campo"><label for="f-prio">Prioridade</label>' +
+          '<select id="f-prio"><option value="">Todas</option>' +
+          PRIORIDADES.map(function(x){
+            return '<option value="' + x.id + '"' + (filtro.prio === x.id ? " selected" : "") + '>' + x.nome + '</option>';
+          }).join("") + '</select></div>' +
+      '</div>' +
+      '<div class="quadro" id="quadro"></div>';
+
+    var fb = document.getElementById("f-busca");
+    fb.addEventListener("input", function(){ filtro.busca = fb.value; pintarQuadro(); });
+    var fr = document.getElementById("f-resp");
+    fr.addEventListener("change", function(){ filtro.resp = fr.value; pintarQuadro(); });
+    var fp = document.getElementById("f-prio");
+    fp.addEventListener("change", function(){ filtro.prio = fp.value; pintarQuadro(); });
+
+    pintarQuadro();
+  }
+
+  function visiveis(){
+    var q = filtro.busca.trim().toLowerCase();
+    return tarefas.filter(function(t){
+      if(filtro.resp && t.responsavel !== filtro.resp) return false;
+      if(filtro.prio && prioridadeDe(t) !== filtro.prio) return false;
+      if(!q) return true;
+      var alvo = (t.titulo + " " + t.responsavel + " " + t.descricao + " " +
+        (t.etapas||[]).map(function(e){
+          return e.nome + " " + e.observacoes + " " +
+            (e.subetapas||[]).map(function(sb){ return sb.nome; }).join(" ");
+        }).join(" ")).toLowerCase();
+      return alvo.indexOf(q) >= 0;
+    });
+  }
+
+  function pintarQuadro(){
+    var quadro = document.getElementById("quadro");
+    if(!quadro) return;
+    var lista = visiveis();
+
+    quadro.innerHTML = COLUNAS.map(function(c){
+      var doGrupo = lista.filter(function(t){ return t.status === c.id; })
+        .sort(function(a,b){
+          return ORDEM_PRIORIDADE[prioridadeDe(a)] - ORDEM_PRIORIDADE[prioridadeDe(b)];
+        });
+      var cards = doGrupo.map(function(t){
+        var p = progresso(t);
+        var atr = atrasada(t);
+        var nEt = (t.etapas||[]).length;
+        var feitas = (t.etapas||[]).filter(function(e){ return percentualEtapa(e) >= 100; }).length;
+        var pr = prioridadeDe(t);
+        return '' +
+          '<div class="tarefa" role="button" tabindex="0" draggable="true" data-id="' + t.id + '" data-p="' + pr + '">' +
+            '<div class="cab-card">' +
+              '<h4>' + esc(t.titulo || "Sem título") + '</h4>' +
+              '<span class="selo ' + pr + '"><i></i>' + nomePrioridade(pr) + '</span>' +
+            '</div>' +
+            '<div class="meta">' +
+              (t.responsavel
+                ? '<span class="resp"><span class="av">' + esc(iniciais(t.responsavel)) + '</span>' + esc(t.responsavel) + '</span>'
+                : '<span class="resp" style="color:var(--muted)">sem responsável</span>') +
+              (t.prazoTotal ? '<span class="prazo ' + (atr ? "atrasado" : "") + '">' + (atr ? "⚠ " : "") + dataBR(t.prazoTotal) + '</span>' : '') +
+            '</div>' +
+            '<div class="prog"><span class="trilho"><i class="' + (p>=100 ? "full" : "") + '" style="width:' + p + '%"></i></span>' +
+            '<span class="pct">' + p + '%</span></div>' +
+            (nEt ? '<span class="etapas-mini">' + feitas + " de " + nEt + (nEt>1 ? " etapas concluídas" : " etapa concluída") + '</span>'
+                 : '<span class="etapas-mini">sem etapas</span>') +
+          '</div>';
+      }).join("");
+
+      return '<div class="coluna" data-st="' + c.id + '">' +
+        '<header><h3>' + c.nome + '</h3><span class="cont">' + doGrupo.length + '</span></header>' +
+        '<div class="faixa"></div>' +
+        '<div class="pilha">' + cards + '</div></div>';
+    }).join("");
+
+    atualizarKpis();
+
+    var v = document.getElementById("vazio-plano");
+    if(v) v.remove();
+    if(!tarefas.length){
+      quadro.insertAdjacentHTML("afterend",
+        '<div class="vazio" id="vazio-plano" style="margin-top:16px"><b>Nenhuma tarefa ainda</b>' +
+        'Crie a primeira tarefa, defina o responsável e quebre em etapas com prazo e percentual.</div>');
+    }
+
+    Array.prototype.forEach.call(quadro.querySelectorAll(".tarefa"), function(el){
+      el.addEventListener("click", function(){ abrirPainel(el.dataset.id); });
+      el.addEventListener("keydown", function(ev){
+        if(ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); abrirPainel(el.dataset.id); }
+      });
+      el.addEventListener("dragstart", function(ev){
+        ev.dataTransfer.setData("text/plain", el.dataset.id);
+        ev.dataTransfer.effectAllowed = "move";
+        el.classList.add("arrastando");
+      });
+      el.addEventListener("dragend", function(){ el.classList.remove("arrastando"); });
+    });
+
+    Array.prototype.forEach.call(quadro.querySelectorAll(".coluna"), function(col){
+      col.addEventListener("dragover", function(ev){ ev.preventDefault(); col.classList.add("drop"); });
+      col.addEventListener("dragleave", function(){ col.classList.remove("drop"); });
+      col.addEventListener("drop", function(ev){
+        ev.preventDefault();
+        col.classList.remove("drop");
+        var id = ev.dataTransfer.getData("text/plain");
+        var t = null;
+        for(var i=0;i<tarefas.length;i++){ if(tarefas[i].id === id){ t = tarefas[i]; break; } }
+        if(t && t.status !== col.dataset.st){
+          t.status = col.dataset.st;
+          gravar(t).then(pintarQuadro, pintarQuadro);
+          pintarQuadro();
+        }
+      });
+    });
+  }
+
+  // Os indicadores moraram no quadro; agora vivem no Painel. Aqui resta
+  // manter o seletor de responsáveis alinhado com as tarefas existentes.
+  function atualizarKpis(){
+    var sel = document.getElementById("f-resp");
+    if(!sel || document.activeElement === sel) return;
+    var nomes = [];
+    tarefas.forEach(function(t){
+      var n = (t.responsavel || "").trim();
+      if(n && nomes.indexOf(n) < 0) nomes.push(n);
+    });
+    nomes.sort();
+    var atual = filtro.resp;
+    sel.innerHTML = '<option value="">Todos</option>' +
+      nomes.map(function(r){ return '<option value="' + esc(r) + '">' + esc(r) + '</option>'; }).join("");
+    sel.value = nomes.indexOf(atual) >= 0 ? atual : "";
+    filtro.resp = sel.value;
+  }
+
+  function criarTarefa(){
+    var t = {
+      id: novoId(), titulo:"", responsavel:"", prazoTotal:"", status:"todo",
+      prioridade:"media", descricao:"", etapas:[], criadoEm: new Date().toISOString()
+    };
+    tarefas.push(t);
+    gravar(t).then(function(){ pintarAba(); }, function(){ pintarAba(); });
+    if(aba !== "quadro"){ aba = "quadro"; pintarPlano(); } else { pintarQuadro(); }
+    abrirPainel(t.id, true);
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     PLANO DE AÇÃO — painel, quadro, cronograma e calendário
+     ═══════════════════════════════════════════════════════════ */
+
+  var ABAS = [
+    { id:"painel",     nome:"Painel" },
+    { id:"acompanhamento", nome:"Acompanhamento" },
+    { id:"quadro",     nome:"Quadro" },
+    { id:"cronograma", nome:"Cronograma" },
+    { id:"calendario", nome:"Calendário" }
+  ];
+  var aba = "painel";
+  var acomp = { ate:null, resp:"", ver:"pendentes" };   // filtros da aba Acompanhamento
+  var timersMotivo = {};
+  var mesCal = null;          // {ano, mes} do calendário
+  var diaSel = null;          // dia clicado no calendário
+  var abertasCrono = {};      // etapas expandidas no cronograma
+  var MES_CURTO = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  var MES_LONGO = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho",
+                   "Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  var DIA_CURTO = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
+  /* ---------- datas ---------- */
+  function dataDe(iso){
+    if(!iso) return null;
+    var p = String(iso).split("-");
+    if(p.length !== 3) return null;
+    var d = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function isoDe(d){
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") +
+           "-" + String(d.getDate()).padStart(2,"0");
+  }
+  function diasEntre(a, b){
+    return Math.round((b - a) / 86400000);
+  }
+  function segundaDa(d){
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var dow = (x.getDay() + 6) % 7;   // segunda = 0
+    x.setDate(x.getDate() - dow);
+    return x;
+  }
+
+  /* ---------- itens: a unidade real de trabalho ----------
+     Cada subtarefa é um item. Uma etapa sem subtarefas conta como
+     um item próprio, para nada ficar de fora da conta.            */
+  function listaItens(){
+    var itens = [];
+    var h = hoje();
+    tarefas.forEach(function(t){
+      (t.etapas || []).forEach(function(e){
+        var subs = e.subetapas || [];
+        if(subs.length){
+          subs.forEach(function(sb){
+            var prazo = sb.prazo || e.prazo || "";
+            itens.push({
+              tipo:"sub", tarefa:t, etapa:e, sub:sb,
+              nome: sb.nome || "Subtarefa sem nome",
+              prazo: prazo,
+              feito: !!sb.feito,
+              atrasado: !sb.feito && prazo && prazo < h,
+              responsavel: e.responsavel || t.responsavel || ""
+            });
+          });
+        } else {
+          var pct = percentualEtapa(e);
+          itens.push({
+            tipo:"etapa", tarefa:t, etapa:e, sub:null,
+            nome: e.nome || "Etapa sem nome",
+            prazo: e.prazo || "",
+            feito: pct >= 100,
+            atrasado: pct < 100 && e.prazo && e.prazo < h,
+            responsavel: e.responsavel || t.responsavel || ""
+          });
+        }
+      });
+    });
+    return itens;
+  }
+
+  function metricas(){
+    var h = hoje();
+    var itens = listaItens();
+    var subsTotal = 0, subsFeitas = 0;
+    var etapasTotal = 0, etapasFeitas = 0, etapasAtrasadas = 0;
+    tarefas.forEach(function(t){
+      (t.etapas || []).forEach(function(e){
+        etapasTotal++;
+        var pct = percentualEtapa(e);
+        if(pct >= 100) etapasFeitas++;
+        else if(e.prazo && e.prazo < h) etapasAtrasadas++;
+        (e.subetapas || []).forEach(function(sb){
+          subsTotal++;
+          if(sb.feito) subsFeitas++;
+        });
+      });
+    });
+    var atrasados = itens.filter(function(i){ return i.atrasado; }).length;
+    return {
+      tarefas: tarefas.length,
+      tarefasAndamento: tarefas.filter(function(t){ return t.status === "doing" || t.status === "review"; }).length,
+      tarefasFeitas: tarefas.filter(function(t){ return t.status === "done"; }).length,
+      etapasTotal: etapasTotal, etapasFeitas: etapasFeitas, etapasAtrasadas: etapasAtrasadas,
+      subsTotal: subsTotal, subsFeitas: subsFeitas,
+      execucao: subsTotal ? Math.round(subsFeitas * 100 / subsTotal) : 0,
+      itens: itens.length,
+      atrasados: atrasados,
+      urgentes: tarefas.filter(function(t){ return prioridadeDe(t) === "urgente" && t.status !== "done"; }).length
+    };
+  }
+
+  /* ---------- aba: ACOMPANHAMENTO ----------
+     Até a data escolhida (padrão: hoje): o que estava previsto, o que foi
+     feito, o que está pendente e o motivo. Clicar abre a tarefa no item. */
+  function somenteLeitura(){ return !!window.CENTRAL_SOMENTE_LEITURA; }
+
+  function situacaoItem(i, ate){
+    // feito "até a data": subtarefa com data de conclusão posterior à data
+    // escolhida ainda estava pendente naquele dia.
+    var conc = i.sub ? (i.sub.concluidoEm || "") : "";
+    var feitoAte = i.feito && (!conc || conc <= ate);
+    return { feito: feitoAte, concluidoEm: conc };
+  }
+
+  function itensAcompanhamento(){
+    var ate = acomp.ate || hoje();
+    var resp = acomp.resp;
+    return listaItens().filter(function(i){
+      return !resp || (i.responsavel || "Sem responsável") === resp;
+    }).map(function(i){
+      var st = situacaoItem(i, ate);
+      var previsto = !!i.prazo && i.prazo <= ate;
+      var diasAtraso = 0, folga = null;
+      var dAte = dataDe(ate), dPrazo = dataDe(i.prazo);
+      if(previsto && !st.feito && dAte && dPrazo) diasAtraso = diasEntre(dPrazo, dAte);
+      if(st.feito && st.concluidoEm && dPrazo){ folga = diasEntre(dataDe(st.concluidoEm), dPrazo); }
+      return { i:i, previsto:previsto, feito:st.feito, concluidoEm:st.concluidoEm,
+               diasAtraso:diasAtraso, folga:folga,
+               motivo: (i.sub ? i.sub.motivo : i.etapa.motivo) || "" };
+    });
+  }
+
+  function pintarAcompanhamento(destino){
+    if(!acomp.ate) acomp.ate = hoje();
+    var ate = acomp.ate;
+    var todos = itensAcompanhamento();
+    var previstos = todos.filter(function(x){ return x.previsto; });
+    var feitos = previstos.filter(function(x){ return x.feito; });
+    var pendentes = previstos.filter(function(x){ return !x.feito; });
+    var adiantados = todos.filter(function(x){ return !x.previsto && x.feito && x.i.prazo; });
+    var noPrazo = feitos.filter(function(x){ return x.folga !== null && x.folga >= 0; }).length;
+    var comData = feitos.filter(function(x){ return x.folga !== null; }).length;
+    var semMotivo = pendentes.filter(function(x){ return !x.motivo.trim(); }).length;
+    var cumprimento = previstos.length ? Math.round(feitos.length * 100 / previstos.length) : 0;
+    var ehHoje = ate === hoje();
+    var rotData = ehHoje ? "hoje" : dataBR(ate);
+
+    var nomes = {};
+    listaItens().forEach(function(i){ nomes[(i.responsavel || "Sem responsável")] = 1; });
+    var opcoesResp = '<option value="">Todos</option>' + Object.keys(nomes).sort().map(function(n){
+      return '<option value="' + esc(n) + '"' + (acomp.resp === n ? " selected" : "") + '>' + esc(n) + '</option>';
+    }).join("");
+
+    var kpis = '' +
+      '<div class="acomp-kpis">' +
+        '<div class="kpi2"><div class="rotulo">Previsto até ' + rotData + '</div><b>' + previstos.length + '</b>' +
+          '<div class="apoio">entregas com prazo vencido ou no dia</div></div>' +
+        '<div class="kpi2 bom"><div class="rotulo">Feito</div><b>' + feitos.length + '</b>' +
+          '<div class="apoio">' + cumprimento + '% do previsto</div>' +
+          '<div class="medidor"><i style="width:' + cumprimento + '%"></i></div></div>' +
+        '<div class="kpi2 ' + (pendentes.length ? "risco" : "") + '"><div class="rotulo">Pendente</div><b>' + pendentes.length + '</b>' +
+          '<div class="apoio">' + (semMotivo ? semMotivo + " sem motivo informado" : "todas com motivo") + '</div></div>' +
+        '<div class="kpi2"><div class="rotulo">Feito no prazo</div><b>' + noPrazo + '<span style="color:var(--muted);font-size:16px">/' + comData + '</span></b>' +
+          '<div class="apoio">das concluídas com data</div></div>' +
+        '<div class="kpi2"><div class="rotulo">Adiantado</div><b>' + adiantados.length + '</b>' +
+          '<div class="apoio">feito antes do prazo previsto</div></div>' +
+      '</div>';
+
+    var filtros = '' +
+      '<div class="acomp-filtros">' +
+        '<div class="f"><label for="ac-ate">Previsto até</label><input id="ac-ate" type="date" value="' + esc(ate) + '"></div>' +
+        '<div class="f"><label for="ac-resp">Responsável</label><select id="ac-resp">' + opcoesResp + '</select></div>' +
+        '<div class="seg" role="group" aria-label="Mostrar">' +
+          [["pendentes","Pendentes (" + pendentes.length + ")"],["feitos","Feitos (" + feitos.length + ")"],["previstos","Todo o previsto (" + previstos.length + ")"]]
+            .map(function(o){ return '<button type="button" data-ver="' + o[0] + '" class="' + (acomp.ver === o[0] ? "on" : "") + '">' + o[1] + '</button>'; }).join("") +
+        '</div>' +
+        (ehHoje ? '' : '<button type="button" class="btn pequeno" id="ac-hoje">Voltar para hoje</button>') +
+      '</div>';
+
+    var lista = acomp.ver === "feitos" ? feitos : acomp.ver === "previstos" ? previstos : pendentes;
+    lista = lista.slice().sort(function(a,b){
+      if(a.feito !== b.feito) return a.feito ? 1 : -1;
+      return (a.i.prazo || "").localeCompare(b.i.prazo || "");
+    });
+
+    var cab = '<div class="acomp-item cab"><span>Entrega</span><span>Responsável</span><span>Previsto</span><span>Situação</span><span>' +
+      (acomp.ver === "feitos" ? "Concluído em" : "Motivo da pendência") + '</span></div>';
+
+    var linhas = lista.map(function(x){
+      var i = x.i;
+      var sit, cls;
+      if(x.feito){
+        if(x.folga === null){ sit = "Feito"; cls = "ok"; }
+        else if(x.folga >= 0){ sit = x.folga > 0 ? "Feito " + x.folga + "d antes" : "Feito no dia"; cls = "ok"; }
+        else { sit = "Feito com " + Math.abs(x.folga) + "d de atraso"; cls = "aviso"; }
+      } else if(x.diasAtraso > 0){ sit = x.diasAtraso + "d de atraso"; cls = "atraso"; }
+      else { sit = "Vence " + (ehHoje ? "hoje" : "no dia"); cls = "aviso"; }
+
+      var ultima;
+      if(acomp.ver === "feitos" || x.feito){
+        ultima = '<span class="motivo-txt">' + (x.concluidoEm ? dataBR(x.concluidoEm) : "—") +
+          (x.motivo ? ' · <span style="color:var(--muted)">' + esc(x.motivo) + '</span>' : '') + '</span>';
+      } else if(somenteLeitura()){
+        ultima = '<span class="motivo-txt ' + (x.motivo ? "" : "sem-motivo") + '">' + (x.motivo ? esc(x.motivo) : "Motivo não informado") + '</span>';
+      } else {
+        ultima = '<input class="motivo ' + (x.motivo ? "" : "sem-motivo") + '" data-motivo value="' + esc(x.motivo) +
+          '" placeholder="Por que está pendente?" aria-label="Motivo da pendência">';
+      }
+
+      return '<div class="acomp-item" data-tarefa="' + esc(i.tarefa.id) + '" data-etapa="' + esc(i.etapa.id) + '" data-sub="' + esc(i.sub ? i.sub.id : "") + '">' +
+        '<span class="o-que"><b>' + esc(i.nome) + '</b><span>' + esc(i.tarefa.titulo || "Sem título") +
+          (i.tipo === "sub" ? " · " + esc(i.etapa.nome || "etapa") : "") + '</span></span>' +
+        '<span class="resp"><span class="rot-movel">Resp.: </span>' + esc(i.responsavel || "—") + '</span>' +
+        '<span class="dt"><span class="rot-movel">Previsto: </span>' + (i.prazo ? dataBR(i.prazo) : "—") + '</span>' +
+        '<span class="sit ' + cls + '">' + sit + '</span>' +
+        '<span class="motivo-cel">' + ultima + '</span>' +
+      '</div>';
+    }).join("");
+
+    var vazioTxt = acomp.ver === "feitos" ? "Nada concluído entre as entregas previstas até " + rotData + "."
+                 : acomp.ver === "previstos" ? "Nenhuma entrega prevista até " + rotData + "."
+                 : "Nenhuma pendência até " + rotData + ". Tudo o que estava previsto foi feito.";
+    var tituloLista = acomp.ver === "feitos" ? "O que foi feito" : acomp.ver === "previstos" ? "Tudo o que estava previsto" : "O que está pendente e por quê";
+    var cartaoLista = cartao(tituloLista, "clique em uma linha para abrir a tarefa",
+      lista.length ? '<div class="acomp-lista">' + cab + linhas + '</div>' : '<p class="vazio-mini">' + vazioTxt + '</p>');
+
+    // evolução por tarefa: previsto x feito até a data
+    var porTarefa = {};
+    todos.forEach(function(x){
+      var t = x.i.tarefa;
+      var r = porTarefa[t.id] || (porTarefa[t.id] = { t:t, prev:0, feito:0, pend:0, semMotivo:0 });
+      if(x.previsto){ r.prev++; if(x.feito) r.feito++; else { r.pend++; if(!x.motivo.trim()) r.semMotivo++; } }
+    });
+    var linhasT = Object.keys(porTarefa).map(function(k){ return porTarefa[k]; })
+      .filter(function(r){ return r.prev; })
+      .sort(function(a,b){ return b.pend - a.pend || (a.t.titulo||"").localeCompare(b.t.titulo||""); });
+    var cartaoTarefas = cartao("Evolução por tarefa", "feito ÷ previsto até " + rotData,
+      linhasT.length ? '<div class="barras">' + linhasT.map(function(r){
+        var pct = Math.round(r.feito * 100 / r.prev);
+        return '<div class="barra-linha" data-abrir-tarefa="' + esc(r.t.id) + '" style="cursor:pointer">' +
+          '<div class="rot"><span class="nome" title="' + esc(r.t.titulo) + '">' + esc(r.t.titulo || "Sem título") + '</span>' +
+            '<span class="valor">' + pct + '%</span></div>' +
+          '<div class="trilha"><i style="width:' + pct + '%"></i></div>' +
+          '<div class="sub">' + r.feito + ' de ' + r.prev + ' previstas feitas' +
+            (r.pend ? ' · <span class="atraso">' + r.pend + ' pendente' + (r.pend>1?"s":"") + '</span>' : '') +
+            (r.semMotivo ? ' · ' + r.semMotivo + ' sem motivo' : '') +
+            (r.t.responsavel ? ' · ' + esc(r.t.responsavel) : '') + '</div></div>';
+      }).join("") + '</div>' : '<p class="vazio-mini">Nenhuma entrega prevista até ' + rotData + '.</p>');
+
+    destino.innerHTML = filtros + kpis +
+      (semMotivo && !somenteLeitura() ? '<div class="acomp-aviso">' + semMotivo + ' pendência' + (semMotivo>1?"s":"") +
+        ' sem motivo informado. Preencha o motivo para acompanhar o que está travando.</div>' : '') +
+      '<div class="painel-colunas"><div class="coluna-painel">' + cartaoLista + '</div>' +
+      '<div class="coluna-painel">' + cartaoTarefas + '</div></div>';
+
+    document.getElementById("ac-ate").addEventListener("change", function(ev){
+      acomp.ate = ev.target.value || hoje(); pintarAcompanhamento(destino);
+    });
+    document.getElementById("ac-resp").addEventListener("change", function(ev){
+      acomp.resp = ev.target.value; pintarAcompanhamento(destino);
+    });
+    var bh = document.getElementById("ac-hoje");
+    if(bh) bh.addEventListener("click", function(){ acomp.ate = hoje(); pintarAcompanhamento(destino); });
+    Array.prototype.forEach.call(destino.querySelectorAll("[data-ver]"), function(b){
+      b.addEventListener("click", function(){ acomp.ver = b.dataset.ver; pintarAcompanhamento(destino); });
+    });
+    Array.prototype.forEach.call(destino.querySelectorAll(".acomp-item[data-tarefa]"), function(linha){
+      linha.addEventListener("click", function(ev){
+        if(ev.target.closest("input")) return;
+        abrirItem(linha.dataset.tarefa, linha.dataset.etapa, linha.dataset.sub);
+      });
+      var campo = linha.querySelector("[data-motivo]");
+      if(campo){
+        campo.addEventListener("click", function(ev){ ev.stopPropagation(); });
+        campo.addEventListener("input", function(){
+          campo.classList.toggle("sem-motivo", !campo.value.trim());
+          salvarMotivo(linha.dataset.tarefa, linha.dataset.etapa, linha.dataset.sub, campo.value);
+        });
+      }
+    });
+    Array.prototype.forEach.call(destino.querySelectorAll("[data-abrir-tarefa]"), function(b){
+      b.addEventListener("click", function(){ abrirPainel(b.dataset.abrirTarefa); });
+    });
+  }
+
+  // Grava o motivo procurando a tarefa ATUAL pelo id (a lista é trocada a cada gravação).
+  function salvarMotivo(tarefaId, etapaId, subId, valor){
+    var t = null;
+    for(var k=0;k<tarefas.length;k++){ if(tarefas[k].id === tarefaId){ t = tarefas[k]; break; } }
+    if(!t) return;
+    (t.etapas || []).forEach(function(e){
+      if(e.id !== etapaId) return;
+      if(subId){ (e.subetapas || []).forEach(function(sb){ if(sb.id === subId) sb.motivo = valor; }); }
+      else e.motivo = valor;
+    });
+    if(timersMotivo[tarefaId]) clearTimeout(timersMotivo[tarefaId]);
+    timersMotivo[tarefaId] = setTimeout(function(){
+      delete timersMotivo[tarefaId];
+      var atual = null;
+      for(var k=0;k<tarefas.length;k++){ if(tarefas[k].id === tarefaId){ atual = tarefas[k]; break; } }
+      if(atual) gravar(JSON.parse(JSON.stringify(atual))).then(null, function(){
+        erroServidor = "Não foi possível salvar o motivo.";
+      });
+    }, 700);
+  }
+
+  // Abre a tarefa e leva até a etapa/subetapa clicada.
+  function abrirItem(tarefaId, etapaId, subId){
+    abrirPainel(tarefaId);
+    var painel = document.getElementById("painel");
+    if(!painel) return;
+    var alvo = (subId && painel.querySelector('[data-sub="' + subId + '"]')) ||
+               painel.querySelector('[data-et="' + etapaId + '"]');
+    if(!alvo) return;
+    setTimeout(function(){
+      alvo.scrollIntoView({ block:"center", behavior:"smooth" });
+      alvo.classList.add("destaque-item");
+      setTimeout(function(){ alvo.classList.remove("destaque-item"); }, 2600);
+    }, 60);
+  }
+
+  /* ---------- aba: PAINEL ---------- */
+  function pintarPainel(destino){
+    var m = metricas();
+    var itens = listaItens();
+
+    destino.innerHTML =
+      faixaKpis(m) +
+      '<div class="painel-colunas">' +
+        '<div class="coluna-painel">' +
+          cartaoExecucaoTarefas() +
+          cartaoSemanas(itens) +
+        '</div>' +
+        '<div class="coluna-painel">' +
+          cartaoResponsaveis(itens) +
+          cartaoProximas(itens) +
+        '</div>' +
+      '</div>';
+
+    ligarDicasColunas(destino);
+  }
+
+  function faixaKpis(m){
+    return '' +
+    '<div class="faixa-kpi">' +
+      '<div class="kpi-heroi">' +
+        '<div class="topo">' +
+          '<div><div class="rotulo">Execução geral</div>' +
+            '<div class="numerao">' + m.execucao + '%</div></div>' +
+          '<div class="detalhe" style="text-align:right">' +
+            '<b class="mono">' + m.subsFeitas + ' de ' + m.subsTotal + '</b><br>subtarefas concluídas</div>' +
+        '</div>' +
+        '<div class="medidor"><i style="width:' + m.execucao + '%"></i></div>' +
+        '<div class="detalhe">Medida pelas subtarefas — a unidade real de trabalho do plano.</div>' +
+      '</div>' +
+      '<div class="kpi2"><div class="rotulo">Etapas</div><b>' + m.etapasFeitas + '<span style="color:var(--muted);font-size:16px">/' + m.etapasTotal + '</span></b>' +
+        '<div class="apoio">concluídas</div></div>' +
+      '<div class="kpi2"><div class="rotulo">Tarefas</div><b>' + m.tarefasAndamento + '<span style="color:var(--muted);font-size:16px">/' + m.tarefas + '</span></b>' +
+        '<div class="apoio">em andamento</div></div>' +
+      '<div class="kpi2 ' + (m.atrasados ? "risco" : "") + '"><div class="rotulo">Atrasadas</div><b>' + m.atrasados + '</b>' +
+        '<div class="apoio">entregas vencidas</div></div>' +
+      '<div class="kpi2 ' + (m.urgentes ? "risco" : "") + '"><div class="rotulo">Urgentes</div><b>' + m.urgentes + '</b>' +
+        '<div class="apoio">tarefas em aberto</div></div>' +
+    '</div>';
+  }
+
+  function cartaoExecucaoTarefas(){
+    var h = hoje();
+    var linhas = tarefas.map(function(t){
+      var subs = 0, feitas = 0, atrasadas = 0;
+      (t.etapas || []).forEach(function(e){
+        var lista = e.subetapas || [];
+        if(lista.length){
+          lista.forEach(function(sb){
+            subs++;
+            if(sb.feito) feitas++;
+            else { var pz = sb.prazo || e.prazo || ""; if(pz && pz < h) atrasadas++; }
+          });
+        } else {
+          subs++;
+          if(percentualEtapa(e) >= 100) feitas++;
+          else if(e.prazo && e.prazo < h) atrasadas++;
+        }
+      });
+      return { titulo:t.titulo || "Sem título", pct:progresso(t), subs:subs,
+               feitas:feitas, atrasadas:atrasadas, prazo:t.prazoTotal };
+    }).sort(function(a,b){ return b.pct - a.pct; });
+
+    if(!linhas.length){
+      return cartao("Execução por tarefa", "", '<p class="vazio-mini">Nenhuma tarefa cadastrada.</p>');
+    }
+
+    var corpo = '<div class="barras">' + linhas.map(function(l){
+      return '<div class="barra-linha">' +
+        '<div class="rot"><span class="nome" title="' + esc(l.titulo) + '">' + esc(l.titulo) + '</span>' +
+          '<span class="valor">' + l.pct + '%</span></div>' +
+        '<div class="trilha"><i style="width:' + Math.max(l.pct, 0) + '%"></i></div>' +
+        '<div class="sub">' + l.feitas + ' de ' + l.subs + ' entregas' +
+          (l.atrasadas ? ' · <span class="atraso">' + l.atrasadas + ' atrasada' + (l.atrasadas>1?"s":"") + '</span>' : '') +
+          (l.prazo ? ' · prazo ' + dataBR(l.prazo) : '') +
+        '</div></div>';
+    }).join("") + '</div>';
+
+    return cartao("Execução por tarefa", "% pelas subtarefas concluídas", corpo);
+  }
+
+  function cartaoResponsaveis(itens){
+    var mapa = {};
+    itens.forEach(function(i){
+      var nome = (i.responsavel || "").trim() || "Sem responsável";
+      if(!mapa[nome]) mapa[nome] = { nome:nome, total:0, feitas:0, atrasadas:0 };
+      mapa[nome].total++;
+      if(i.feito) mapa[nome].feitas++;
+      if(i.atrasado) mapa[nome].atrasadas++;
+    });
+    var linhas = Object.keys(mapa).map(function(k){ return mapa[k]; })
+      .sort(function(a,b){ return b.total - a.total; });
+
+    if(!linhas.length){
+      return cartao("Carga por responsável", "", '<p class="vazio-mini">Sem entregas atribuídas.</p>');
+    }
+
+    var corpo = '<table class="tab-resp"><thead><tr>' +
+      '<th>Responsável</th><th style="width:38%">Andamento</th>' +
+      '<th class="dir">Feitas</th><th class="dir">Total</th><th class="dir">Atraso</th>' +
+      '</tr></thead><tbody>' +
+      linhas.map(function(r){
+        var pct = r.total ? Math.round(r.feitas * 100 / r.total) : 0;
+        return '<tr>' +
+          '<td><span class="pessoa"><span class="av">' + esc(iniciais(r.nome)) + '</span>' + esc(r.nome) + '</span></td>' +
+          '<td><div class="medidor"><i style="width:' + pct + '%"></i></div></td>' +
+          '<td class="dir">' + r.feitas + '</td>' +
+          '<td class="dir" style="color:var(--muted)">' + r.total + '</td>' +
+          '<td class="dir" style="color:' + (r.atrasadas ? "var(--crit)" : "var(--muted)") + '">' + r.atrasadas + '</td>' +
+        '</tr>';
+      }).join("") + '</tbody></table>';
+
+    return cartao("Carga por responsável", "entregas por pessoa", corpo);
+  }
+
+  /* Colunas empilhadas: entregas por semana de vencimento.
+     Duas séries — concluídas e pendentes — com legenda e rótulo. */
+  function cartaoSemanas(itens){
+    var comPrazo = itens.filter(function(i){ return !!i.prazo; });
+    if(!comPrazo.length){
+      return cartao("Entregas por semana", "", '<p class="vazio-mini">Nenhuma entrega tem prazo definido.</p>');
+    }
+
+    var hojeD = dataDe(hoje());
+    var inicio = segundaDa(hojeD);
+    inicio.setDate(inicio.getDate() - 14);            // 2 semanas de retrovisor
+    var semanas = [];
+    for(var k=0;k<12;k++){
+      var ini = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + k*7);
+      var fim = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate() + 6);
+      semanas.push({ ini:ini, fim:fim, feitas:0, pendentes:0 });
+    }
+    var antes = { feitas:0, pendentes:0 }, depois = { feitas:0, pendentes:0 };
+    comPrazo.forEach(function(i){
+      var d = dataDe(i.prazo);
+      if(!d) return;
+      var alvo = null;
+      for(var k=0;k<semanas.length;k++){
+        if(d >= semanas[k].ini && d <= semanas[k].fim){ alvo = semanas[k]; break; }
+      }
+      if(!alvo) alvo = d < semanas[0].ini ? antes : depois;
+      if(i.feito) alvo.feitas++; else alvo.pendentes++;
+    });
+
+    var maxV = 1;
+    semanas.forEach(function(s){ maxV = Math.max(maxV, s.feitas + s.pendentes); });
+
+    var L=34, R=8, T=26, B=40, W=560, H=222;
+    var larg = (W - L - R) / semanas.length;
+    var barW = Math.min(26, larg - 10);
+    var alturaUtil = H - T - B;
+    var esc1 = function(v){ return v / maxV * alturaUtil; };
+
+    // grade
+    var passos = [0, Math.ceil(maxV/2), maxV];
+    var grade = passos.map(function(v){
+      var y = T + alturaUtil - esc1(v);
+      return '<line class="grade" x1="' + L + '" y1="' + y.toFixed(1) + '" x2="' + (W-R) + '" y2="' + y.toFixed(1) + '"></line>' +
+             '<text class="eixo-txt" x="' + (L-7) + '" y="' + (y+3.5).toFixed(1) + '" text-anchor="end">' + v + '</text>';
+    }).join("");
+
+    var barras = semanas.map(function(s, idx){
+      var x = L + idx*larg + (larg - barW)/2;
+      var total = s.feitas + s.pendentes;
+      var base = T + alturaUtil;
+      var out = "";
+      var hPend = esc1(s.pendentes), hFeito = esc1(s.feitas);
+      // pendentes em cima, concluídas embaixo, com 2px de respiro entre elas
+      if(s.feitas > 0){
+        out += '<rect class="col-feito" x="' + x.toFixed(1) + '" y="' + (base - hFeito).toFixed(1) +
+               '" width="' + barW.toFixed(1) + '" height="' + hFeito.toFixed(1) + '" rx="0"></rect>';
+      }
+      if(s.pendentes > 0){
+        var yP = base - hFeito - hPend - (s.feitas > 0 ? 2 : 0);
+        out += '<rect class="col-pendente" x="' + x.toFixed(1) + '" y="' + yP.toFixed(1) +
+               '" width="' + barW.toFixed(1) + '" height="' + Math.max(hPend,1).toFixed(1) + '" rx="3"></rect>';
+      }
+      if(total > 0){
+        var yT = base - hFeito - hPend - (s.feitas > 0 ? 2 : 0) - 5;
+        out += '<text class="rotulo-col" x="' + (x + barW/2).toFixed(1) + '" y="' + yT.toFixed(1) + '" text-anchor="middle">' + total + '</text>';
+      }
+      var rotulo = s.ini.getDate() + "/" + MES_CURTO[s.ini.getMonth()];
+      out += '<text class="eixo-txt" x="' + (x + barW/2).toFixed(1) + '" y="' + (base + 15) + '" text-anchor="middle">' + rotulo + '</text>';
+      // área de captura para a dica
+      out += '<rect class="alvo-col" x="' + (L + idx*larg).toFixed(1) + '" y="' + T + '" width="' + larg.toFixed(1) +
+             '" height="' + alturaUtil + '" fill="transparent" ' +
+             'data-dica="Semana de ' + s.ini.getDate() + "/" + MES_CURTO[s.ini.getMonth()] +
+             " a " + s.fim.getDate() + "/" + MES_CURTO[s.fim.getMonth()] +
+             ' — ' + s.feitas + ' concluída' + (s.feitas===1?"":"s") + ', ' + s.pendentes + ' pendente' + (s.pendentes===1?"":"s") + '"></rect>';
+      return out;
+    }).join("");
+
+    // marca do dia de hoje
+    var marca = "";
+    for(var k=0;k<semanas.length;k++){
+      if(hojeD >= semanas[k].ini && hojeD <= semanas[k].fim){
+        var xh = L + k*larg + larg/2;
+        marca = '<line class="marca-hoje" x1="' + xh.toFixed(1) + '" y1="' + (T-4) + '" x2="' + xh.toFixed(1) + '" y2="' + (T+alturaUtil) + '"></line>' +
+                '<text class="eixo-txt" x="' + xh.toFixed(1) + '" y="' + (T-9) + '" text-anchor="middle" style="fill:var(--crit)">hoje</text>';
+        break;
+      }
+    }
+
+    var svg = '<div class="grafico-semanas"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" ' +
+      'aria-label="Entregas por semana de vencimento, separando concluídas e pendentes.">' +
+      grade + marca + barras +
+      '<line class="grade" x1="' + L + '" y1="' + (T+alturaUtil) + '" x2="' + (W-R) + '" y2="' + (T+alturaUtil) + '"></line>' +
+      '</svg></div>';
+
+    var fora = "";
+    if(antes.feitas + antes.pendentes > 0 || depois.feitas + depois.pendentes > 0){
+      fora = '<p class="vazio-mini" style="margin-top:8px">Fora da janela: ' +
+        (antes.feitas + antes.pendentes) + ' antes · ' + (depois.feitas + depois.pendentes) + ' depois.</p>';
+    }
+
+    var legenda = '<span class="legenda">' +
+      '<span><i class="feito"></i>Concluídas</span>' +
+      '<span><i class="pendente"></i>Pendentes</span></span>';
+
+    return cartao("Entregas por semana", legenda, svg + fora);
+  }
+
+  function cartaoProximas(itens){
+    var h = hoje();
+    var hojeD = dataDe(h);
+    var limite = new Date(hojeD.getFullYear(), hojeD.getMonth(), hojeD.getDate() + 14);
+    var lista = itens.filter(function(i){
+      if(i.feito || !i.prazo) return false;
+      var d = dataDe(i.prazo);
+      return d && d <= limite;
+    }).sort(function(a,b){ return a.prazo.localeCompare(b.prazo); }).slice(0, 12);
+
+    if(!lista.length){
+      return cartao("Próximas entregas", "14 dias", '<p class="vazio-mini">Nada vencendo nos próximos 14 dias.</p>');
+    }
+
+    var corpo = '<div class="lista-entregas rolante">' + lista.map(function(i){
+      var d = dataDe(i.prazo);
+      var dif = diasEntre(hojeD, d);
+      var estado = dif < 0 ? "atrasado" : (dif === 0 ? "hoje" : "");
+      var quando = dif < 0 ? Math.abs(dif) + "d atrás" : (dif === 0 ? "hoje" : "em " + dif + "d");
+      return '<div class="entrega ' + estado + '">' +
+        '<span class="quando">' + quando + '</span>' +
+        '<span class="marcador ' + estado + '"></span>' +
+        '<span class="txt"><b>' + esc(i.nome) + '</b>' +
+          '<span>' + esc(i.tarefa.titulo || "Sem título") +
+          (i.tipo === "sub" ? " · " + esc(i.etapa.nome || "etapa") : "") +
+          (i.responsavel ? " · " + esc(i.responsavel) : "") + '</span></span>' +
+        '<span class="crono-info">' + dataBR(i.prazo) + '</span>' +
+      '</div>';
+    }).join("") + '</div>';
+
+    return cartao("Próximas entregas", "14 dias · só o que está em aberto", corpo);
+  }
+
+  function cartao(titulo, legenda, conteudo){
+    return '<section class="cartao"><header><h3>' + titulo + '</h3>' +
+      (legenda ? (legenda.indexOf("<") === 0 ? legenda : '<span class="legenda-titulo">' + legenda + '</span>') : '') +
+      '</header><div class="conteudo">' + conteudo + '</div></section>';
+  }
+
+  /* dica flutuante nas colunas do gráfico */
+  function ligarDicasColunas(raiz){
+    var dica = document.getElementById("dica-grafico");
+    if(!dica){
+      dica = document.createElement("div");
+      dica.id = "dica-grafico";
+      dica.style.cssText = "position:fixed;z-index:60;pointer-events:none;display:none;" +
+        "background:var(--ink);color:var(--paper);font-size:12px;padding:6px 9px;" +
+        "border-radius:5px;max-width:260px;line-height:1.35;box-shadow:var(--shadow-lg)";
+      document.body.appendChild(dica);
+    }
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-dica]"), function(el){
+      el.addEventListener("mousemove", function(ev){
+        dica.textContent = el.dataset.dica;
+        dica.style.display = "block";
+        dica.style.left = Math.min(ev.clientX + 14, window.innerWidth - 270) + "px";
+        dica.style.top = (ev.clientY + 16) + "px";
+      });
+      el.addEventListener("mouseleave", function(){ dica.style.display = "none"; });
+    });
+  }
+
+  /* ---------- aba: CRONOGRAMA ---------- */
+  function inicioEtapa(tarefa, etapas, idx){
+    // Sem data de início cadastrada, a barra vai do fim da etapa anterior
+    // (ou da criação da tarefa) até o prazo — é o período de execução.
+    if(idx > 0 && etapas[idx-1].prazo) return etapas[idx-1].prazo;
+    var criado = (tarefa.criadoEm || "").slice(0, 10);
+    return criado || etapas[idx].prazo;
+  }
+
+  function pintarCronograma(destino){
+    var datas = [];
+    tarefas.forEach(function(t){
+      if(t.prazoTotal) datas.push(t.prazoTotal);
+      (t.etapas || []).forEach(function(e){
+        if(e.prazo) datas.push(e.prazo);
+        (e.subetapas || []).forEach(function(sb){ if(sb.prazo) datas.push(sb.prazo); });
+      });
+    });
+    datas.push(hoje());
+    if(!datas.length){
+      destino.innerHTML = '<div class="vazio"><b>Sem datas para montar o cronograma</b>' +
+        'Informe o prazo das etapas para elas aparecerem aqui.</div>';
+      return;
+    }
+    datas.sort();
+    var ini = dataDe(datas[0]), fim = dataDe(datas[datas.length-1]);
+    ini = new Date(ini.getFullYear(), ini.getMonth(), 1);
+    fim = new Date(fim.getFullYear(), fim.getMonth() + 1, 0);
+    var totalDias = Math.max(diasEntre(ini, fim), 1);
+    var pos = function(iso){
+      var d = dataDe(iso);
+      if(!d) return null;
+      var p = diasEntre(ini, d) / totalDias * 100;
+      return Math.max(0, Math.min(100, p));
+    };
+
+    // faixa de meses
+    var meses = [], cursor = new Date(ini.getFullYear(), ini.getMonth(), 1);
+    while(cursor <= fim){
+      var proximo = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      var ultimoDia = new Date(proximo.getFullYear(), proximo.getMonth(), 0);
+      meses.push({
+        rotulo: MES_LONGO[cursor.getMonth()].slice(0,3) + "/" + String(cursor.getFullYear()).slice(2),
+        inicio: diasEntre(ini, cursor) / totalDias * 100,
+        largura: (diasEntre(cursor, ultimoDia) + 1) / totalDias * 100
+      });
+      cursor = proximo;
+    }
+    var divisores = meses.map(function(m){
+      return '<span class="divisor" style="left:' + m.inicio.toFixed(3) + '%"></span>';
+    }).join("");
+    var pHoje = pos(hoje());
+    var linhaHoje = pHoje === null ? "" : '<span class="hoje-linha" style="left:' + pHoje.toFixed(3) + '%"></span>';
+
+    var linhas = "";
+    tarefas.forEach(function(t){
+      var etapas = (t.etapas || []).slice().sort(function(a,b){
+        return (a.prazo || "9999").localeCompare(b.prazo || "9999");
+      });
+      var pct = progresso(t);
+      linhas += '<div class="crono-linha tarefa">' +
+        '<div class="nome-cel"><span class="rotulo-txt" title="' + esc(t.titulo) + '">' + esc(t.titulo || "Sem título") + '</span>' +
+          '<span class="crono-info">' + pct + '%</span></div>' +
+        '<div class="faixa">' + divisores + linhaHoje + barraTarefa(t, etapas, pos) + '</div></div>';
+
+      etapas.forEach(function(e, idx){
+        var pe = percentualEtapa(e);
+        var ini2 = inicioEtapa(t, etapas, idx);
+        var a = pos(ini2), b = pos(e.prazo);
+        var barra = "";
+        var atrasada = pe < 100 && e.prazo && e.prazo < hoje();
+        var dicaEtapa = esc(e.nome || "Etapa") + " — " + pe + '% · prazo ' + dataBR(e.prazo);
+        if(a !== null && b !== null && Math.abs(b - a) >= 1.2){
+          var esq = Math.min(a, b), larg = Math.abs(b - a);
+          barra = '<span class="crono-barra ' + (pe>=100 ? "completa" : "") + ' ' + (atrasada ? "atrasada" : "") + '" ' +
+            'style="left:' + esq.toFixed(3) + '%;width:' + larg.toFixed(3) + '%" ' +
+            'data-dica="' + dicaEtapa + '">' +
+            '<i style="width:' + pe + '%"></i></span>';
+        } else if(b !== null){
+          // Etapas que caem no mesmo dia da anterior não têm período: viram marco.
+          barra = '<span class="crono-ponto ' + (pe>=100 ? "feito" : (atrasada ? "atrasado" : "")) +
+            '" style="left:' + b.toFixed(3) + '%" data-dica="' + dicaEtapa + '"></span>';
+        } else if(false){
+          barra = '<span class="crono-ponto ' + (pe>=100 ? "feito" : "") + '" style="left:' + b.toFixed(3) + '%"></span>';
+        }
+        var subs = e.subetapas || [];
+        var aberta = !!abertasCrono[e.id];
+        linhas += '<div class="crono-linha etapa">' +
+          '<div class="nome-cel">' +
+            (subs.length ? '<button class="expandir" data-exp="' + e.id + '" aria-label="Ver subtarefas">' + (aberta ? "−" : "+") + '</button>' : '<span style="width:19px;flex:none"></span>') +
+            '<span class="rotulo-txt" title="' + esc(e.nome) + '">' + esc(e.nome || "Etapa sem nome") + '</span>' +
+            '<span class="crono-info">' + pe + '%</span></div>' +
+          '<div class="faixa">' + divisores + linhaHoje + barra + '</div></div>';
+
+        if(aberta){
+          subs.forEach(function(sb){
+            var pz = sb.prazo || e.prazo || "";
+            var p = pos(pz);
+            var atrasado = !sb.feito && pz && pz < hoje();
+            var ponto = p === null ? "" :
+              '<span class="crono-ponto ' + (sb.feito ? "feito" : (atrasado ? "atrasado" : "")) + '" ' +
+              'style="left:' + p.toFixed(3) + '%" data-dica="' + esc(sb.nome || "Subtarefa") +
+              (pz ? " — prazo " + dataBR(pz) : "") +
+              (sb.feito ? " · concluída" + (sb.concluidoEm ? " em " + dataBR(sb.concluidoEm) : "") : " · pendente") + '"></span>';
+            linhas += '<div class="crono-linha sub">' +
+              '<div class="nome-cel"><span class="rotulo-txt" style="' + (sb.feito ? "text-decoration:line-through" : "") + '">' +
+                esc(sb.nome || "Subtarefa sem nome") + '</span></div>' +
+              '<div class="faixa">' + divisores + linhaHoje + ponto + '</div></div>';
+          });
+        }
+      });
+    });
+
+    destino.innerHTML =
+      '<div class="legenda" style="margin-bottom:12px">' +
+        '<span><i class="feito"></i>Executado</span>' +
+        '<span><i class="pendente"></i>A executar</span>' +
+        '<span><i style="background:var(--crit)"></i>Atrasado</span>' +
+        '<span style="margin-left:auto">A barra vai do fim da etapa anterior até o prazo.</span>' +
+      '</div>' +
+      '<div class="crono"><div class="crono-rolagem"><div class="crono-grade" style="--col-nome:290px">' +
+        '<div class="crono-cab"><div class="celula-nome">Tarefa / etapa</div>' +
+          '<div class="crono-meses">' + meses.map(function(m){
+            return '<div class="crono-mes" style="width:' + m.largura.toFixed(3) + '%">' + m.rotulo + '</div>';
+          }).join("") + '</div></div>' +
+        linhas +
+      '</div></div></div>';
+
+    Array.prototype.forEach.call(destino.querySelectorAll("[data-exp]"), function(b){
+      b.addEventListener("click", function(){
+        var id = b.dataset.exp;
+        abertasCrono[id] = !abertasCrono[id];
+        pintarAba();
+      });
+    });
+    ligarDicasColunas(destino);
+  }
+
+  function barraTarefa(t, etapas, pos){
+    var datas = etapas.map(function(e){ return e.prazo; }).filter(Boolean);
+    if(t.prazoTotal) datas.push(t.prazoTotal);
+    if(!datas.length) return "";
+    datas.sort();
+    var criado = (t.criadoEm || "").slice(0,10);
+    var a = pos(criado || datas[0]), b = pos(datas[datas.length-1]);
+    if(a === null || b === null) return "";
+    var esq = Math.min(a,b), larg = Math.max(Math.abs(b-a), 0.8);
+    var pct = progresso(t);
+    return '<span class="crono-barra ' + (pct>=100 ? "completa" : "") + '" style="left:' + esq.toFixed(3) +
+      '%;width:' + larg.toFixed(3) + '%;height:20px" data-dica="' + esc(t.titulo || "Tarefa") +
+      ' — ' + pct + '% · prazo ' + dataBR(t.prazoTotal) + '"><i style="width:' + pct + '%"></i></span>';
+  }
+
+  /* ---------- aba: CALENDÁRIO ---------- */
+  function pintarCalendario(destino){
+    var hojeD = dataDe(hoje());
+    var itens = listaItens().filter(function(i){ return !!i.prazo; });
+
+    if(!mesCal){
+      // Abre no mês corrente; se ele estiver vazio, vai para o primeiro mês
+      // que tem entrega — ninguém quer abrir um calendário em branco.
+      mesCal = { ano:hojeD.getFullYear(), mes:hojeD.getMonth() };
+      var temNoMes = itens.some(function(i){
+        var d = dataDe(i.prazo);
+        return d && d.getMonth() === mesCal.mes && d.getFullYear() === mesCal.ano;
+      });
+      if(!temNoMes && itens.length){
+        var futuras = itens.map(function(i){ return i.prazo; })
+          .filter(function(x){ return x >= hoje(); }).sort();
+        var alvoIso = futuras.length ? futuras[0] : itens.map(function(i){ return i.prazo; }).sort().pop();
+        var dAlvo = dataDe(alvoIso);
+        if(dAlvo) mesCal = { ano:dAlvo.getFullYear(), mes:dAlvo.getMonth() };
+      }
+      if(!diaSel) diaSel = hoje();
+    }
+    var porDia = {};
+    itens.forEach(function(i){
+      if(!porDia[i.prazo]) porDia[i.prazo] = [];
+      porDia[i.prazo].push(i);
+    });
+
+    var primeiro = new Date(mesCal.ano, mesCal.mes, 1);
+    var inicioGrade = new Date(primeiro.getFullYear(), primeiro.getMonth(), 1 - primeiro.getDay());
+    var celulas = "";
+    for(var k=0;k<42;k++){
+      var d = new Date(inicioGrade.getFullYear(), inicioGrade.getMonth(), inicioGrade.getDate() + k);
+      var iso = isoDe(d);
+      var doMes = d.getMonth() === mesCal.mes;
+      var doDia = porDia[iso] || [];
+      var fitas = doDia.slice(0, 3).map(function(i){
+        var classe = i.feito ? "feito" : (i.atrasado ? "atrasado" : "pendente");
+        return '<span class="fita ' + classe + ' ' + (i.tipo === "etapa" ? "etapa" : "") + '" title="' +
+          esc(i.nome) + ' — ' + esc(i.tarefa.titulo || "") + '">' + esc(i.nome) + '</span>';
+      }).join("");
+      var mais = doDia.length > 3 ? '<span class="mais">+' + (doDia.length - 3) + '</span>' : "";
+      celulas += '<button class="dia ' + (doMes ? "" : "fora") + ' ' + (iso === hoje() ? "hoje" : "") +
+        ' ' + (iso === diaSel ? "selecionado" : "") + '" data-dia="' + iso + '">' +
+        '<span class="n">' + d.getDate() + '</span>' + fitas + mais + '</button>';
+    }
+
+    var doMesTotal = itens.filter(function(i){
+      var d = dataDe(i.prazo);
+      return d && d.getMonth() === mesCal.mes && d.getFullYear() === mesCal.ano;
+    });
+    var feitasMes = doMesTotal.filter(function(i){ return i.feito; }).length;
+
+    destino.innerHTML =
+      '<div class="cal-topo">' +
+        '<div class="nav-mes"><button id="mes-ant" aria-label="Mês anterior">‹</button>' +
+          '<button id="mes-prox" aria-label="Próximo mês">›</button></div>' +
+        '<h3>' + MES_LONGO[mesCal.mes] + ' de ' + mesCal.ano + '</h3>' +
+        '<button class="btn pequeno" id="mes-hoje">Hoje</button>' +
+        '<span class="legenda" style="margin-left:auto">' +
+          '<span><i class="feito"></i>Concluído</span>' +
+          '<span><i class="pendente"></i>Pendente</span>' +
+          '<span><i style="background:var(--crit)"></i>Atrasado</span></span>' +
+      '</div>' +
+      '<p class="vazio-mini" style="margin:-6px 0 12px">' + doMesTotal.length +
+        ' entregas vencem neste mês · ' + feitasMes + ' já concluídas.</p>' +
+      '<div class="cal-malha">' +
+        DIA_CURTO.map(function(n){ return '<div class="cal-cab">' + n + '</div>'; }).join("") +
+        celulas +
+      '</div>' +
+      '<div class="dia-detalhe" id="dia-detalhe"></div>';
+
+    document.getElementById("mes-ant").addEventListener("click", function(){
+      mesCal = mesCal.mes === 0 ? { ano:mesCal.ano-1, mes:11 } : { ano:mesCal.ano, mes:mesCal.mes-1 };
+      pintarAba();
+    });
+    document.getElementById("mes-prox").addEventListener("click", function(){
+      mesCal = mesCal.mes === 11 ? { ano:mesCal.ano+1, mes:0 } : { ano:mesCal.ano, mes:mesCal.mes+1 };
+      pintarAba();
+    });
+    document.getElementById("mes-hoje").addEventListener("click", function(){
+      mesCal = { ano:hojeD.getFullYear(), mes:hojeD.getMonth() };
+      diaSel = hoje();
+      pintarAba();
+    });
+    Array.prototype.forEach.call(destino.querySelectorAll("[data-dia]"), function(b){
+      b.addEventListener("click", function(){
+        diaSel = b.dataset.dia;
+        pintarAba();
+      });
+    });
+
+    if(diaSel){
+      var doDiaSel = porDia[diaSel] || [];
+      var caixa = document.getElementById("dia-detalhe");
+      caixa.innerHTML = cartao(
+        dataBR(diaSel),
+        doDiaSel.length + (doDiaSel.length === 1 ? " entrega" : " entregas"),
+        doDiaSel.length
+          ? '<div class="lista-entregas">' + doDiaSel.map(function(i){
+              var estado = i.feito ? "feito" : (i.atrasado ? "atrasado" : "");
+              return '<div class="entrega">' +
+                '<span class="marcador ' + estado + '"></span>' +
+                '<span class="txt"><b style="' + (i.feito ? "text-decoration:line-through;color:var(--muted)" : "") + '">' +
+                  esc(i.nome) + '</b><span>' + esc(i.tarefa.titulo || "") +
+                  (i.tipo === "sub" ? " · " + esc(i.etapa.nome || "") : "") +
+                  (i.responsavel ? " · " + esc(i.responsavel) : "") + '</span></span>' +
+                '<span class="crono-info">' + (i.feito ? "concluída" : (i.atrasado ? "atrasada" : "pendente")) + '</span>' +
+              '</div>';
+            }).join("") + '</div>'
+          : '<p class="vazio-mini">Nada vencendo neste dia.</p>'
+      );
+    }
+  }
+
+  /* ---------------- painel de detalhe ---------------- */
+  function abrirPainel(id, focarTitulo){
+    var t = null;
+    for(var i=0;i<tarefas.length;i++){ if(tarefas[i].id === id){ t = tarefas[i]; break; } }
+    if(!t) return;
+    rascunho = JSON.parse(JSON.stringify(t));
+    montarPainel();
+    if(focarTitulo){
+      var c = document.getElementById("c-titulo");
+      if(c) c.focus();
+    }
+  }
+
+  function fecharPainel(){
+    if(rascunho && timerSalvar) salvarAgora();
+    var f = document.getElementById("fundo-painel");
+    var p = document.getElementById("painel");
+    if(f) f.remove();
+    if(p) p.remove();
+    document.removeEventListener("keydown", escFechar);
+    rascunho = null;
+    if(timerSalvar){ clearTimeout(timerSalvar); timerSalvar = null; }
+  }
+
+  function escFechar(ev){
+    if(ev.key === "Escape" && document.getElementById("painel")) fecharPainel();
+  }
+
+  function montarPainel(){
+    var vf = document.getElementById("fundo-painel");
+    var vp = document.getElementById("painel");
+    if(vf) vf.remove();
+    if(vp) vp.remove();
+    var t = rascunho;
+
+    var fundo = document.createElement("div");
+    fundo.className = "fundo"; fundo.id = "fundo-painel";
+    fundo.addEventListener("click", function(){ fecharPainel(); });
+
+    var p = document.createElement("aside");
+    p.className = "painel"; p.id = "painel";
+    p.setAttribute("role","dialog");
+    p.setAttribute("aria-label","Detalhe da tarefa");
+    p.innerHTML = '' +
+      '<header><div class="t"><p>Tarefa</p></div>' +
+        '<span class="salvo" id="ind-salvo"></span>' +
+        '<button class="fechar" id="btn-fechar" aria-label="Fechar">×</button></header>' +
+      '<div class="corpo">' +
+        '<div class="bloco">' +
+          '<div class="f"><label for="c-titulo">Tarefa</label>' +
+            '<input id="c-titulo" data-campo="titulo" value="' + esc(t.titulo) + '" placeholder="O que precisa ser feito"></div>' +
+          '<div class="linha2">' +
+            '<div class="f"><label for="c-resp">Responsável</label>' +
+              '<input id="c-resp" data-campo="responsavel" value="' + esc(t.responsavel) + '" placeholder="Quem conduz"></div>' +
+            '<div class="f"><label for="c-status">Status</label><select id="c-status" data-campo="status">' +
+              COLUNAS.map(function(c){ return '<option value="' + c.id + '"' + (t.status === c.id ? " selected" : "") + '>' + c.nome + '</option>'; }).join("") +
+            '</select></div>' +
+          '</div>' +
+          '<div class="linha2">' +
+            '<div class="f"><label for="c-prioridade">Prioridade</label>' +
+              '<select id="c-prioridade" data-campo="prioridade">' +
+              PRIORIDADES.map(function(x){
+                return '<option value="' + x.id + '"' + (prioridadeDe(t) === x.id ? " selected" : "") + '>' + x.nome + '</option>';
+              }).join("") + '</select></div>' +
+            '<div class="f"><label for="c-prazo">Prazo total da tarefa</label>' +
+              '<input id="c-prazo" type="date" data-campo="prazoTotal" value="' + esc(t.prazoTotal) + '"></div>' +
+          '</div>' +
+          '<div class="f"><label for="c-desc">Descrição</label>' +
+            '<textarea id="c-desc" data-campo="descricao" placeholder="Contexto, objetivo, entregável">' + esc(t.descricao) + '</textarea></div>' +
+        '</div>' +
+        '<div class="total-box">' +
+          '<div class="cab"><span>Execução total</span><b id="tot-pct">0%</b></div>' +
+          '<div class="prog"><span class="trilho"><i id="tot-barra" style="width:0%"></i></span></div>' +
+          '<span class="nota-calc" id="tot-nota"></span>' +
+        '</div>' +
+        '<div class="bloco"><div class="rotulo">Etapas</div>' +
+          '<div id="lista-etapas" style="display:flex;flex-direction:column;gap:10px"></div>' +
+          '<button class="btn pequeno" id="add-etapa" style="align-self:flex-start">+ Adicionar etapa</button>' +
+        '</div>' +
+      '</div>' +
+      '<footer><button class="btn perigo" id="excluir">Excluir tarefa</button>' +
+        '<span class="espaco"></span>' +
+        '<button class="btn primario" id="concluir">Salvar e fechar</button></footer>';
+
+    document.body.appendChild(fundo);
+    document.body.appendChild(p);
+
+    Array.prototype.forEach.call(p.querySelectorAll("[data-campo]"), function(el){
+      var ev = (el.tagName === "SELECT" || el.type === "date") ? "change" : "input";
+      el.addEventListener(ev, function(){
+        rascunho[el.dataset.campo] = el.value;
+        agendarSalvar();
+      });
+    });
+
+    document.getElementById("btn-fechar").addEventListener("click", function(){ fecharPainel(); });
+    document.getElementById("concluir").addEventListener("click", function(){ fecharPainel(); });
+    document.getElementById("add-etapa").addEventListener("click", function(){
+      rascunho.etapas.push({ id:novoId(), nome:"", responsavel:"", prazo:"", percentual:0,
+                             observacoes:"", subetapas:[] });
+      pintarEtapas(true);
+      agendarSalvar();
+    });
+    document.getElementById("excluir").addEventListener("click", function(){
+      var id = rascunho.id;
+      rascunho = null;
+      if(timerSalvar){ clearTimeout(timerSalvar); timerSalvar = null; }
+      fecharPainel();
+      apagar(id).then(function(){ pintarPlano(); }, function(){ pintarPlano(); });
+    });
+
+    document.addEventListener("keydown", escFechar);
+    pintarEtapas(false);
+  }
+
+  function pintarEtapas(focarUltima){
+    var caixa = document.getElementById("lista-etapas");
+    if(!caixa) return;
+    var et = rascunho.etapas || [];
+
+    if(!et.length){
+      caixa.innerHTML = '<div class="vazio" style="padding:18px"><b>Sem etapas</b>' +
+        'Quebre a tarefa em etapas com prazo e percentual — a execução total é a média delas.</div>';
+      atualizarTotal();
+      return;
+    }
+
+    caixa.innerHTML = et.map(function(e, i){
+      return '<div class="etapa" data-et="' + e.id + '">' +
+        '<div class="cab"><span class="idx">' + String(i+1).padStart(2,"0") + '</span>' +
+          '<input class="nome" data-et-campo="nome" value="' + esc(e.nome) + '" placeholder="Nome da etapa">' +
+          '<button class="rm" data-rm="' + e.id + '" aria-label="Remover etapa">×</button></div>' +
+        '<div class="linha2">' +
+          '<div class="f"><label>Responsável</label>' +
+            '<input data-et-campo="responsavel" value="' + esc(e.responsavel) + '" placeholder="Quem executa"></div>' +
+          '<div class="f"><label>Prazo de entrega</label>' +
+            '<input type="date" data-et-campo="prazo" value="' + esc(e.prazo) + '"></div>' +
+        '</div>' +
+        '<div class="sub-bloco">' +
+          '<div class="cab-sub"><span class="rot-sub">Subetapas</span>' +
+            '<span class="contagem" data-contagem></span></div>' +
+          '<div class="sub-lista" data-sublista></div>' +
+          '<button type="button" class="add-sub" data-add-sub>+ Adicionar subetapa</button>' +
+        '</div>' +
+        '<div class="f"><label>Execução</label><div data-exec></div></div>' +
+        (!(e.subetapas || []).length && percentualEtapa(e) < 100 && e.prazo && e.prazo < hoje()
+          ? '<div class="f"><label style="color:var(--crit)">Motivo da pendência</label>' +
+            '<input data-et-campo="motivo" value="' + esc(e.motivo || "") + '" placeholder="Por que está pendente?"></div>'
+          : '') +
+        '<div class="f"><label>Observações</label>' +
+          '<textarea data-et-campo="observacoes" placeholder="Imprevistos, pendências, quem está travando">' + esc(e.observacoes) + '</textarea></div>' +
+      '</div>';
+    }).join("");
+
+    Array.prototype.forEach.call(caixa.querySelectorAll(".etapa"), function(bloco){
+      var id = bloco.dataset.et;
+      var alvo = null;
+      for(var i=0;i<rascunho.etapas.length;i++){ if(rascunho.etapas[i].id === id){ alvo = rascunho.etapas[i]; break; } }
+      Array.prototype.forEach.call(bloco.querySelectorAll("[data-et-campo]"), function(el){
+        var campo = el.dataset.etCampo;
+        var ev = el.type === "date" ? "change" : "input";
+        el.addEventListener(ev, function(){
+          if(campo === "percentual"){
+            alvo.percentual = Number(el.value);
+            bloco.querySelector(".pcte .n").textContent = alvo.percentual + "%";
+            atualizarTotal();
+          } else {
+            alvo[campo] = el.value;
+          }
+          agendarSalvar();
+        });
+      });
+      bloco.querySelector("[data-rm]").addEventListener("click", function(){
+        rascunho.etapas = rascunho.etapas.filter(function(x){ return x.id !== id; });
+        pintarEtapas(false);
+        agendarSalvar();
+      });
+
+      bloco.querySelector("[data-add-sub]").addEventListener("click", function(){
+        if(!alvo.subetapas) alvo.subetapas = [];
+        alvo.subetapas.push({ id:novoId(), nome:"", feito:false });
+        pintarSubetapas(bloco, alvo, true);
+        agendarSalvar();
+      });
+
+      pintarSubetapas(bloco, alvo, false);
+    });
+
+    atualizarTotal();
+    if(focarUltima){
+      var todos = caixa.querySelectorAll("input.nome");
+      if(todos.length) todos[todos.length-1].focus();
+    }
+  }
+
+  function pintarSubetapas(bloco, etapa, focarUltima){
+    var lista = bloco.querySelector("[data-sublista]");
+    var contagem = bloco.querySelector("[data-contagem]");
+    var exec = bloco.querySelector("[data-exec]");
+    var subs = etapa.subetapas || [];
+    var pct = percentualEtapa(etapa);
+
+    // lista de checks
+    if(!subs.length){
+      lista.innerHTML = '<p style="margin:0;font-size:12.5px;color:var(--muted)">' +
+        'Sem subetapas — a execução desta etapa fica na régua abaixo.</p>';
+      contagem.textContent = "";
+    } else {
+      var feitas = subs.filter(function(x){ return !!x.feito; }).length;
+      contagem.textContent = feitas + "/" + subs.length;
+      lista.innerHTML = subs.map(function(sb){
+        return '<div class="sub ' + (sb.feito ? "feito" : "") + '" data-sub="' + sb.id + '">' +
+          '<input type="checkbox" data-sub-feito' + (sb.feito ? " checked" : "") +
+            ' aria-label="Concluir subetapa">' +
+          '<input class="nome-sub" data-sub-nome value="' + esc(sb.nome) + '" placeholder="O que precisa ser feito">' +
+          '<button type="button" class="rm-sub" data-sub-rm aria-label="Remover subetapa">×</button>' +
+        '</div>' +
+        (!sb.feito && (sb.prazo || etapa.prazo) && (sb.prazo || etapa.prazo) < hoje()
+          ? '<div class="sub-motivo" data-sub-motivo-de="' + sb.id + '"><label>Motivo da pendência</label>' +
+            '<input data-sub-motivo value="' + esc(sb.motivo || "") + '" placeholder="Por que está pendente?"></div>'
+          : '');
+      }).join("");
+    }
+
+    // área de execução: automática com check, manual sem check
+    if(subs.length){
+      exec.innerHTML = '<div class="exec-auto">' +
+        '<span class="trilho"><i class="' + (pct>=100 ? "full" : "") + '" style="width:' + pct + '%"></i></span>' +
+        '<span class="n">' + pct + '%</span>' +
+        '<span class="porque">pelas subetapas</span></div>';
+    } else {
+      var manual = Number(etapa.percentual) || 0;
+      exec.innerHTML = '<div class="pcte">' +
+        '<input type="range" min="0" max="100" step="5" value="' + manual + '">' +
+        '<span class="n">' + manual + '%</span></div>';
+      var regua = exec.querySelector("input[type=range]");
+      regua.addEventListener("input", function(){
+        etapa.percentual = Number(regua.value);
+        exec.querySelector(".n").textContent = etapa.percentual + "%";
+        atualizarTotal();
+        agendarSalvar();
+      });
+    }
+
+    // eventos de cada subetapa
+    Array.prototype.forEach.call(lista.querySelectorAll("[data-sub]"), function(linha){
+      var sid = linha.dataset.sub;
+      var sub = null;
+      for(var i=0;i<subs.length;i++){ if(subs[i].id === sid){ sub = subs[i]; break; } }
+      if(!sub) return;
+
+      linha.querySelector("[data-sub-feito]").addEventListener("change", function(ev){
+        sub.feito = ev.target.checked;
+        linha.classList.toggle("feito", sub.feito);
+        atualizarExecucao(bloco, etapa);
+        atualizarTotal();
+        agendarSalvar();
+      });
+      linha.querySelector("[data-sub-nome]").addEventListener("input", function(ev){
+        sub.nome = ev.target.value;
+        agendarSalvar();
+      });
+      var campoMotivo = lista.querySelector('[data-sub-motivo-de="' + sid + '"] input');
+      if(campoMotivo) campoMotivo.addEventListener("input", function(ev){
+        sub.motivo = ev.target.value;
+        agendarSalvar();
+      });
+      linha.querySelector("[data-sub-rm]").addEventListener("click", function(){
+        etapa.subetapas = etapa.subetapas.filter(function(x){ return x.id !== sid; });
+        pintarSubetapas(bloco, etapa, false);
+        atualizarTotal();
+        agendarSalvar();
+      });
+    });
+
+    if(focarUltima){
+      var campos = lista.querySelectorAll("input.nome-sub");
+      if(campos.length) campos[campos.length-1].focus();
+    }
+  }
+
+  // Atualiza só os números da etapa, sem redesenhar a lista (não perde o foco).
+  function atualizarExecucao(bloco, etapa){
+    var subs = etapa.subetapas || [];
+    var pct = percentualEtapa(etapa);
+    var contagem = bloco.querySelector("[data-contagem]");
+    if(contagem && subs.length){
+      contagem.textContent = subs.filter(function(x){ return !!x.feito; }).length + "/" + subs.length;
+    }
+    var barra = bloco.querySelector("[data-exec] .trilho i");
+    var numero = bloco.querySelector("[data-exec] .n");
+    if(barra){ barra.style.width = pct + "%"; barra.className = pct >= 100 ? "full" : ""; }
+    if(numero){ numero.textContent = pct + "%"; }
+  }
+
+  function atualizarTotal(){
+    var p = progresso(rascunho);
+    var el = document.getElementById("tot-pct");
+    if(!el) return;
+    var barra = document.getElementById("tot-barra");
+    var nota = document.getElementById("tot-nota");
+    el.textContent = p + "%";
+    barra.style.width = p + "%";
+    barra.className = p >= 100 ? "full" : "";
+    var n = (rascunho.etapas || []).length;
+    nota.textContent = n
+      ? "Média dos percentuais das " + n + (n>1 ? " etapas." : " etapa.")
+      : "Sem etapas — adicione etapas para calcular a execução.";
+  }
+
+  function agendarSalvar(){
+    var ind = document.getElementById("ind-salvo");
+    if(ind){ ind.textContent = "salvando…"; ind.className = "salvo"; }
+    if(timerSalvar) clearTimeout(timerSalvar);
+    timerSalvar = setTimeout(salvarAgora, 700);
+  }
+
+  function salvarAgora(){
+    if(!rascunho) return;
+    if(timerSalvar){ clearTimeout(timerSalvar); timerSalvar = null; }
+    var copia = JSON.parse(JSON.stringify(rascunho));
+    gravar(copia).then(function(){
+      var ind = document.getElementById("ind-salvo");
+      if(ind){ ind.textContent = "salvo"; ind.className = "salvo ok"; }
+      pintarAba();
+    }, function(){
+      var ind = document.getElementById("ind-salvo");
+      if(ind){ ind.textContent = "não foi possível salvar"; ind.className = "salvo erro"; }
+    });
+  }
+
+  /* ---------------- partida ---------------- */
+  app.innerHTML = '<div class="vazio"><b>Abrindo a central…</b>Carregando empresas e tarefas.</div>';
+  Promise.all([carregarEmpresas(), carregarTarefas()]).then(repintar, function(e){
+    erroServidor = "Não consegui falar com o servidor local (" + e.message + ").";
+    repintar();
+  });
+})();
+</script>
+</body>
+</html>

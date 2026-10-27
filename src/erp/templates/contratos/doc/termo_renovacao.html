@@ -1,0 +1,46 @@
+{# Termo de Renovação de Cotas — modelos Civil e Agronegócio (D4Sign 2026); Saúde segue o Agronegócio. #}
+<section class="folha termo">
+  <img class="cab-termo" src="{{ cab }}" alt="Capuzzo">
+  <h1 class="t-titulo">Termo de Renovação<br>de Cotas</h1>
+
+  <p class="t-abre">Por meio deste instrumento,</p>
+
+  <p class="t-just"><b>{{ d.investidor.nome }}</b>, {{ d.investidor.nacionalidade }}, portador(a) do
+    {{ d.investidor.documento_tipo }} nº {{ d.investidor.documento }}, residente e domiciliado(a) à
+    {{ d.investidor.endereco }}, CEP: {{ d.investidor.cep }} (“<b>Investidor(a)</b>”), formaliza a renovação de
+    {{ d.qtd }} ({{ d.qtd_extenso|lower }}) cota(s) do <b>{{ p.condominio }}</b> (“<b>Condomínio</b>”) administrado
+    por <b>{{ d.empresa.empresa_nome }}</b>, inscrita no CNPJ: {{ d.empresa.empresa_cnpj }}, com sede na
+    {{ d.empresa.empresa_endereco }}, neste ato representada na forma de seu Contrato Social (“<b>Contratada</b>”)
+    e <b>ADERE</b> para todos os fins e efeitos de direito ao <b>{{ p.regulamento }}</b> (“<b>Regulamento</b>”),
+    do qual este instrumento é parte integrante e indissociável e declara que:</p>
+
+  <ol class="t-lista">
+    <li>Renova a(s) cota(s) descrita(s) abaixo, com as seguintes condições:
+      <table class="t-cotas">
+        <thead><tr><th>Cota(s) nº</th><th>Rentabilidade</th><th>Valor total</th><th>Prazo mínimo de resgate</th><th>Tipo</th></tr></thead>
+        <tbody><tr><td>{{ d.faixa }}</td><td class="t-rent">{{ p.rentabilidade }}</td><td>{{ moeda(d.valor_total) }}</td>
+          <td>{{ d.prazo_meses }} meses</td><td>{{ p.tipo }}</td></tr></tbody>
+      </table>
+    </li>
+    <li>Tem consciência de que a Contratada tem amplos poderes para exercer a total administração do Condomínio;</li>
+    <li>Recebeu uma cópia, leu, compreendeu e está plenamente de acordo com os termos e condições do Regulamento e
+      reitera, assim, as declarações dispostas no referido documento;</li>
+    <li>Teve a oportunidade de questionar e de esclarecer dúvidas sobre o conteúdo dos termos e condições do
+      Regulamento;</li>
+    <li>Está ciente de que a remuneração mensal e o resgate da cota serão pagos apenas para contas bancárias de sua
+      própria titularidade;</li>
+    <li>Autoriza a Contratada a representar o Condomínio perante administradores, custodiantes, escrituradores e
+      gestores de fundos de investimentos, inclusive com poderes para dar e receber quitação, celebrar acordos e
+      transigir, solicitar informações, sempre nos limites necessários para a prestação dos serviços objeto do
+      Regulamento;</li>
+    <li>Está ciente de que o prazo mínimo para resgate começa a contar a partir do dia {{ p.dia }} ({{ p.dia_extenso }})
+      do mês subsequente à assinatura deste termo;</li>
+    <li>Sua concordância, por escrito, via e-mail ou WhatsApp, é válida também como assinatura deste termo;</li>
+    {% include "contratos/doc/_item_corretoras.html" %}
+  </ol>
+
+  <p class="t-just">Este Termo de Renovação e seus anexos são parte integrante e indissociável do Regulamento. Na
+    hipótese de qualquer conflito entre as disposições, prevalecerão as disposições do Regulamento.</p>
+
+  <p class="t-data">{{ d.local_data }}.</p>
+</section>

@@ -8,25 +8,40 @@ export async function loadDashboard(): Promise<DashboardLoadResult> {
       ok: false,
       error: {
         source: "configuration",
-        message: "As variáveis públicas do Supabase não foram configuradas.",
-        hint: "Crie .env.local a partir de .env.example e reinicie o servidor.",
+        message:
+          "As variáveis públicas do Supabase não foram configuradas.",
+        hint:
+          "Crie .env.local a partir de .env.example e reinicie o servidor.",
       },
     };
   }
 
   const supabase = getSupabaseBrowserClient();
 
-  const [executiveResult, productsResult] = await Promise.all([
+  const [
+    executiveResult,
+    productsResult,
+    leadsResult,
+  ] = await Promise.all([
     supabase
       .schema("api_comercial")
       .from("dashboard_executivo")
       .select("*")
       .single(),
+
     supabase
       .schema("api_comercial")
       .from("produtos_resumo")
       .select("*")
       .order("vinculos_total", { ascending: false }),
+
+    supabase
+      .schema("api_comercial")
+      .from("leads_central")
+      .select("lead_id", {
+        count: "exact",
+        head: true,
+      }),
   ]);
 
   if (executiveResult.error) {
@@ -53,13 +68,24 @@ export async function loadDashboard(): Promise<DashboardLoadResult> {
     };
   }
 
+  if (leadsResult.error) {
+    return {
+      ok: false,
+      error: {
+        source: "leads_central",
+        code: leadsResult.error.code,
+        message: leadsResult.error.message,
+        hint: leadsResult.error.hint,
+      },
+    };
+  }
+
   return {
     ok: true,
     data: {
       executive: executiveResult.data,
       products: productsResult.data ?? [],
+      leadsTotal: leadsResult.count ?? 0,
     },
   };
 }
-
-

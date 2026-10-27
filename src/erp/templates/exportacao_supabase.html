@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+{% block title %}Exportação Supabase / Lovable — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">🛰️</div>
+  <div class="page-header-title">Exportação Supabase / Lovable</div>
+  <div class="page-header-sub">
+    Área temporária para sincronizar o Supabase mantendo o histórico até junho.
+  </div>
+</div>
+
+<div class="note-box" style="border-left:4px solid #f59e0b;">
+  <div style="font-weight:700;color:#f59e0b;margin-bottom:6px;">⚠️ Leia antes de gerar</div>
+  <div style="font-size:13px;line-height:1.7;">
+    Esta exportação <strong>não reconstrói o histórico anterior ao corte</strong>.
+    Ela apenas gera dados incrementais a partir da base atual do app.<br>
+    Tabelas <strong>mensais</strong> (Agro e Fluxo) recebem
+    <code>DELETE ... WHERE &lt;coluna de corte&gt; &gt;= data</code> + <code>INSERT</code> —
+    tudo que está no Supabase antes do corte permanece intacto.<br>
+    Tabelas <strong>cadastrais</strong> (Civil e Saúde) não têm coluna de mês: recebem
+    <code>UPSERT</code> pela chave lógica e <strong>nenhum DELETE</strong>.<br>
+    Nada é executado automaticamente: o app <em>não</em> se conecta ao Supabase.
+  </div>
+</div>
+
+<form method="POST" action="{{ url_for('exportacao_supabase_gerar') }}"
+      onsubmit="return confirmarGeracao();">
+
+  <!-- 1 · Data de corte -->
+  <div class="card" style="margin-top:18px;">
+    <div class="form-section-title">1 · Data de corte</div>
+    <div class="form-row">
+      <div class="form-group" style="max-width:260px;">
+        <label for="cutoff">Exportar competências a partir de</label>
+        <input type="date" id="cutoff" name="cutoff" class="form-control"
+               value="{{ cutoff_selecionado }}" required>
+      </div>
+      <div class="form-group flex-1">
+        <label>&nbsp;</label>
+        <div class="text-dim" style="font-size:12px;line-height:1.6;padding-top:10px;">
+          Padrão <strong>{{ cutoff_padrao }}</strong>. Vale só para as tabelas mensais —
+          as cadastrais exportam a posição atual.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · Bases e estratégia -->
+  <div class="card" style="margin-top:18px;">
+    <div class="form-section-title">2 · Bases, tabelas e estratégia</div>
+    <div class="text-dim" style="font-size:12px;margin-bottom:14px;">
+      Os nomes e a estratégia já vêm com o mapeamento real do Supabase.
+      Ajuste apenas se a estrutura mudar. Nomes aceitam letras, números e underscore.
+    </div>
+
+    {% for b in bases %}
+    {% set cfg = config_bases.get(b.chave) %}
+    <div class="form-section" style="border:1px solid rgba(212,175,55,.18);border-radius:8px;
+                padding:14px;margin-bottom:12px;">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:10px;">
+        <input type="checkbox" name="bases" value="{{ b.chave }}"
+               {% if b.chave in bases_selecionadas %}checked{% endif %}>
+        <span style="font-weight:700;">{{ b.label }}</span>
+        <span class="text-dim" style="font-size:11px;">{{ b.descricao }}</span>
+      </label>
+
+      <div class="form-row" style="flex-wrap:wrap;gap:12px;">
+        <div class="form-group" style="min-width:230px;flex:1;">
+          <label for="tabela_{{ b.chave }}">Tabela no Supabase</label>
+          <input type="text" id="tabela_{{ b.chave }}" name="tabela_{{ b.chave }}"
+                 class="form-control text-mono" value="{{ cfg.tabela }}"
+                 pattern="[A-Za-z_][A-Za-z0-9_]*"
+                 title="Apenas letras, números e underscore">
+        </div>
+
+        <div class="form-group" style="min-width:250px;flex:1;">
+          <label for="estrategia_{{ b.chave }}">Estratégia</label>
+          <select id="estrategia_{{ b.chave }}" name="estrategia_{{ b.chave }}"
+                  class="form-control" data-base="{{ b.chave }}"
+                  onchange="alternarCorte(this);">
+            <option value="delete_insert_por_data"
+                    {% if cfg.estrategia == 'delete_insert_por_data' %}selected{% endif %}>
+              Mensal — DELETE + INSERT por data
+            </option>
+            <option value="upsert_cadastral"
+                    {% if cfg.estrategia == 'upsert_cadastral' %}selected{% endif %}>
+              Cadastral — UPSERT, sem DELETE
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group" style="min-width:200px;flex:1;">
+          <label for="corte_{{ b.chave }}">Coluna de corte</label>
+          <input type="text" id="corte_{{ b.chave }}" name="corte_{{ b.chave }}"
+                 class="form-control text-mono" value="{{ cfg.coluna_corte }}"
+                 placeholder="mes"
+                 {% if cfg.estrategia == 'upsert_cadastral' %}disabled{% endif %}>
+        </div>
+
+        <div class="form-group" style="min-width:200px;flex:1;">
+          <label>Chave de conflito (UPSERT)</label>
+          <input type="text" class="form-control text-mono"
+                 value="{{ cfg.conflict_columns | join(', ') or '—' }}" readonly
+                 title="Definida pelo esquema da tabela">
+        </div>
+      </div>
+
+      <div class="text-dim" style="font-size:11px;margin-top:8px;">
+        Colunas exportadas:
+        <span class="text-mono">{{ cfg.columns | join(', ') }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- 3 · Opções -->
+  <div class="card" style="margin-top:18px;">
+    <div class="form-section-title">3 · Opções de conversão</div>
+    <div class="form-row" style="flex-wrap:wrap;gap:16px;">
+      <div class="form-group" style="min-width:320px;flex:1;">
+        <label for="percentual_formato">Agro — <span class="text-mono">percentual_rendimento</span></label>
+        <select id="percentual_formato" name="percentual_formato" class="form-control">
+          <option value="fracao" {% if opcoes.percentual_como_fracao %}selected{% endif %}>
+            Fração — 1,7% grava 0,017
+          </option>
+          <option value="percentual" {% if not opcoes.percentual_como_fracao %}selected{% endif %}>
+            Percentual — 1,7% grava 1,70
+          </option>
+        </select>
+        <div class="text-dim" style="font-size:11px;margin-top:6px;">
+          Confira como os meses anteriores estão gravados no Supabase e use o mesmo formato.
+        </div>
+      </div>
+
+      <div class="form-group" style="min-width:320px;flex:1;">
+        <label for="escopo_cadastral">Civil / Saúde — escopo do UPSERT</label>
+        <select id="escopo_cadastral" name="escopo_cadastral" class="form-control">
+          <option value="tudo" {% if not opcoes.cadastro_somente_alteradas %}selected{% endif %}>
+            Posição atual completa (todas as cotas do app)
+          </option>
+          <option value="alteradas" {% if opcoes.cadastro_somente_alteradas %}selected{% endif %}>
+            Somente cotas criadas/alteradas desde a data de corte
+          </option>
+        </select>
+        <div class="text-dim" style="font-size:11px;margin-top:6px;">
+          Em nenhum dos dois casos há DELETE — linhas que só existem no Supabase ficam intactas.
+        </div>
+      </div>
+
+      <div class="form-group" style="min-width:240px;flex:1;">
+        <label for="fluxo_tipo">Fluxo — <span class="text-mono">tipo</span></label>
+        <input type="text" id="fluxo_tipo" name="fluxo_tipo" class="form-control"
+               value="{{ opcoes.fluxo_tipo }}" maxlength="120">
+        <div class="text-dim" style="font-size:11px;margin-top:6px;">
+          Precisa bater com a nomenclatura já usada no fluxo antigo.
+        </div>
+      </div>
+
+      <div class="form-group" style="min-width:240px;flex:1;">
+        <label for="fluxo_grupo">Fluxo — <span class="text-mono">grupo</span></label>
+        <input type="text" id="fluxo_grupo" name="fluxo_grupo" class="form-control"
+               value="{{ opcoes.fluxo_grupo }}" maxlength="120">
+        <div class="text-dim" style="font-size:11px;margin-top:6px;">
+          <span class="text-mono">detalhe</span> usa sempre o nome do condomínio.
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section-title" style="margin-top:18px;">
+      Grafia do status no Supabase
+    </div>
+    <div class="text-dim" style="font-size:12px;margin-bottom:10px;">
+      Deixe em branco para gravar exatamente como está no app
+      (<span class="text-mono">ativa</span> / <span class="text-mono">inativa</span>).
+      Na Saúde o status faz parte da chave do UPSERT — se a grafia não bater com
+      a do Supabase, o <span class="text-mono">ON CONFLICT</span> nunca casa e
+      cada execução insere tudo de novo.
+    </div>
+    <div class="form-row" style="flex-wrap:wrap;gap:12px;">
+      {% for campo, rotulo, exemplo in [
+            ('status_civil_ativa',   'Civil · cotas ativas',   'Ativa'),
+            ('status_civil_inativa', 'Civil · cotas inativas', 'Inativa'),
+            ('status_saude_ativa',   'Saúde · cotas ativas',   'Ativo'),
+            ('status_saude_inativa', 'Saúde · cotas inativas', 'Inativo')] %}
+      <div class="form-group" style="min-width:190px;flex:1;">
+        <label for="{{ campo }}">{{ rotulo }}</label>
+        <input type="text" id="{{ campo }}" name="{{ campo }}" class="form-control"
+               value="{{ opcoes.get(campo, '') }}" placeholder="ex.: {{ exemplo }}"
+               maxlength="60">
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if pontos_confirmar %}
+    <div class="note-box" style="margin-top:14px;border-left:4px solid #f59e0b;">
+      <div style="font-weight:700;color:#f59e0b;margin-bottom:6px;">
+        ⚠️ Pontos a confirmar no Supabase antes de rodar em produção
+      </div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;">
+        {% for titulo, texto in pontos_confirmar %}
+        <li><span class="text-mono">{{ titulo }}</span> — {{ texto }}</li>
+        {% endfor %}
+      </ul>
+      <div class="text-dim" style="font-size:11px;margin-top:8px;">
+        Estes mesmos avisos saem no SQL, no README e na aba <span class="text-mono">resumo</span> do Excel.
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+    <button type="submit" class="btn btn-primary">🛰️ Gerar Exportação</button>
+  </div>
+</form>
+
+<!-- ═══════════════ RESULTADO ═══════════════ -->
+{% if resultado %}
+<div class="divider-gold" style="margin:28px 0 18px;"></div>
+
+<div class="page-header" style="margin-bottom:12px;">
+  <div class="page-header-title" style="font-size:20px;">Exportação {{ resultado.export_id }}</div>
+  <div class="page-header-sub">Gerada em {{ resultado.gerado_em_txt }}</div>
+</div>
+
+{% for a in resultado.alertas %}
+<div class="alert alert-warning">⚠️ {{ a }}</div>
+{% endfor %}
+
+<div class="metrics-grid">
+  <div class="metric-card card-gold">
+    <div class="metric-icon">📅</div>
+    <div class="metric-label">Data de corte</div>
+    <div class="metric-value">{{ resultado.cutoff_iso }}</div>
+    <div class="metric-sub">competência {{ resultado.cutoff_label }}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">📦</div>
+    <div class="metric-label">Total de registros</div>
+    <div class="metric-value">{{ resultado.resumo.total_registros }}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">🌾</div>
+    <div class="metric-label">Registros Agro</div>
+    <div class="metric-value">{{ resultado.resumo.registros_agro }}</div>
+    <div class="metric-sub">mensal</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">💠</div>
+    <div class="metric-label">Registros Fluxo</div>
+    <div class="metric-value">{{ resultado.resumo.registros_fluxo }}</div>
+    <div class="metric-sub">mensal</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">🏗️</div>
+    <div class="metric-label">Registros Civil</div>
+    <div class="metric-value">{{ resultado.resumo.registros_civil }}</div>
+    <div class="metric-sub">cadastral</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">🏥</div>
+    <div class="metric-label">Registros Saúde</div>
+    <div class="metric-value">{{ resultado.resumo.registros_saude }}</div>
+    <div class="metric-sub">cadastral</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">⏮️</div>
+    <div class="metric-label">Período inicial</div>
+    <div class="metric-value">{{ resultado.resumo.periodo_inicial or '—' }}</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-icon">⏭️</div>
+    <div class="metric-label">Período final</div>
+    <div class="metric-value">{{ resultado.resumo.periodo_final or '—' }}</div>
+  </div>
+</div>
+
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;">
+  <a class="btn btn-primary"
+     href="{{ url_for('exportacao_supabase_download', export_id=resultado.export_id, file_type='excel') }}">
+     📊 Baixar Excel de conferência</a>
+  <a class="btn btn-secondary"
+     href="{{ url_for('exportacao_supabase_download', export_id=resultado.export_id, file_type='csv') }}">
+     📄 Baixar CSV</a>
+  <a class="btn btn-secondary"
+     href="{{ url_for('exportacao_supabase_download', export_id=resultado.export_id, file_type='sql') }}">
+     🧾 Baixar SQL</a>
+  <a class="btn btn-secondary"
+     href="{{ url_for('exportacao_supabase_download', export_id=resultado.export_id, file_type='readme') }}">
+     📘 Baixar README</a>
+</div>
+
+<div class="table-wrap" style="margin-top:20px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Base</th>
+        <th>Tabela no Supabase</th>
+        <th style="text-align:center;">Registros</th>
+        <th>Estratégia</th>
+        <th>Coluna de corte</th>
+        <th>Chave de conflito</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in resultado.tabelas %}
+      <tr>
+        <td>{{ t.label }}</td>
+        <td class="text-mono text-gold">{{ t.tabela }}</td>
+        <td style="text-align:center;font-weight:600;">{{ t.registros }}</td>
+        <td class="text-dim" style="font-size:12px;">
+          {% if t.estrategia == 'delete_insert_por_data' %}
+            DELETE WHERE {{ t.coluna_corte }} &gt;= '{{ resultado.cutoff_iso }}' + INSERT
+          {% else %}
+            INSERT … ON CONFLICT DO UPDATE (sem DELETE)
+          {% endif %}
+        </td>
+        <td class="text-mono">{{ t.coluna_corte or '—' }}</td>
+        <td class="text-mono">{{ t.conflict_columns | join(', ') or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-dim">Nenhuma tabela — não havia registros a exportar.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if resultado.avisos %}
+<div class="note-box" style="margin-top:18px;">
+  <div style="font-weight:700;margin-bottom:6px;">Observações da geração</div>
+  <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;">
+    {% for a in resultado.avisos %}<li>{{ a }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="text-dim" style="font-size:11px;margin-top:14px;">
+  Arquivos gravados em <span class="text-mono">exports/supabase_lovable/{{ resultado.export_id }}/</span>
+</div>
+{% endif %}
+
+<!-- ═══════════════ EXPORTAÇÕES ANTERIORES ═══════════════ -->
+{% if exports_anteriores %}
+<div class="divider-gold" style="margin:28px 0 14px;"></div>
+<div class="section-label">Exportações anteriores</div>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Pasta</th><th>Gerada em</th><th>Data de corte</th>
+        <th style="text-align:center;">Registros</th><th>Bases</th>
+        <th style="text-align:center;">Arquivos</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in exports_anteriores %}
+      <tr>
+        <td class="text-mono">{{ e.export_id }}</td>
+        <td class="text-dim">{{ e.gerado_em }}</td>
+        <td class="text-dim">{{ e.cutoff }}</td>
+        <td style="text-align:center;">{{ e.registros }}</td>
+        <td class="text-dim" style="font-size:12px;">{{ e.bases }}</td>
+        <td style="text-align:center;">
+          <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+            <a class="btn btn-secondary btn-sm"
+               href="{{ url_for('exportacao_supabase_download', export_id=e.export_id, file_type='excel') }}">Excel</a>
+            <a class="btn btn-secondary btn-sm"
+               href="{{ url_for('exportacao_supabase_download', export_id=e.export_id, file_type='csv') }}">CSV</a>
+            <a class="btn btn-secondary btn-sm"
+               href="{{ url_for('exportacao_supabase_download', export_id=e.export_id, file_type='sql') }}">SQL</a>
+            <a class="btn btn-secondary btn-sm"
+               href="{{ url_for('exportacao_supabase_download', export_id=e.export_id, file_type='readme') }}">README</a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function alternarCorte(sel) {
+  var campo = document.getElementById('corte_' + sel.dataset.base);
+  if (!campo) return;
+  if (sel.value === 'upsert_cadastral') {
+    campo.dataset.anterior = campo.value;
+    campo.value = '';
+    campo.disabled = true;
+  } else {
+    campo.disabled = false;
+    if (!campo.value) campo.value = campo.dataset.anterior || 'mes';
+  }
+}
+
+function confirmarGeracao() {
+  var campo = document.getElementById('cutoff');
+  var valor = (campo.value || '').trim();
+  if (!valor) {
+    alert('Informe a data de corte. Ela é obrigatória.');
+    campo.focus();
+    return false;
+  }
+  if (document.querySelectorAll('input[name="bases"]:checked').length === 0) {
+    alert('Selecione pelo menos uma base para exportar.');
+    return false;
+  }
+  var faltando = [];
+  document.querySelectorAll('input[name="bases"]:checked').forEach(function (cb) {
+    var est = document.getElementById('estrategia_' + cb.value);
+    var col = document.getElementById('corte_' + cb.value);
+    if (est && est.value === 'delete_insert_por_data' && col && !col.value.trim()) {
+      faltando.push(cb.value);
+    }
+  });
+  if (faltando.length) {
+    alert('A estratégia mensal exige a coluna de corte nas bases: ' + faltando.join(', '));
+    return false;
+  }
+  if (valor < '{{ cutoff_minimo }}') {
+    return confirm(
+      'ATENÇÃO\n\nA data de corte ' + valor + ' é anterior a {{ cutoff_minimo }}.\n\n' +
+      'Nas tabelas mensais o SQL passará a substituir meses que vieram das planilhas originais.\n\n' +
+      'Deseja gerar mesmo assim?'
+    );
+  }
+  return true;
+}
+</script>
+{% endblock %}

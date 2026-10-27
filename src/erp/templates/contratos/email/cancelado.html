@@ -1,0 +1,9 @@
+{% extends "contratos/email/_base.html" %}
+{% block corpo %}
+<p style="margin:0 0 14px;">Olá, <b>{{ d.investidor.nome }}</b>.</p>
+<p style="margin:0 0 14px;">O <b>{{ TIPOS[c.tipo] }}</b> enviado anteriormente ({{ d.produto.nome }} · {{ d.qtd }} cota(s) · {{ moeda((d.retirada or {}).valor or d.valor_total) }})
+  foi <b style="color:#b42318;">cancelado</b> pela {{ cfg.empresa_assinante }} e <b>não tem mais validade</b>{% if substituido %} —
+  em seguida você receberá uma nova versão corrigida para assinar{% endif %}.</p>
+{% if motivo %}<p style="margin:0 0 14px;color:#555;">Motivo: {{ motivo }}</p>{% endif %}
+<p style="margin:0 0 10px;font-size:13px;color:#555;">Se você já assinou a versão cancelada, essa assinatura foi invalidada. Não é preciso fazer nada com ela.</p>
+{% endblock %}

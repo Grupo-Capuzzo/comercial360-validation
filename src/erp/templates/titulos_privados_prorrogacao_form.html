@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Registrar Prorrogação — Títulos Privados{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=loan.id) }}" class="back-link">← Voltar para o Empréstimo</a>
+
+<div class="page-header">
+  <div class="page-header-icon">⏳</div>
+  <div class="page-header-title">Registrar Prorrogação</div>
+  <div class="page-header-sub">{{ loan.client_name }} — Empréstimo {{ loan.loan_number or ('#' ~ loan.id) }}</div>
+</div>
+
+<div class="note-box" style="margin-bottom:16px;">
+  ℹ️ A prorrogação NÃO reduz o valor principal do empréstimo — ela só adia a data a partir da
+  qual os juros de atraso passam a contar. Se parte do valor pago deve ser considerada
+  amortização (reduzindo o saldo), preencha o campo opcional abaixo.
+</div>
+
+<div class="card-gold">
+  <form method="post">
+    <div class="form-section">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Valor Pago da Prorrogação (R$) *</label>
+          <input type="text" name="extension_amount" class="form-control" required
+                 placeholder="2.000,00" data-mask="currency">
+        </div>
+        <div class="form-group">
+          <label>Data do Pagamento *</label>
+          <input type="date" name="paid_date" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>Prorrogar Até Qual Data *</label>
+          <input type="date" name="covered_until_date" class="form-control" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Valor Considerado Amortização (opcional)</label>
+          <input type="text" name="principal_amortization_amount" class="form-control"
+                 placeholder="0,00 — só preencha se parte do valor reduzir o principal" data-mask="currency">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observações</label>
+        <textarea name="notes" class="form-control" rows="2" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=loan.id) }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">✓ Registrar Prorrogação</button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

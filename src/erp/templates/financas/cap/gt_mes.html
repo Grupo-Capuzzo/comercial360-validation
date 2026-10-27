@@ -1,0 +1,209 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}GT · Apuração {{ rotulo(comp) }}{% endblock %}
+{% block fin_conteudo %}
+{% set ed = not fechado %}
+{% macro v(x) %}{{ '' if x is none else ('%.2f'|format(x)).replace('.', ',') }}{% endmacro %}
+{% macro dd(x) %}{{ '' if x is none else x }}{% endmacro %}
+{% call m.cabecalho('Apuração · ' ~ rotulo(comp), 'Informe o valor a distribuir: o sistema faz o rateio entre os investidores pela fórmula da planilha.', 'Gestão Tática') %}
+  <a class="btn-pill outline fin-btn mini" href="{{ url_for('financas.gt_mes', slug=empresa.slug, comp=anterior) }}">{{ ic('chevron_left') }} {{ rotulo(anterior, True) }}</a>
+  <a class="btn-pill outline fin-btn mini" href="{{ url_for('financas.gt_mes', slug=empresa.slug, comp=proximo) }}">{{ rotulo(proximo, True) }} {{ ic('chevron_right') }}</a>
+  {% if fechado %}
+    <span class="pr-st neutro gt-st">Fechado</span>
+    <form method="post" action="{{ url_for('financas.gt_mes_acao', slug=empresa.slug, comp=comp, acao='reabrir') }}" onsubmit="return confirm('Reabrir {{ rotulo(comp) }} para edição?')">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn-pill outline fin-btn">{{ ic('lock_open') }} Reabrir</button></form>
+  {% elif movs %}
+    <span class="pr-st {{ 'ok' if calculado else 'aviso' }} gt-st">{{ 'Calculado' if calculado else 'Aberto' }}</span>
+    <form method="post" action="{{ url_for('financas.gt_mes_acao', slug=empresa.slug, comp=comp, acao='gerar') }}" title="Inclui os investidores ativos que ainda não estão no mês">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn-pill outline fin-btn">{{ fic('pessoas') }} Trazer investidores</button></form>
+    {% if calculado %}
+    <form method="post" action="{{ url_for('financas.gt_mes_acao', slug=empresa.slug, comp=comp, acao='fechar') }}" onsubmit="return confirm('Fechar {{ rotulo(comp) }}? Os valores ficam travados e o próximo mês parte deles.')">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn-pill fin-btn">{{ ic('lock') }} Fechar mês</button></form>
+    {% endif %}
+  {% endif %}
+{% endcall %}
+
+{% if not movs %}
+<section class="vg-box gt-vazio">
+  <h3>{{ rotulo(comp) }} ainda não foi aberto</h3>
+  <p class="fin-sub">Entram todos os investidores ativos com a banca de {{ rotulo(anterior) }}, o saque já preenchido com o rendimento líquido do mês anterior
+    e as retiradas dos congelados que completam 60 dias neste mês. Tudo pode ser ajustado antes de calcular.</p>
+  <form method="post" action="{{ url_for('financas.gt_mes_acao', slug=empresa.slug, comp=comp, acao='gerar') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn-pill fin-btn">{{ fic('add') }} Abrir {{ rotulo(comp) }}</button></form>
+</section>
+{% else %}
+
+<form method="post" id="gt-form" action="{{ url_for('financas.gt_mes_salvar', slug=empresa.slug, comp=comp) }}" autocomplete="off">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+  <div class="gt-topo">
+    <section class="vg-box gt-dist">
+      <header><h3>Valor a distribuir — {{ rotulo(comp) }}</h3><span>divulgação em {{ data_br(divulgacao.isoformat()) }}</span></header>
+      {% if ed %}
+        <div class="gt-dist-in"><span>R$</span><input class="inp" name="valor_distribuir" id="gt-valor" inputmode="decimal" value="{{ v(valor) if valor else '' }}" placeholder="0,00"></div>
+      {% else %}
+        <div class="gt-dist-in ro"><b>{{ reais(valor) }}</b></div>
+      {% endif %}
+      <div class="gt-prev">
+        <div><small>Rentabilidade bruta</small><b id="pv-bruta">{{ (pct(faixa.bruta_min) ~ ' a ' ~ pct(faixa.bruta_max)) if faixa else '—' }}</b></div>
+        <div><small>Rentabilidade líquida</small><b id="pv-liq">{{ (pct(faixa.liq_min) ~ ' a ' ~ pct(faixa.liq_max)) if faixa else '—' }}</b></div>
+        <div><small>Taxa de gestão + tarifas</small><b id="pv-taxa">{{ reais(tot.taxa_gestao + tot.tarifa) }}</b></div>
+        <div><small>Líquido aos investidores</small><b id="pv-liqv">{{ reais(tot.resultado_liquido) }}</b></div>
+      </div>
+      {% if res %}<details class="gt-adm"><summary>Detalhe vindo da planilha (aba ADM)</summary>
+        <div class="vg-linhas">{% for r in res %}<div><span>{{ r.origem }}</span><b>{{ reais(r.valor) }} → {{ reais(r.valor_repassado) }}</b></div>{% endfor %}</div></details>{% endif %}
+    </section>
+    <section class="vg-box gt-hist3">
+      <header><h3>Rentabilidade dos últimos 3 meses</h3><span>menor e maior entre os investidores</span></header>
+      <table class="pr-tabela">
+        <thead><tr><th>Mês</th><th class="num">Distribuído</th><th class="num">Bruta</th><th class="num">Líquida</th></tr></thead>
+        <tbody>
+        {% for f in faixas %}
+          <tr class="clic" onclick="location.href='{{ url_for('financas.gt_mes', slug=empresa.slug, comp=f.comp) }}'"><td><b>{{ rotulo(f.comp, True) }}</b></td><td class="num">{{ reais(f.valor) }}</td>
+            <td class="num">{{ pct(f.bruta_min) }} – {{ pct(f.bruta_max) }}</td><td class="num">{{ pct(f.liq_min) }} – {{ pct(f.liq_max) }}</td></tr>
+        {% else %}<tr><td colspan="4" class="fin-vazio">Sem meses anteriores apurados.</td></tr>{% endfor %}
+        <tr class="gt-este"><td><b>{{ rotulo(comp, True) }}</b> <small>{{ 'prévia' if ed else '' }}</small></td><td class="num" id="pv-valor">{{ reais(valor) }}</td>
+          <td class="num" id="pv-bruta2">{{ (pct(faixa.bruta_min) ~ ' – ' ~ pct(faixa.bruta_max)) if faixa else '—' }}</td>
+          <td class="num" id="pv-liq2">{{ (pct(faixa.liq_min) ~ ' – ' ~ pct(faixa.liq_max)) if faixa else '—' }}</td></tr>
+        </tbody>
+      </table>
+      <p class="co-dica">A rentabilidade varia pelo peso (0,9 rende 90%) e pela taxa de gestão de cada um. A faixa considera só quem ficou com a banca cheia o mês todo (sem aporte nem congelamento no mês).</p>
+    </section>
+  </div>
+
+  <section class="vg-box">
+    <header><h3>Investidores</h3><span>dias = dia do mês (1 a 30) · os resultados se atualizam enquanto você digita</span></header>
+    <div class="mv-wrap">
+    <table class="pr-tabela gt-mov" id="gt-mov">
+      <thead>
+        <tr><th rowspan="2">Investidor</th><th rowspan="2" class="num">Banca inicial</th>
+          <th colspan="2">Aporte</th><th colspan="2">Saque</th><th colspan="2">Congelado</th><th colspan="2">Retirada</th>
+          <th rowspan="2" class="num">Peso</th><th rowspan="2" class="num">Taxa %</th><th rowspan="2" class="num">Tarifa</th>
+          <th rowspan="2" class="num gt-c">Montante × peso</th><th rowspan="2" class="num gt-c">% banca</th><th rowspan="2" class="num gt-c">Bruto</th>
+          <th rowspan="2" class="num gt-c">Rentab.</th><th rowspan="2" class="num gt-c">Taxa gestão</th><th rowspan="2" class="num gt-c">Líquido</th><th rowspan="2" class="num gt-c">Saldo final</th></tr>
+        <tr class="gt-g2"><th>dia</th><th class="num">valor</th><th>dia</th><th class="num">valor</th><th>dia</th><th class="num">valor</th><th>dia</th><th class="num">valor</th></tr>
+      </thead>
+      <tbody>
+      {% for x in movs %}{% set p = 'm' ~ x.id ~ '_' %}
+        <tr class="gt-l {{ '' if x.calculado else 'gt-pend' }}" data-p="{{ p }}" data-ant="{{ x.saldo_ant if x.tem_ant else '' }}"
+            data-taxacli="{{ x.taxa_cli }}" data-tarifacli="{{ x.tarifa_cli }}">
+          <td class="gt-nome"><a href="{{ url_for('financas.gt_cliente', slug=empresa.slug, cid=x.gt_cliente_id) }}"><b>{{ x.nome }}</b></a>
+            {% if ed %}<label class="gt-rm" title="Tirar este investidor do mês"><input type="checkbox" name="{{ p }}remover" value="1"> tirar</label>{% endif %}</td>
+          {% if ed %}
+            <td class="num">{% if x.tem_ant %}<span class="gt-ro c-banca" title="Saldo de {{ rotulo(anterior, True) }} − saque − congelado">{{ reais(x.banca_inicial) }}</span><input type="hidden" name="{{ p }}banca" value="{{ v(x.banca_inicial) }}">
+              {% else %}<input class="inp num gt-w" name="{{ p }}banca" value="{{ v(x.banca_inicial) if x.banca_inicial else '' }}" title="Primeiro mês do investidor">{% endif %}</td>
+            <td><input class="inp gt-d" name="{{ p }}dia_aporte" value="{{ dd(x.dia_aporte) }}"></td><td><input class="inp num gt-w" name="{{ p }}aporte" value="{{ v(x.aporte) if x.aporte else '' }}"></td>
+            <td><input class="inp gt-d" name="{{ p }}dia_saque" value="{{ dd(x.dia_saque) }}"></td><td><input class="inp num gt-w" name="{{ p }}saque" value="{{ v(x.saque) if x.saque else '' }}"></td>
+            <td><input class="inp gt-d" name="{{ p }}dia_congel" value="{{ dd(x.dia_congel) }}"></td><td><input class="inp num gt-w" name="{{ p }}congelado" value="{{ v(x.congelado) if x.congelado else '' }}"></td>
+            <td><input class="inp gt-d" name="{{ p }}dia_retirada" value="{{ dd(x.dia_retirada) }}"></td><td><input class="inp num gt-w" name="{{ p }}retirada" value="{{ v(x.retirada) if x.retirada else '' }}"></td>
+            <td><input class="inp num gt-d" name="{{ p }}peso" value="{{ ('%g'|format(x.peso if x.peso is not none else 1)).replace('.', ',') }}"></td>
+            <td><input class="inp num gt-d" name="{{ p }}taxa" value="{{ ('%g'|format((x.taxa_pct if x.taxa_pct is not none else (x.taxa_cli or 0.25)) * 100)).replace('.', ',') }}"></td>
+            <td><input class="inp num gt-d2" name="{{ p }}tarifa" value="{{ v(x.tarifa) if x.tarifa is not none else '' }}" placeholder="{{ v(x.tarifa_cli) }}"><input type="hidden" name="{{ p }}obs" value="{{ x.obs or '' }}"></td>
+          {% else %}
+            <td class="num">{{ reais(x.banca_inicial) }}</td>
+            <td>{{ dd(x.dia_aporte) }}</td><td class="num">{{ reais(x.aporte) if x.aporte else '—' }}</td>
+            <td>{{ dd(x.dia_saque) }}</td><td class="num">{{ reais(x.saque) if x.saque else '—' }}</td>
+            <td>{{ dd(x.dia_congel) }}</td><td class="num">{{ reais(x.congelado) if x.congelado else '—' }}</td>
+            <td>{{ dd(x.dia_retirada) }}</td><td class="num">{{ reais(x.retirada) if x.retirada else '—' }}</td>
+            <td class="num">{{ '%g'|format(x.peso or 0) }}</td><td class="num">{{ pct(x.taxa_pct, 0) }}</td><td class="num">{{ reais(x.tarifa) }}</td>
+          {% endif %}
+          <td class="num gt-c c-base">{{ reais(x.base_calculo) if x.base_calculo is not none else '—' }}</td>
+          <td class="num gt-c c-pct">{{ pct(x.percentual) if x.percentual is not none else '—' }}</td>
+          <td class="num gt-c c-bruto"><b>{{ reais(x.resultado_bruto) if x.resultado_bruto is not none else '—' }}</b></td>
+          <td class="num gt-c c-rent">{{ pct(x.rentab) if x.rentab is not none else '—' }}</td>
+          <td class="num gt-c c-taxa">{{ reais(x.taxa_gestao) if x.taxa_gestao is not none else '—' }}</td>
+          <td class="num gt-c c-liq">{{ reais(x.resultado_liquido) if x.resultado_liquido is not none else '—' }}</td>
+          <td class="num gt-c c-saldo"><b>{{ reais(x.saldo_final) if x.saldo_final is not none else '—' }}</b></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td><b>Total · {{ movs|length }}</b></td><td class="num"><b id="t-banca">{{ reais(tot.banca_inicial) }}</b></td>
+        <td></td><td class="num" id="t-aporte">{{ reais(tot.aporte) }}</td><td></td><td class="num" id="t-saque">{{ reais(tot.saque) }}</td>
+        <td></td><td class="num" id="t-cong">{{ reais(tot.congelado) }}</td><td></td><td class="num" id="t-ret">{{ reais(tot.retirada) }}</td>
+        <td></td><td></td><td class="num" id="t-tarifa">{{ reais(tot.tarifa) }}</td>
+        <td class="num gt-c" id="t-base">{{ reais(tot.base_calculo) }}</td><td class="num gt-c">100%</td><td class="num gt-c"><b id="t-bruto">{{ reais(tot.resultado_bruto) }}</b></td>
+        <td class="num gt-c"></td><td class="num gt-c" id="t-taxa">{{ reais(tot.taxa_gestao) }}</td><td class="num gt-c" id="t-liq">{{ reais(tot.resultado_liquido) }}</td>
+        <td class="num gt-c"><b id="t-saldo">{{ reais(tot.saldo_final) }}</b></td></tr></tfoot>
+    </table>
+    </div>
+    <details class="gt-regras"><summary>Como o rateio é calculado (mesma fórmula da planilha)</summary>
+      <ul class="gt-lista">
+        <li><b>Banca inicial</b> = saldo final do mês anterior − saque − congelado do mês.</li>
+        <li><b>Montante × peso</b> = banca × peso + aporte × peso ÷ 30 × (30 − dia do aporte) + congelado × peso ÷ 30 × dia do congelamento + saque × peso ÷ 30 × dia do saque.
+          Ou seja: o aporte rende a partir do dia em que entra; o saque e o congelado rendem até o dia em que saem.</li>
+        <li><b>% da banca</b> = montante × peso do investidor ÷ soma de todos. <b>Bruto</b> = % × valor a distribuir.</li>
+        <li><b>Taxa de gestão</b> = bruto × taxa %. <b>Líquido</b> = bruto − taxa − tarifa. <b>Saldo final</b> = banca inicial + aporte + líquido.</li>
+        <li><b>Congelado</b>: sai da banca no dia informado e fica 60 dias sem render até o saque. <b>Retirada</b> = o pagamento desse congelado (não altera o saldo).</li>
+      </ul>
+    </details>
+  </section>
+
+  {% if ed %}
+  <div class="lf-barra co-barra">
+    <span class="co-barra-info">Distribuindo <b id="pv-barra">{{ reais(valor) }}</b> entre {{ movs|length }} investidor(es)</span>
+    <button class="btn-pill fin-btn" type="submit">{{ fic('calculo') }} Calcular e salvar</button>
+  </div>
+  {% endif %}
+</form>
+
+{% if ed and fora %}
+<form method="post" class="gt-incluir" action="{{ url_for('financas.gt_mes_acao', slug=empresa.slug, comp=comp, acao='incluir') }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <span>Incluir investidor neste mês:</span>
+  <select class="inp" name="gt_cliente_id">{% for c in fora %}<option value="{{ c.id }}">{{ c.nome }}{{ '' if c.ativo else ' (inativo)' }}</option>{% endfor %}</select>
+  <button class="btn-pill outline fin-btn mini">Incluir</button>
+  <a class="fin-link" href="{{ url_for('financas.gt_cliente', slug=empresa.slug) }}?comp={{ comp }}">ou cadastrar investidor novo</a>
+</form>
+{% endif %}
+{% endif %}
+
+{% if ed and movs %}
+<script>
+(function () {
+  function num(s) { s = String(s || '').replace(/[^\d,.-]/g, ''); if (s.indexOf(',') >= 0 || /^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); return parseFloat(s) || 0; }
+  function br(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+  function pc(v) { return (v * 100).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%'; }
+  var form = document.getElementById('gt-form'), valor = document.getElementById('gt-valor'), linhas = form.querySelectorAll('tr.gt-l');
+  function campo(tr, n) { var i = form.querySelector('[name="' + tr.dataset.p + n + '"]'); return i ? i.value : ''; }
+  function dia(s) { var n = parseInt(s, 10); return isNaN(n) ? 0 : Math.max(0, Math.min(30, n)); }
+  function set(tr, cls, txt) { var c = tr.querySelector('.' + cls); if (c) c.innerHTML = txt; }
+  function calc() {
+    var V = num(valor.value), rows = [], soma = 0;
+    linhas.forEach(function (tr) {
+      if (form.querySelector('[name="' + tr.dataset.p + 'remover"]:checked')) { tr.classList.add('gt-off'); return; }
+      tr.classList.remove('gt-off');
+      var G = num(campo(tr, 'saque')), K = num(campo(tr, 'congelado')), E = num(campo(tr, 'aporte')), I = num(campo(tr, 'retirada'));
+      var L = campo(tr, 'peso').trim() === '' ? 1 : num(campo(tr, 'peso'));
+      var C = tr.dataset.ant !== '' ? parseFloat(tr.dataset.ant) - G - K : num(campo(tr, 'banca'));
+      var M = C * L + E * L / 30 * (30 - dia(campo(tr, 'dia_aporte'))) + K * L / 30 * dia(campo(tr, 'dia_congel')) + G * L / 30 * dia(campo(tr, 'dia_saque'));
+      var taxa = campo(tr, 'taxa').trim() === '' ? parseFloat(tr.dataset.taxacli || 0.25) : num(campo(tr, 'taxa')) / 100;
+      var tar = campo(tr, 'tarifa').trim() === '' ? parseFloat(tr.dataset.tarifacli || 0) : num(campo(tr, 'tarifa'));
+      rows.push({tr: tr, C: C, E: E, G: G, K: K, I: I, M: M, taxa: taxa, tar: tar}); soma += Math.max(M, 0);
+    });
+    var t = {C: 0, E: 0, G: 0, K: 0, I: 0, M: 0, O: 0, tar: 0, S: 0, T: 0, U: 0}, br_ = [], lq_ = [];
+    rows.forEach(function (r) {
+      var M = Math.max(r.M, 0), N = soma ? M / soma : 0, O = N * V, tar = M > 0 ? r.tar : 0, S = O * r.taxa, T = O - S - tar, U = r.C + r.E + T;
+      var Q = r.C > 0 ? O / r.C : (r.E > 0 ? O / r.E : 0);
+      if (r.tr.dataset.ant !== '') set(r.tr, 'c-banca', br(r.C));
+      set(r.tr, 'c-base', br(r.M)); set(r.tr, 'c-pct', pc(N)); set(r.tr, 'c-bruto', '<b>' + br(O) + '</b>'); set(r.tr, 'c-rent', pc(Q));
+      set(r.tr, 'c-taxa', br(S)); set(r.tr, 'c-liq', br(T)); set(r.tr, 'c-saldo', '<b>' + br(U) + '</b>');
+      t.C += r.C; t.E += r.E; t.G += r.G; t.K += r.K; t.I += r.I; t.M += r.M; t.O += O; t.tar += tar; t.S += S; t.T += T; t.U += U;
+      if (r.C > 1 && !r.E && !r.K) { br_.push(O / r.C); lq_.push(T / r.C); }
+    });
+    if (!br_.length) rows.forEach(function (r) { if (r.C > 1) { var O = soma ? Math.max(r.M, 0) / soma * V : 0, tar = r.M > 0 ? r.tar : 0; br_.push(O / r.C); lq_.push((O - O * r.taxa - tar) / r.C); } });
+    var faixa = function (a) { return (a.length && V) ? pc(Math.min.apply(null, a)) + ' a ' + pc(Math.max.apply(null, a)) : '—'; };
+    document.getElementById('pv-bruta').textContent = faixa(br_); document.getElementById('pv-liq').textContent = faixa(lq_);
+    document.getElementById('pv-bruta2').textContent = faixa(br_).replace(' a ', ' – '); document.getElementById('pv-liq2').textContent = faixa(lq_).replace(' a ', ' – ');
+    document.getElementById('pv-taxa').textContent = V ? br(t.S + t.tar) : '—'; document.getElementById('pv-liqv').textContent = V ? br(t.T) : '—';
+    document.getElementById('pv-valor').textContent = br(V); document.getElementById('pv-barra').textContent = br(V);
+    [['t-banca', t.C], ['t-aporte', t.E], ['t-saque', t.G], ['t-cong', t.K], ['t-ret', t.I], ['t-tarifa', t.tar], ['t-base', t.M], ['t-bruto', t.O], ['t-taxa', t.S], ['t-liq', t.T], ['t-saldo', t.U]]
+      .forEach(function (x) { document.getElementById(x[0]).textContent = br(x[1]); });
+  }
+  form.addEventListener('input', calc); form.addEventListener('change', calc);
+  valor.addEventListener('blur', function () { if (valor.value) valor.value = num(valor.value).toLocaleString('pt-BR', {minimumFractionDigits: 2}); });
+  calc();
+  valor.focus();
+})();
+</script>
+{% endif %}
+{% endblock %}

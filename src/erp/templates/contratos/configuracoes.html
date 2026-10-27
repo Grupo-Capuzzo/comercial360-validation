@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Configurações de contratos — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('contratos.painel') }}" class="back-link">← Voltar para Contratos</a>
+<div class="page-header">
+  <div class="page-header-icon">⚙️</div>
+  <div class="page-header-title">Configurações dos contratos</div>
+  <div class="page-header-sub">Valem para os próximos contratos gerados. Contratos já gerados não mudam (ficam protegidos pelo hash).</div>
+</div>
+
+<form method="post" class="card-gold">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+  <div class="form-section">
+    <div class="form-section-title">Link de assinatura</div>
+    <div class="form-group">
+      <label>Endereço público do app</label>
+      <input type="url" name="url_publica" value="{{ cfg.url_publica }}" class="form-control" placeholder="https://assinar.capuzzo.com.br">
+      <div class="text-dim" style="font-size:12px;margin-top:4px;">É o começo do link que vai no e-mail do cliente
+        (ex.: <span class="text-mono">{{ cfg.url_publica }}/contratos/assinar/…</span>).
+        Enquanto estiver <span class="text-mono">127.0.0.1</span>, o link só abre neste computador.</div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">Empresa (Contratada)</div>
+    <div class="form-row">
+      <div class="form-group"><label>Razão social</label><input name="empresa_nome" value="{{ cfg.empresa_nome }}" class="form-control"></div>
+      <div class="form-group" style="max-width:240px"><label>CNPJ</label><input name="empresa_cnpj" value="{{ cfg.empresa_cnpj }}" class="form-control"></div>
+    </div>
+    <div class="form-group"><label>Sede</label><input name="empresa_endereco" value="{{ cfg.empresa_endereco }}" class="form-control"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Nome na assinatura da empresa</label><input name="empresa_assinante" value="{{ cfg.empresa_assinante }}" class="form-control"></div>
+      <div class="form-group"><label>E-mail do signatário da empresa</label><input name="empresa_email" value="{{ cfg.empresa_email }}" class="form-control"></div>
+      <div class="form-group" style="max-width:220px"><label>Local da assinatura</label><input name="cidade_assinatura" value="{{ cfg.cidade_assinatura }}" class="form-control"></div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">Testemunhas</div>
+    {% for i in (1, 2) %}
+    <div class="form-row">
+      <div class="form-group"><label>Testemunha {{ i }} — nome</label><input name="testemunha{{ i }}_nome" value="{{ cfg['testemunha%d_nome' % i] }}" class="form-control"></div>
+      <div class="form-group" style="max-width:220px"><label>CPF</label><input name="testemunha{{ i }}_cpf" value="{{ cfg['testemunha%d_cpf' % i] }}" class="form-control"></div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">Comunicação com o cliente</div>
+    <div class="form-group"><label>E-mail de atendimento / cópia dos comprovantes</label>
+      <input name="email_copia" value="{{ cfg.email_copia }}" class="form-control"></div>
+    <div class="form-group"><label>Dados para depósito (aparecem para o cliente depois que ele assina)</label>
+      <textarea name="instrucoes_deposito" rows="4" class="form-control" placeholder="Banco, agência, conta, titular, CNPJ ou chave PIX da Capuzzo">{{ cfg.instrucoes_deposito }}</textarea></div>
+  </div>
+
+  <div class="page-actions"><button class="btn btn-primary">✓ Salvar</button></div>
+</form>
+{% endblock %}

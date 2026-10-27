@@ -1,0 +1,41 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Gerar contrato{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Gerar contrato para cotas pendentes', 'Para cotas já cadastradas como pendentes e ainda sem contrato. Para uma compra nova, use “Nova cota com contrato”.', 'Contratos e assinaturas') %}
+  <a class="btn-pill outline fin-btn" href="{{ url_for('financas.cond_contratos', slug=empresa.slug) }}">{{ ic('arrow_back') }} Contratos</a>
+{% endcall %}
+<section class="fin-box">
+  <form method="get" class="fin-form" style="max-width:420px">
+    <label class="lbl">Cotista com cotas pendentes</label>
+    <select class="inp" name="client_id" onchange="this.form.submit()"><option value="">Selecione…</option>
+      {% for cid, nome in clientes %}<option value="{{ cid }}" {{ 'selected' if cliente and cliente.id == cid }}>{{ nome }}</option>{% endfor %}
+      {% if cliente and cliente.id not in (clientes|map(attribute=0)|list) %}<option value="{{ cliente.id }}" selected>{{ cliente.full_name }}</option>{% endif %}
+    </select>
+  </form>
+  {% if cliente %}
+    {% if falta %}<p class="co-aviso">Para gerar o contrato, complete o cadastro de <b>{{ cliente.full_name }}</b>. Falta: {{ falta|join(', ') }}.
+      <a href="{{ url_for('financas.cond_cotista_editar', slug=empresa.slug, cid=cliente.id) }}">Completar cadastro →</a></p>{% endif %}
+    {% if cotas %}
+    <form method="post" class="fin-form" style="margin-top:.8rem">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="client_id" value="{{ cliente.id }}">
+      <label class="lbl">Produto</label>
+      <select class="inp" name="condominium_id" id="sel-prod" style="max-width:320px">
+        {% for cond_id, lista in cotas|groupby('condominium_id') %}<option value="{{ cond_id }}" {{ 'disabled' if lista[0].produto_code not in modelos }}>{{ lista[0].produto_nome }}{{ ' (modelo em breve)' if lista[0].produto_code not in modelos }}</option>{% endfor %}
+      </select>
+      <table class="pr-tabela" style="margin-top:.6rem">
+        <thead><tr><th></th><th>Cota</th><th>Produto</th><th class="num">Valor</th><th>Cadastrada em</th></tr></thead>
+        <tbody>{% for x in cotas %}<tr data-prod="{{ x.condominium_id }}"><td><input type="checkbox" name="share_ids" value="{{ x.id }}" checked></td>
+          <td class="mono">{{ x.share_number }}</td><td>{{ x.produto_nome }}</td><td class="num">{{ reais(x.share_value) }}</td><td>{{ x.created_at|ct_data }}</td></tr>{% endfor %}</tbody>
+      </table>
+      <button class="btn-pill fin-btn" style="margin-top:.8rem" {{ 'disabled' if falta }}>{{ fic('contrato') }} Gerar contrato (já assinado pela empresa)</button>
+    </form>
+    <script>(function () { var s = document.getElementById('sel-prod'); function f() { document.querySelectorAll('tr[data-prod]').forEach(function (tr) {
+      var on = tr.dataset.prod === s.value; tr.style.display = on ? '' : 'none'; tr.querySelector('input').disabled = !on; }); } if (s) { s.addEventListener('change', f); f(); } })();</script>
+    {% else %}
+      <p class="fin-sub" style="margin-top:.8rem">Este cotista não tem cotas pendentes sem contrato.
+        <a href="{{ url_for('financas.cond_cota_nova', slug=empresa.slug, produto='civil', client_id=cliente.id) }}">Cadastrar nova cota com contrato →</a></p>
+    {% endif %}
+  {% elif not clientes %}<p class="fin-sub" style="margin-top:.8rem">Não há cotas pendentes sem contrato.</p>{% endif %}
+</section>
+{% endblock %}

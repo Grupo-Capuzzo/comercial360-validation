@@ -1,0 +1,29 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Cotistas{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Cotistas', 'Todos os clientes dos condomínios, com patrimônio e próximos vencimentos.') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.cond_cotista_novo', slug=empresa.slug) }}">{{ fic('add') }} Novo cliente</a>
+{% endcall %}
+<form class="pr-filtros" method="get"><input class="inp" name="q" value="{{ busca }}" placeholder="Buscar nome, CPF ou e-mail"><button class="btn-pill fin-btn mini">Buscar</button></form>
+<section class="vg-box">
+  <header><h3>{{ lista|length }} cliente(s)</h3><span>Patrimônio ativo {{ reais(lista|sum(attribute='valor')) }}</span></header>
+  <div style="overflow-x:auto">
+  <table class="pr-tabela">
+    <thead><tr><th>Cotista</th><th>CPF/CNPJ</th><th>Contato</th><th class="num">Cotas ativas</th><th class="num">Patrimônio</th><th>Próx. vencimento</th><th>Situação</th></tr></thead>
+    <tbody>
+    {% for c in lista %}
+      <tr class="clic" onclick="location.href='{{ url_for('financas.cond_cotista', slug=empresa.slug, cid=c.id) }}'">
+        <td><b>{{ c.full_name }}</b></td><td class="mono">{{ c.cpf }}</td>
+        <td style="font-size:.8rem">{{ c.email or '' }}<br><span style="color:var(--muted)">{{ c.phone or '' }}</span></td>
+        <td class="num">{{ c.cotas_ativas }}{% if c.pendentes %} <span class="pr-st pendente">+{{ c.pendentes }} pend.</span>{% endif %}</td>
+        <td class="num"><b>{{ reais(c.valor) }}</b></td>
+        <td>{{ data_br(c.prox_venc) if c.prox_venc else '—' }}</td>
+        <td><span class="pr-st {{ 'ok' if c.status == 'ativo' else 'neutro' }}">{{ c.status|capitalize }}</span></td>
+      </tr>
+    {% else %}<tr><td colspan="7" class="fin-vazio">Nenhum cliente encontrado.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

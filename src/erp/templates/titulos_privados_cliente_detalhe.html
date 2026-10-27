@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}{{ cliente.name }} — Títulos Privados — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('titulos_privados_clientes') }}" class="back-link">← Voltar para Clientes de Títulos</a>
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+  <div>
+    <div class="page-header-title">{{ cliente.name }}</div>
+    <div class="page-header-sub" style="margin-top:6px;">
+      {% if cliente.status == 'ativo' %}
+        <span class="badge badge-active">● Ativo</span>
+      {% else %}
+        <span class="badge badge-inactive">● Inativo</span>
+      {% endif %}
+      &nbsp;
+      {% if cliente.document %}<span class="text-mono text-dim">{{ formatar_documento(cliente.document) }}</span>{% endif %}
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+    <a href="{{ url_for('titulos_privados_cliente_editar', pcid=cliente.id) }}" class="btn btn-secondary">✏️ Editar</a>
+    {% if cliente.status == 'ativo' %}
+      <form method="post" action="{{ url_for('titulos_privados_cliente_inativar', pcid=cliente.id) }}" style="display:inline;">
+        <button type="submit" class="btn btn-danger" data-confirm="Inativar o cliente {{ cliente.name }}?">🔒 Inativar</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('titulos_privados_cliente_reativar', pcid=cliente.id) }}" style="display:inline;">
+        <button type="submit" class="btn btn-success">🔓 Reativar</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Dados do cliente -->
+<div class="card-gold" style="margin-bottom:20px;">
+  <div class="form-section-title" style="margin-bottom:12px;">Dados do Cliente</div>
+  <div class="detail-grid">
+    <div>
+      <div class="detail-item-label">Nome</div>
+      <div class="detail-item-value">{{ cliente.name }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">CPF/CNPJ</div>
+      <div class="detail-item-value text-mono">{{ formatar_documento(cliente.document) if cliente.document else '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Telefone</div>
+      <div class="detail-item-value">{{ cliente.phone or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">E-mail</div>
+      <div class="detail-item-value">{{ cliente.email or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Chave PIX</div>
+      <div class="detail-item-value text-mono">{{ cliente.pix_key or '—' }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Vinculado ao cadastro geral</div>
+      <div class="detail-item-value">
+        {% if cliente.linked_client_id %}
+          <span class="badge badge-active">🔗 Sim (cliente #{{ cliente.linked_client_id }})</span>
+        {% else %}
+          <span class="text-dim">Não</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% if cliente.notes %}
+  <div style="margin-top:14px;">
+    <div class="detail-item-label">Observações</div>
+    <div class="detail-item-value text-dim" style="margin-top:4px;">{{ cliente.notes }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Saldo total -->
+<div class="metrics-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px;">
+  <div class="metric-card">
+    <div class="metric-value" style="color:#d4af37;">{{ formatar_moeda(saldo_total) }}</div>
+    <div class="metric-label">Saldo Total Atualizado</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">{{ loans_ativos | length }}</div>
+    <div class="metric-label">Empréstimos Ativos</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value" style="color:#555;">{{ loans_quitados | length }}</div>
+    <div class="metric-label">Empréstimos Quitados</div>
+  </div>
+</div>
+
+<div style="margin-bottom:20px;">
+  <a href="{{ url_for('titulos_privados_emprestimos_novo', private_client_id=cliente.id) }}" class="btn btn-primary">
+    + Novo Empréstimo para este Cliente
+  </a>
+</div>
+
+<!-- Empréstimos ativos -->
+<div class="section-label">💰 &nbsp;Empréstimos Ativos ({{ loans_ativos | length }})</div>
+{% if loans_ativos %}
+<div class="table-wrap" style="margin-bottom:24px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Empréstimo</th><th>Método</th><th>Dias em Atraso</th>
+        <th style="text-align:right;">Saldo Atualizado</th><th>Status</th><th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in loans_ativos %}
+      <tr>
+        <td class="text-mono">{{ l.loan_number or ('#' ~ l.id) }}</td>
+        <td>{{ {'bullet':'Pagamento Único','price':'Price','manual':'Manual'}.get(l.calculation_method, l.calculation_method) }}</td>
+        <td>
+          {% if l.calc and l.calc.days_overdue > 0 %}
+            <span class="badge badge-inactive">{{ l.calc.days_overdue }} dia(s)</span>
+          {% else %}
+            <span class="badge badge-active">Em dia</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right;font-weight:600;">{{ formatar_moeda(l.calc.updated_amount) if l.calc else '—' }}</td>
+        <td>
+          {% if l.status == 'active' %}<span class="badge badge-active">Ativo</span>
+          {% elif l.status == 'overdue' %}<span class="badge badge-inactive">Em Atraso</span>
+          {% else %}<span class="badge badge-pending">{{ l.status }}</span>{% endif %}
+        </td>
+        <td style="text-align:right;">
+          <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=l.id) }}" class="btn btn-secondary btn-sm">Ver</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:24px;">
+  <div class="empty-state-icon">💰</div>
+  <div class="empty-state-title">Nenhum empréstimo ativo</div>
+</div>
+{% endif %}
+
+<!-- Empréstimos quitados -->
+<div class="section-label">✅ &nbsp;Empréstimos Quitados ({{ loans_quitados | length }})</div>
+{% if loans_quitados %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Empréstimo</th><th>Valor Contratado</th><th>Status</th><th style="text-align:right;">Ações</th></tr>
+    </thead>
+    <tbody>
+      {% for l in loans_quitados %}
+      <tr>
+        <td class="text-mono">{{ l.loan_number or ('#' ~ l.id) }}</td>
+        <td>{{ formatar_moeda(l.contracted_amount) }}</td>
+        <td><span class="badge badge-inactive">{{ l.status }}</span></td>
+        <td style="text-align:right;">
+          <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=l.id) }}" class="btn btn-secondary btn-sm">Ver</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">✅</div>
+  <div class="empty-state-title">Nenhum empréstimo quitado ainda</div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block title %}Registrar Amortização — Títulos Privados{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=loan.id) }}" class="back-link">← Voltar para o Empréstimo</a>
+
+<div class="page-header">
+  <div class="page-header-icon">📉</div>
+  <div class="page-header-title">Registrar Amortização</div>
+  <div class="page-header-sub">{{ loan.client_name }} — Empréstimo {{ loan.loan_number or ('#' ~ loan.id) }}</div>
+</div>
+
+{% if is_price_like %}
+{# ══════════════════════════════════════════════════════════════════
+   OPÇÃO 1 — Quitar Parcela Antecipada (calculadora "quanto fica hoje")
+   ══════════════════════════════════════════════════════════════════ #}
+<div class="card-gold" style="margin-bottom:16px;">
+  <div class="form-section-title" style="margin-bottom:6px;">💰 Quitar Parcela Antecipada</div>
+  <div class="note-box" style="margin-bottom:14px;">
+    ℹ️ Use aqui quando o cliente perguntar "quanto fica para quitar a parcela do mês que vem, se eu pagar hoje?".
+    O sistema desconta os juros que ainda não venceram (valor presente). Parcelas já vencidas usam o valor
+    atualizado por atraso, sem desconto.
+  </div>
+
+  {% if not parcelas_abertas %}
+  <div class="note-box" style="color:#f87171;border-color:rgba(239,68,68,0.25);">
+    ⚠️ Não há parcelas em aberto neste empréstimo.
+  </div>
+  {% else %}
+  <form method="post" id="form-quitacao-antecipada">
+    <input type="hidden" name="ui_tipo" value="quitar_parcela_antecipada">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data de Pagamento *</label>
+        <input type="date" name="payment_date" id="early-payment-date" class="form-control" required
+               value="{{ hoje_iso }}">
+      </div>
+      <div class="form-group">
+        <label>Parcela que Deseja Quitar *</label>
+        <select name="installment_id" id="early-installment-id" class="form-control" required>
+          <option value="">Selecione…</option>
+          {% for p in parcelas_abertas %}
+          <option value="{{ p.id }}">
+            Parcela {{ p.installment_number }} — venc. {{ formatar_data(p.due_date) }} —
+            valor original {{ formatar_moeda(p.original_amount) }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div id="qa-resultado" style="display:none;">
+      <div class="detail-grid" style="margin-top:6px;">
+        <div>
+          <div class="detail-item-label">Vencimento da Parcela</div>
+          <div class="detail-item-value" id="qa-vencimento">—</div>
+        </div>
+        <div>
+          <div class="detail-item-label">Dias de Antecipação</div>
+          <div class="detail-item-value" id="qa-dias">—</div>
+        </div>
+        <div>
+          <div class="detail-item-label">Desconto por Antecipação</div>
+          <div class="detail-item-value" id="qa-desconto" style="color:#4ade80;font-weight:700;">—</div>
+        </div>
+      </div>
+      <div class="note-box" style="margin-top:12px;text-align:center;">
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">Valor para quitar esta parcela hoje</div>
+        <div style="font-size:22px;font-weight:700;color:#d4af37;" id="qa-valor-final">—</div>
+      </div>
+    </div>
+    <div id="qa-erro" class="note-box" style="display:none;color:#f87171;border-color:rgba(239,68,68,0.25);margin-top:12px;"></div>
+    <div id="qa-carregando" class="text-dim" style="display:none;margin-top:8px;font-size:12px;">Calculando…</div>
+
+    <div class="page-actions">
+      <button type="submit" class="btn btn-primary" id="btn-quitar-antecipada" disabled>
+        ✓ Registrar Quitação Antecipada
+      </button>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════
+   OPÇÃO 2 — Amortização Avulsa (valor livre)
+   ══════════════════════════════════════════════════════════════════ #}
+<div class="card-gold">
+  <div class="form-section-title" style="margin-bottom:6px;">📉 Amortização Avulsa</div>
+  {% if is_price_like %}
+  <div class="note-box" style="margin-bottom:14px;">
+    ℹ️ Use quando o cliente quiser pagar um valor qualquer (não necessariamente o valor exato de antecipação de
+    uma parcela) — o sistema aplica esse valor na parcela escolhida, nas próximas parcelas em sequência, ou
+    liquida o empréstimo inteiro.
+  </div>
+  {% endif %}
+
+  {% if calc_atual %}
+  <div class="detail-grid" style="margin-bottom:14px;">
+    <div>
+      <div class="detail-item-label">Saldo Atualizado Antes</div>
+      <div class="detail-item-value" id="saldo-antes" style="font-weight:700;">{{ formatar_moeda(calc_atual.updated_amount) }}</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Valor Aplicado (digite ao lado)</div>
+      <div class="detail-item-value" id="valor-preview">R$ 0,00</div>
+    </div>
+    <div>
+      <div class="detail-item-label">Saldo Estimado Depois</div>
+      <div class="detail-item-value" id="saldo-depois" style="color:#d4af37;font-weight:700;">{{ formatar_moeda(calc_atual.updated_amount) }}</div>
+    </div>
+  </div>
+  <div class="note-box" id="preview-parcelas" style="margin-bottom:14px;display:none;"></div>
+  {% endif %}
+
+  <form method="post" id="form-amortizacao">
+
+    {% if is_price_like %}
+    <div class="form-section">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tipo *</label>
+          <select name="ui_tipo" id="ui_tipo" class="form-control" required onchange="atualizarTipoPrice()">
+            <option value="parcela_especifica">Antecipar Parcela Específica (valor livre)</option>
+            <option value="proximas_parcelas">Aplicar nas Próximas Parcelas (em sequência)</option>
+            <option value="liquidacao_total">Liquidação Total do Empréstimo</option>
+            <option value="reduzir_prazo" disabled>Amortizar Principal — Reduzir Prazo (em breve)</option>
+            <option value="reduzir_parcela" disabled>Amortizar Principal — Reduzir Parcela (em breve)</option>
+          </select>
+        </div>
+        <div class="form-group" id="grupo-parcela-alvo">
+          <label>Parcela Alvo *</label>
+          <select name="installment_id" id="installment_id" class="form-control">
+            <option value="">Selecione…</option>
+            {% for p in parcelas_abertas %}
+            <option value="{{ p.id }}" data-saldo="{{ p.updated_amount }}">
+              Parcela {{ p.installment_number }} — venc. {{ formatar_data(p.due_date) }} —
+              valor {{ formatar_moeda(p.original_amount) }} — saldo atualizado {{ formatar_moeda(p.updated_amount) }} —
+              status {% if p.visual_status == 'overdue' %}Atrasada{% elif p.visual_status == 'partial' %}Parcial{% elif p.visual_status == 'extended' %}Prorrogada{% else %}Aberta{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="note-box" id="aviso-proximas" style="display:none;">
+        ℹ️ O valor será aplicado à primeira parcela em aberto (por vencimento); se sobrar, passa para a
+        próxima, e assim por diante, até acabar o valor ou as parcelas em aberto.
+      </div>
+      <div class="note-box" id="aviso-liquidacao" style="display:none;">
+        ℹ️ A liquidação total exige valor igual ou maior que o saldo atualizado total do empréstimo
+        ({{ formatar_moeda(calc_atual.updated_amount) if calc_atual else '—' }}). Todas as parcelas em
+        aberto serão marcadas como pagas e o empréstimo passa para "Quitado".
+      </div>
+      <div class="note-box" id="aviso-fase2" style="display:none;color:#f0ad4e;border-color:rgba(240,173,78,0.25);">
+        ⚠️ Esta opção recalcula o cronograma futuro e ainda não está disponível nesta versão —
+        selecione outro tipo para continuar.
+      </div>
+      {% if not parcelas_abertas %}
+      <div class="note-box" style="color:#f87171;border-color:rgba(239,68,68,0.25);">
+        ⚠️ Não há parcelas em aberto neste empréstimo.
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="form-section">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tipo de Amortização *</label>
+          <select name="amortization_type" class="form-control" required>
+            <option value="antecipacao_parcela">Antecipação de Parcela</option>
+            <option value="reducao_saldo" selected>Redução de Saldo</option>
+            <option value="liquidacao_parcial">Liquidação Parcial</option>
+            <option value="liquidacao_total">Liquidação Total</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Aplicar Em *</label>
+          <select name="applied_to" class="form-control" required>
+            <option value="principal" selected>Principal</option>
+            <option value="interest">Juros</option>
+            <option value="mixed">Misto</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="form-section">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Valor Amortizado (R$) *</label>
+          <input type="text" name="amount" id="input-amount" class="form-control" required
+                 placeholder="5.000,00" data-mask="currency" oninput="atualizarPreview()">
+        </div>
+        <div class="form-group">
+          <label>Data do Pagamento *</label>
+          <input type="date" name="payment_date" class="form-control" required value="{{ hoje_iso }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observações</label>
+        <textarea name="notes" class="form-control" rows="2" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=loan.id) }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary" id="btn-salvar-amortizacao">✓ Registrar Amortização Avulsa</button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+var SALDO_ATUAL = {{ (calc_atual.updated_amount if calc_atual else 0) | tojson }};
+var IS_PRICE_LIKE = {{ (is_price_like | default(false)) | tojson }};
+var PARCELAS_ABERTAS = {{ (parcelas_abertas | default([])) | tojson }};
+var PREVIEW_URL = {{ (url_for('titulos_privados_amortizacao_preview_parcela', loan_id=loan.id) if is_price_like else '') | tojson }};
+
+function parseValorBR(texto) {
+  if (!texto) return 0;
+  var limpo = texto.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.');
+  var v = parseFloat(limpo);
+  return isNaN(v) ? 0 : v;
+}
+
+function formatarMoedaJS(v) {
+  return 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function formatarDataJS(iso) {
+  if (!iso) return '—';
+  var partes = iso.split('-');
+  return partes.length === 3 ? (partes[2] + '/' + partes[1] + '/' + partes[0]) : iso;
+}
+
+/* ── Card 1: Quitar Parcela Antecipada — preview via AJAX ── */
+function atualizarQuitacaoAntecipada() {
+  var instEl = document.getElementById('early-installment-id');
+  var dataEl = document.getElementById('early-payment-date');
+  if (!instEl || !dataEl) return;
+  var instId = instEl.value;
+  var dataPag = dataEl.value;
+  var resultadoEl = document.getElementById('qa-resultado');
+  var erroEl = document.getElementById('qa-erro');
+  var carregandoEl = document.getElementById('qa-carregando');
+  var btn = document.getElementById('btn-quitar-antecipada');
+
+  resultadoEl.style.display = 'none';
+  erroEl.style.display = 'none';
+  btn.disabled = true;
+
+  if (!instId || !dataPag) return;
+
+  carregandoEl.style.display = 'block';
+  fetch(PREVIEW_URL + '?installment_id=' + encodeURIComponent(instId) + '&payment_date=' + encodeURIComponent(dataPag))
+    .then(function (resp) { return resp.json(); })
+    .then(function (data) {
+      carregandoEl.style.display = 'none';
+      if (!data.success) {
+        erroEl.textContent = data.error || 'Não foi possível calcular.';
+        erroEl.style.display = 'block';
+        return;
+      }
+      if (data.status === 'paid') {
+        erroEl.textContent = 'Esta parcela já está paga.';
+        erroEl.style.display = 'block';
+        return;
+      }
+      document.getElementById('qa-vencimento').textContent = formatarDataJS(data.due_date);
+      document.getElementById('qa-dias').textContent =
+        data.days_until_due > 0 ? (data.days_until_due + ' dia(s) antes do vencimento')
+        : (data.days_until_due === 0 ? 'Vence hoje' : 'Já vencida (' + Math.abs(data.days_until_due) + ' dia(s) de atraso)');
+      document.getElementById('qa-desconto').textContent = formatarMoedaJS(data.discount_amount);
+      document.getElementById('qa-valor-final').textContent = formatarMoedaJS(data.early_settlement_amount);
+      resultadoEl.style.display = 'block';
+      btn.disabled = false;
+    })
+    .catch(function () {
+      carregandoEl.style.display = 'none';
+      erroEl.textContent = 'Erro ao calcular a quitação antecipada.';
+      erroEl.style.display = 'block';
+    });
+}
+
+if (document.getElementById('early-installment-id')) {
+  document.getElementById('early-installment-id').addEventListener('change', atualizarQuitacaoAntecipada);
+  document.getElementById('early-payment-date').addEventListener('change', atualizarQuitacaoAntecipada);
+}
+
+/* ── Card 2: Amortização Avulsa ── */
+function atualizarTipoPrice() {
+  if (!IS_PRICE_LIKE) return;
+  var tipo = document.getElementById('ui_tipo').value;
+  var grupoParcelaAlvo = document.getElementById('grupo-parcela-alvo');
+  var inputParcela = document.getElementById('installment_id');
+  var avisoProximas = document.getElementById('aviso-proximas');
+  var avisoLiquidacao = document.getElementById('aviso-liquidacao');
+  var avisoFase2 = document.getElementById('aviso-fase2');
+  var btnSalvar = document.getElementById('btn-salvar-amortizacao');
+
+  grupoParcelaAlvo.style.display = 'none';
+  inputParcela.required = false;
+  avisoProximas.style.display = 'none';
+  avisoLiquidacao.style.display = 'none';
+  avisoFase2.style.display = 'none';
+  btnSalvar.disabled = false;
+
+  if (tipo === 'parcela_especifica') {
+    grupoParcelaAlvo.style.display = 'block';
+    inputParcela.required = true;
+  } else if (tipo === 'proximas_parcelas') {
+    avisoProximas.style.display = 'block';
+  } else if (tipo === 'liquidacao_total') {
+    avisoLiquidacao.style.display = 'block';
+  } else if (tipo === 'reduzir_prazo' || tipo === 'reduzir_parcela') {
+    avisoFase2.style.display = 'block';
+    btnSalvar.disabled = true;
+  }
+  atualizarPreview();
+}
+
+function atualizarPreview() {
+  var valor = parseValorBR(document.getElementById('input-amount').value);
+  var previewEl = document.getElementById('valor-preview');
+  var depoisEl = document.getElementById('saldo-depois');
+  var previewParcelasEl = document.getElementById('preview-parcelas');
+  if (!previewEl || !depoisEl) return;
+  previewEl.textContent = formatarMoedaJS(valor);
+
+  if (IS_PRICE_LIKE) {
+    var tipo = document.getElementById('ui_tipo') ? document.getElementById('ui_tipo').value : 'parcela_especifica';
+
+    if (tipo === 'parcela_especifica') {
+      var sel = document.getElementById('installment_id');
+      var opt = sel.options[sel.selectedIndex];
+      var saldoParcela = opt ? parseFloat(opt.getAttribute('data-saldo') || '0') : 0;
+      var restante = Math.max(saldoParcela - valor, 0);
+      if (previewParcelasEl) {
+        previewParcelasEl.style.display = opt && opt.value ? 'block' : 'none';
+        previewParcelasEl.textContent = opt && opt.value
+          ? 'Parcela selecionada: saldo atualizado ' + formatarMoedaJS(saldoParcela) +
+            ' → depois do pagamento: ' + formatarMoedaJS(restante) +
+            (valor >= saldoParcela ? ' (fica PAGA)' : ' (fica PARCIAL)')
+          : '';
+      }
+      var depoisTotal = SALDO_ATUAL - Math.min(valor, saldoParcela || valor);
+      depoisEl.textContent = formatarMoedaJS(depoisTotal < 0 ? 0 : depoisTotal);
+      depoisEl.style.color = depoisTotal < 0 ? '#f87171' : '#d4af37';
+      return;
+    }
+
+    if (tipo === 'proximas_parcelas') {
+      var restanteValor = valor;
+      var linhas = [];
+      for (var idx = 0; idx < PARCELAS_ABERTAS.length && restanteValor > 0; idx++) {
+        var p = PARCELAS_ABERTAS[idx];
+        var saldoP = p.updated_amount;
+        var consumido = Math.min(restanteValor, saldoP);
+        var ficaPago = consumido >= saldoP;
+        linhas.push('Parcela ' + p.installment_number + ': ' + formatarMoedaJS(consumido) +
+                     (ficaPago ? ' (fica PAGA)' : ' (fica PARCIAL)'));
+        restanteValor -= consumido;
+      }
+      if (previewParcelasEl) {
+        previewParcelasEl.style.display = linhas.length ? 'block' : 'none';
+        previewParcelasEl.textContent = linhas.length
+          ? 'Parcelas afetadas em sequência: ' + linhas.join(' | ') +
+            (restanteValor > 0 ? ' | Sobra não aplicada: ' + formatarMoedaJS(restanteValor) : '')
+          : '';
+      }
+      var depois2 = SALDO_ATUAL - (valor - restanteValor);
+      depoisEl.textContent = formatarMoedaJS(depois2 < 0 ? 0 : depois2);
+      depoisEl.style.color = depois2 < 0 ? '#f87171' : '#d4af37';
+      return;
+    }
+
+    if (tipo === 'liquidacao_total') {
+      if (previewParcelasEl) {
+        previewParcelasEl.style.display = 'block';
+        previewParcelasEl.textContent = valor >= SALDO_ATUAL
+          ? 'Cobre o saldo total — empréstimo ficará QUITADO.'
+          : 'Valor insuficiente para liquidação total (faltam ' + formatarMoedaJS(SALDO_ATUAL - valor) + ').';
+      }
+      depoisEl.textContent = formatarMoedaJS(valor >= SALDO_ATUAL ? 0 : SALDO_ATUAL);
+      depoisEl.style.color = valor >= SALDO_ATUAL ? '#d4af37' : '#f87171';
+      return;
+    }
+
+    if (previewParcelasEl) { previewParcelasEl.style.display = 'none'; }
+    depoisEl.textContent = formatarMoedaJS(SALDO_ATUAL);
+    return;
+  }
+
+  // Empréstimo bullet — projeção simples de sempre.
+  var depois = SALDO_ATUAL - valor;
+  depoisEl.textContent = formatarMoedaJS(depois < 0 ? 0 : depois);
+  depoisEl.style.color = depois < 0 ? '#f87171' : '#d4af37';
+}
+
+if (document.getElementById('ui_tipo')) {
+  document.getElementById('installment_id').addEventListener('change', atualizarPreview);
+  atualizarTipoPrice();
+}
+
+document.getElementById('form-amortizacao').addEventListener('submit', function (e) {
+  var valor = parseValorBR(document.getElementById('input-amount').value);
+  if (!IS_PRICE_LIKE && SALDO_ATUAL > 0 && valor > SALDO_ATUAL) {
+    if (!confirm('O valor amortizado (' + formatarMoedaJS(valor) + ') é MAIOR que o saldo total ' +
+                 'atualizado (' + formatarMoedaJS(SALDO_ATUAL) + '). Confirma mesmo assim?')) {
+      e.preventDefault();
+    }
+  }
+});
+</script>
+{% endblock %}

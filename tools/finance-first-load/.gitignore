@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+private/
+*.sqlite*
+*.csv
+*.zip
+*.dump
+*.log
+approval*.json
+matches*.json
+proposal*.json
+# Preserve the previous local delivery record, but do not publish destination reports.
+/DELIVERY.json

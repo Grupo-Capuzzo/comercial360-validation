@@ -1,0 +1,41 @@
+{# Campos da demanda (nova ou edição). Espera: d (dict ou none), usuarios, portal_user #}
+{% set d = d or {} %}
+<label class="lbl" for="f-titulo">Título</label>
+<input class="inp" id="f-titulo" name="titulo" maxlength="200" required value="{{ d.titulo or '' }}" placeholder="O que precisa ser feito">
+<label class="lbl" for="f-desc">Descrição <small>(opcional)</small></label>
+<textarea class="inp" id="f-desc" name="descricao" rows="3" placeholder="Detalhes, passo a passo, onde encontrar">{{ d.descricao or '' }}</textarea>
+<div class="op-2col">
+  <div>
+    <label class="lbl">Tipo</label>
+    <div class="seg op-seg">
+      <input type="radio" id="f-tipo-p-{{ d.id or 'n' }}" name="tipo" value="pontual" {{ 'checked' if d.tipo != 'recorrente' }} data-op-tipo>
+      <label for="f-tipo-p-{{ d.id or 'n' }}">Pontual</label>
+      <input type="radio" id="f-tipo-r-{{ d.id or 'n' }}" name="tipo" value="recorrente" {{ 'checked' if d.tipo == 'recorrente' }} data-op-tipo>
+      <label for="f-tipo-r-{{ d.id or 'n' }}">Recorrente</label>
+    </div>
+  </div>
+  <div data-op-rec {{ 'hidden' if d.tipo != 'recorrente' }}>
+    <label class="lbl" for="f-rec">Repete</label>
+    <select class="inp" id="f-rec" name="recorrencia">
+      {% for k, v in RECORRENCIAS.items() %}<option value="{{ k }}" {{ 'selected' if (d.recorrencia or 'mensal') == k }}>{{ v }}</option>{% endfor %}
+    </select>
+  </div>
+</div>
+<div class="op-2col">
+  <div>
+    <label class="lbl" for="f-venc">Vencimento</label>
+    <input class="inp" id="f-venc" type="date" name="vencimento" value="{{ d.vencimento or (hoje_iso if hoje_iso is defined else '') }}">
+  </div>
+  <div>
+    <label class="lbl" for="f-prio">Prioridade</label>
+    <select class="inp" id="f-prio" name="prioridade">
+      {% for k, v in PRIORIDADES.items() %}<option value="{{ k }}" {{ 'selected' if (d.prioridade or 'normal') == k }}>{{ v }}</option>{% endfor %}
+    </select>
+  </div>
+</div>
+{% if portal_user.admin %}
+<label class="lbl" for="f-resp">Responsável</label>
+<select class="inp" id="f-resp" name="responsavel_id">
+  {% for x in usuarios %}<option value="{{ x.id }}" {{ 'selected' if (d.responsavel_id or portal_user.id) == x.id }}>{{ x.nome }}</option>{% endfor %}
+</select>
+{% endif %}

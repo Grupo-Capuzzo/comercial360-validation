@@ -1,0 +1,130 @@
+{% extends "operacao/_layout.html" %}
+{% block title %}Demandas · {{ empresa.nome }}{% endblock %}
+{% block op_content %}
+<div class="op-head">
+  <div>
+    <div class="eyebrow-line">Demandas e rotinas</div>
+    <h1>{{ 'Demandas da equipe' if portal_user.admin else 'Minhas demandas' }}</h1>
+    <p>Tudo o que precisa ser feito na {{ empresa.nome }}: lance, acompanhe, anote e conclua.</p>
+  </div>
+  <button class="btn-pill" type="button" onclick="document.getElementById('dlg-nova').showModal()">{{ oic('add') }} Nova demanda</button>
+</div>
+
+<div class="op-kpis">
+  <div class="op-kpi {{ 'risco' if cont.atrasadas }}"><b>{{ cont.atrasadas }}</b><span>Atrasadas</span></div>
+  <div class="op-kpi"><b>{{ cont.hoje }}</b><span>Vencem hoje</span></div>
+  <div class="op-kpi"><b>{{ cont.abertas }}</b><span>Em aberto</span></div>
+  <div class="op-kpi dark"><b>{{ hhmm(semana[-1].s) }}</b><span>Na empresa hoje</span></div>
+</div>
+
+<form class="op-toolbar" method="get">
+  <input type="hidden" name="aba" value="{{ aba }}">
+  <div class="chips">
+    {% for k, rot in [('hoje','Hoje e atrasadas'),('proximas','Próximas'),('recorrentes','Recorrentes'),('todas','Todas abertas'),('concluidas','Concluídas')] %}
+      <a class="chip {{ 'on' if aba == k }}" href="{{ url_for('operacao.demandas', slug=empresa.slug, aba=k, resp=resp, q=busca or None) }}">{{ rot }} <small>{{ abas[k] }}</small></a>
+    {% endfor %}
+  </div>
+  <div class="op-filtros">
+    {% if portal_user.admin %}
+    <select class="inp" name="resp" onchange="this.form.submit()" aria-label="Responsável">
+      <option value="">Toda a equipe</option>
+      {% for x in usuarios %}<option value="{{ x.id }}" {{ 'selected' if resp == x.id }}>{{ x.nome }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <label class="search">{{ ic('search') }}<input type="search" name="q" value="{{ busca }}" placeholder="Buscar demanda…"></label>
+  </div>
+</form>
+
+<div class="op-cols">
+  <div class="op-lista">
+    {% for t in lista %}
+    <article class="op-tarefa sit-{{ t.situacao }} {{ 'rodando' if t.rodando }}">
+      <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=t.id) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="voltar" value="{{ request.full_path }}">
+        {% if t.status == 'concluida' %}
+          <button class="op-check feito" name="acao" value="reabrir" title="Reabrir">{{ oic('check') }}</button>
+        {% else %}
+          <button class="op-check" name="acao" value="concluir" title="Marcar como concluída">{{ oic('check') }}</button>
+        {% endif %}
+      </form>
+      <a class="op-tarefa-corpo" href="{{ url_for('operacao.demanda', slug=empresa.slug, tid=t.id) }}">
+        <b>{{ t.titulo }}</b>
+        <span class="op-meta">
+          {% if t.status == 'concluida' %}<span class="op-venc ok">Concluída em {{ data_hora_br(t.concluida_em) }}</span>
+          {% elif t.situacao == 'atrasada' %}<span class="op-venc risco">Venceu {{ data_br(t.vencimento) }}</span>
+          {% elif t.situacao == 'hoje' %}<span class="op-venc aviso">Vence hoje</span>
+          {% elif t.vencimento %}<span class="op-venc">Vence {{ data_br(t.vencimento) }}</span>
+          {% else %}<span class="op-venc">Sem data</span>{% endif %}
+          {% if t.tipo == 'recorrente' %}<span class="op-tag">{{ oic('repeat') }}{{ RECORRENCIAS.get(t.recorrencia, '') }}</span>{% endif %}
+          {% if t.prioridade == 'alta' %}<span class="op-tag risco">Prioridade alta</span>{% endif %}
+          {% if t.chamado_id %}<span class="op-tag">Chamado nº {{ numero_chamado(t.chamado_id) }}</span>{% endif %}
+          {% if t.status == 'andamento' %}<span class="op-tag andamento">Em andamento</span>{% endif %}
+          {% if portal_user.admin %}<span class="op-resp">{{ t.resp_nome }}</span>{% endif %}
+        </span>
+      </a>
+      <div class="op-tempo">
+        <span class="op-tempo-n" {% if t.rodando %}data-op-tarefa-tempo="{{ t.id }}"{% endif %}>{{ hhmmss(t.segundos) }}</span>
+        {% if t.status != 'concluida' and t.responsavel_id == portal_user.id %}
+        <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=t.id) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="voltar" value="{{ request.full_path }}">
+          {% if t.rodando %}
+            <button class="op-play on" name="acao" value="parar" title="Pausar o tempo desta demanda">{{ oic('pause') }}</button>
+          {% else %}
+            <button class="op-play" name="acao" value="iniciar" title="Começar a contar o tempo nesta demanda">{{ oic('play') }}</button>
+          {% endif %}
+        </form>
+        {% endif %}
+      </div>
+    </article>
+    {% else %}
+    <div class="op-vazio">
+      {% if aba == 'hoje' %}Nada vencendo hoje nem atrasado. {% if abas.proximas %}Veja as <a href="{{ url_for('operacao.demandas', slug=empresa.slug, aba='proximas', resp=resp) }}">próximas</a>.{% endif %}
+      {% elif aba == 'concluidas' %}Nenhuma demanda concluída ainda.
+      {% else %}Nenhuma demanda aqui. Use “Nova demanda” para lançar.{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <aside class="op-resumo">
+    <section class="op-card">
+      <h3>Onde o tempo foi gasto</h3>
+      <p class="op-sub">Demandas com mais tempo nos últimos 7 dias</p>
+      {% for r in gasto %}
+        <a class="op-barra" href="{{ url_for('operacao.demanda', slug=empresa.slug, tid=r.id) }}">
+          <span class="op-barra-rot"><span>{{ r.titulo }}</span><b>{{ hhmm(r.s) }}</b></span>
+          <span class="op-barra-trilha"><i style="width: {{ ((r.s or 0) * 100 / maior)|round|int }}%"></i></span>
+        </a>
+      {% else %}
+        <p class="op-sub">Use o ▶ de uma demanda para começar a medir.</p>
+      {% endfor %}
+    </section>
+    <section class="op-card">
+      <h3>Tempo na empresa</h3>
+      <p class="op-sub">Cronômetro da barra superior, por dia</p>
+      {% set maxd = (semana|map(attribute='s')|max) or 1 %}
+      <div class="op-semana">
+        {% for d in semana %}
+          <div class="op-dia" title="{{ d.dia.strftime('%d/%m') }}: {{ hhmm(d.s) }}">
+            <span class="op-dia-col"><i style="height: {{ (d.s * 100 / maxd)|round|int }}%"></i></span>
+            <small>{{ ['seg','ter','qua','qui','sex','sáb','dom'][d.dia.weekday()] }}</small>
+          </div>
+        {% endfor %}
+      </div>
+      <p class="op-sub">Semana: <b>{{ hhmm(semana|sum(attribute='s')) }}</b></p>
+    </section>
+  </aside>
+</div>
+
+<dialog id="dlg-nova" class="dlg op-dlg">
+  <form method="post" action="{{ url_for('operacao.demanda_nova', slug=empresa.slug) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="dlg-head"><h3>Nova demanda</h3>
+      <button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
+    {% with d=none %}{% include "operacao/_form_demanda.html" %}{% endwith %}
+    <button class="btn-pill" type="submit">Lançar demanda</button>
+  </form>
+</dialog>
+{% include "operacao/_js_form.html" %}
+{% endblock %}

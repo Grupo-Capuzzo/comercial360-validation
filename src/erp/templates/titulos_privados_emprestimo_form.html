@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Novo Empréstimo — Títulos Privados — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<a href="{{ url_for('titulos_privados_emprestimos') }}" class="back-link">← Voltar para Empréstimos</a>
+
+<div class="page-header">
+  <div class="page-header-icon">➕</div>
+  <div class="page-header-title">Novo Empréstimo</div>
+  <div class="page-header-sub">Empréstimo privado da empresa para um cliente de títulos.</div>
+</div>
+
+{% if not clientes %}
+<div class="note-box" style="color:#f87171;border-color:rgba(239,68,68,0.25);margin-bottom:16px;">
+  ⚠️ Nenhum cliente de títulos ativo cadastrado ainda.
+  <a href="{{ url_for('titulos_privados_clientes_novo') }}" style="color:#d4af37;">Cadastre um cliente primeiro</a>.
+</div>
+{% endif %}
+
+<div class="card-gold">
+  <form method="post" id="form-emprestimo">
+
+    <div class="form-section">
+      <div class="form-section-title">Cliente</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cliente de Títulos *</label>
+          <select name="private_client_id" class="form-control" required>
+            <option value="">Selecione…</option>
+            {% for c in clientes %}
+            <option value="{{ c.id }}" {{ 'selected' if emprestimo.get('private_client_id')|string == c.id|string else '' }}>
+              {{ c.name }}{% if c.document %} — {{ formatar_documento(c.document) }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Número/Identificação do Empréstimo</label>
+          <input type="text" name="loan_number" value="{{ emprestimo.get('loan_number','') }}"
+                 class="form-control" placeholder="Opcional — ex: EMP-001">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Tipo de Empréstimo</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Método de Cálculo *</label>
+          <select name="calculation_method" id="calculation_method" class="form-control" onchange="atualizarCamposMetodo()">
+            <option value="bullet" {{ 'selected' if emprestimo.get('calculation_method','bullet') == 'bullet' else '' }}>Pagamento Único</option>
+            <option value="price"  {{ 'selected' if emprestimo.get('calculation_method') == 'price' else '' }}>Parcelado — Sistema Price</option>
+            <option value="manual" {{ 'selected' if emprestimo.get('calculation_method') == 'manual' else '' }}>Manual</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Valores e Taxa</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Valor Originalmente Emprestado (R$) *</label>
+          <input type="text" name="original_amount" value="{{ emprestimo.get('original_amount','') }}"
+                 class="form-control" required placeholder="30.000,00" data-mask="currency">
+        </div>
+        <div class="form-group" id="grupo-contracted-amount">
+          <label>Valor Total Contratado a Pagar (R$) *
+            <span style="color:#666;font-size:11px;">(automático no Price)</span>
+          </label>
+          <input type="text" name="contracted_amount" value="{{ emprestimo.get('contracted_amount','') }}"
+                 class="form-control" required placeholder="32.000,00" data-mask="currency">
+        </div>
+        <div class="form-group">
+          <label>Taxa de Juros Mensal (%) *</label>
+          <input type="text" name="interest_rate_monthly" value="{{ emprestimo.get('interest_rate_monthly','') }}"
+                 class="form-control" required placeholder="Ex: 3,5 ou 3,5%">
+          <div style="font-size:11px;color:#666;margin-top:4px;">Aceita 3,5 / 3,5% / 0,035 / 0.035 — todos equivalem a 3,5% ao mês.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Datas</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data de Contratação *</label>
+          <input type="date" name="start_date" value="{{ emprestimo.get('start_date','') }}"
+                 class="form-control" required>
+        </div>
+        <div class="form-group" id="grupo-final-due-date">
+          <label>Data de Vencimento *</label>
+          <input type="date" name="final_due_date" value="{{ emprestimo.get('final_due_date','') }}"
+                 class="form-control">
+        </div>
+        <div class="form-group" id="grupo-first-due-date" style="display:none;">
+          <label>Data da Primeira Parcela *</label>
+          <input type="date" name="first_due_date" value="{{ emprestimo.get('first_due_date','') }}"
+                 class="form-control">
+        </div>
+        <div class="form-group" id="grupo-installments" style="display:none;">
+          <label>Quantidade de Parcelas *</label>
+          <input type="number" name="installments_count" min="1" value="{{ emprestimo.get('installments_count','') }}"
+                 class="form-control">
+        </div>
+      </div>
+      <div class="note-box" id="aviso-price" style="display:none;">
+        ℹ️ No método Price, o valor da parcela e o valor total contratado são calculados
+        automaticamente a partir do valor original, da taxa mensal e da quantidade de parcelas.
+      </div>
+      <div class="note-box" id="aviso-manual" style="display:none;">
+        ℹ️ No método manual, o empréstimo é criado sem parcelas — o preenchimento manual das
+        parcelas será suportado em uma próxima etapa deste módulo.
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Observações</div>
+      <div class="form-group">
+        <textarea name="notes" class="form-control" rows="3"
+                  placeholder="Anotações internas (opcional)">{{ emprestimo.get('notes','') }}</textarea>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a href="{{ url_for('titulos_privados_emprestimos') }}" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">✓ Cadastrar Empréstimo</button>
+    </div>
+
+  </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function atualizarCamposMetodo() {
+  var metodo = document.getElementById('calculation_method').value;
+  var grupoContratado = document.getElementById('grupo-contracted-amount');
+  var grupoFinalDue = document.getElementById('grupo-final-due-date');
+  var grupoFirstDue = document.getElementById('grupo-first-due-date');
+  var grupoInstallments = document.getElementById('grupo-installments');
+  var avisoPrice = document.getElementById('aviso-price');
+  var avisoManual = document.getElementById('aviso-manual');
+  var inputContratado = grupoContratado.querySelector('input');
+  var inputFinalDue = grupoFinalDue.querySelector('input');
+  var inputFirstDue = grupoFirstDue.querySelector('input');
+  var inputInstallments = grupoInstallments.querySelector('input');
+
+  if (metodo === 'price') {
+    grupoContratado.style.display = 'none';
+    inputContratado.required = false;
+    grupoFinalDue.style.display = 'none';
+    inputFinalDue.required = false;
+    grupoFirstDue.style.display = 'block';
+    inputFirstDue.required = true;
+    grupoInstallments.style.display = 'block';
+    inputInstallments.required = true;
+    avisoPrice.style.display = 'block';
+    avisoManual.style.display = 'none';
+  } else if (metodo === 'manual') {
+    grupoContratado.style.display = 'block';
+    inputContratado.required = true;
+    grupoFinalDue.style.display = 'block';
+    inputFinalDue.required = false;
+    grupoFirstDue.style.display = 'none';
+    inputFirstDue.required = false;
+    grupoInstallments.style.display = 'none';
+    inputInstallments.required = false;
+    avisoPrice.style.display = 'none';
+    avisoManual.style.display = 'block';
+  } else { // bullet
+    grupoContratado.style.display = 'block';
+    inputContratado.required = true;
+    grupoFinalDue.style.display = 'block';
+    inputFinalDue.required = true;
+    grupoFirstDue.style.display = 'none';
+    inputFirstDue.required = false;
+    grupoInstallments.style.display = 'none';
+    inputInstallments.required = false;
+    avisoPrice.style.display = 'none';
+    avisoManual.style.display = 'none';
+  }
+}
+atualizarCamposMetodo();
+</script>
+{% endblock %}

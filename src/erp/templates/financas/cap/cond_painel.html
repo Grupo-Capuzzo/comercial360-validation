@@ -1,0 +1,179 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Condomínios{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Painel dos condomínios', 'Patrimônio, cotistas, vencimentos e apurações dos três condomínios.') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.cond_cota_nova', slug=empresa.slug) }}">{{ fic('add') }} Nova cota</a>
+  <a class="btn-pill fin-btn" href="{{ url_for('financas.cond_apuracao_nova', slug=empresa.slug) }}">{{ fic('calculo') }} Apurar mês</a>
+{% endcall %}
+
+<div class="vg-kpis">
+  <div class="vg-kpi escuro"><small>{{ fic('predio') }} Patrimônio ativo</small><b>{{ res.patrimonio_fmt }}</b><em>{{ res.cotas_ativas }} cotas ativas</em></div>
+  <a class="vg-kpi" href="{{ url_for('financas.cond_cotistas', slug=empresa.slug) }}"><small>{{ fic('pessoas') }} Cotistas</small><b>{{ res.cotistas }}</b><em>com cota ativa</em></a>
+  <div class="vg-kpi"><small>{{ fic('receber') }} Rendimento mensal</small><b>{{ res.rendimento_fmt }}</b><em>estimado pela taxa de cada produto</em></div>
+  <a class="vg-kpi" href="{{ url_for('financas.cond_contratos', slug=empresa.slug) }}"><small>{{ fic('contrato') }} Pendentes</small><b>{{ res.pendentes }}</b><em>{{ res.valor_pendente_fmt }} aguardando ativação</em></a>
+  <a class="vg-kpi" href="{{ url_for('financas.cond_vencimentos', slug=empresa.slug, dias=30) }}"><small>{{ fic('calendario') }} Vencem em 30 dias</small><b>{{ res.vencem_30 }}</b><em>{{ res.vencidas }} já vencida(s) sem renovação</em></a>
+  <a class="vg-kpi {{ 'alerta' if res.retiradas }}" href="{{ url_for('financas.cond_vencimentos', slug=empresa.slug, aba='retiradas') }}"><small>{{ fic('pagar') }} Retiradas</small><b>{{ res.retiradas }}</b><em>solicitadas</em></a>
+</div>
+
+<div class="vg-prods">
+  {% for p in res.por_produto %}
+  <a class="vg-box vg-prod" href="{{ url_for('financas.cond_produto', slug=empresa.slug, code=p.code) }}" style="text-decoration:none;color:inherit;border-top:4px solid {{ p.cor }}">
+    <header><h3>{{ fic('predio') }} {{ p.nome }}</h3><span>{{ '%.2f'|format(p.default_monthly_rate * 100) }}% a.m.</span></header>
+    <div class="vg-big"><small>Patrimônio</small>{{ reais(p.valor) }}</div>
+    <div class="vg-linhas">
+      <div><span>Cotas ativas · cotistas</span><b>{{ p.ativas }} · {{ p.cotistas }}</b></div>
+      <div><span>Rendimento mensal estimado</span><b>{{ reais(p.rendimento) }}</b></div>
+      <div><span>Pendentes</span><b>{{ p.pendentes }}</b></div>
+      <div class="{{ 'risco' if p.vencidas }}"><span>Vencem em 30 dias · vencidas</span><b>{{ p.venc30 }} · {{ p.vencidas }}</b></div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% set tot = res.patrimonio or 1 %}
+<section class="vg-box" style="margin-bottom:1rem">
+  <header><h3>Distribuição do patrimônio</h3></header>
+  <div class="pr-barra-h">{% for p in res.por_produto %}<i style="width:{{ 100 * p.valor / tot }}%;background:{{ p.cor }}"></i>{% endfor %}</div>
+  <div class="pr-leg">{% for p in res.por_produto %}<span style="--c:{{ p.cor }}">{{ p.nome }} {{ '%.1f'|format(100 * p.valor / tot) }}%</span>{% endfor %}</div>
+</section>
+
+{# ── Aquisições x retiradas, mês a mês ── #}
+<section class="vg-box" style="margin-bottom:1rem">
+  <header><h3>Aquisições × retiradas por mês</h3>
+    <form method="get" class="mv-per"><select class="inp" name="periodo" onchange="this.form.submit()">
+      <option value="12m" {{ 'selected' if periodo == '12m' }}>Últimos 12 meses</option>
+      {% for a in anos %}<option value="{{ a }}" {{ 'selected' if periodo == a }}>{{ a }}</option>{% endfor %}
+    </select><input type="hidden" name="dias" value="{{ dias }}"></form></header>
+  <p class="fin-sub" style="margin:-.3rem 0 .6rem">Resultado de cada mês (entradas − retiradas). Clique no condomínio para abrir entradas e retiradas; clique num valor para ver os clientes.
+    Entrada = data de aquisição da cota · retirada = data em que a cota foi retirada (inativada).</p>
+  {% macro cel(v, n, k, tipo) %}{% if n %}<button type="button" class="mv-v {{ tipo }}" data-k="{{ k }}|{{ tipo }}">{{ reais(v) }}<small>{{ n }} cota{{ 's' if n > 1 }}</small></button>{% else %}<span class="mv-0">—</span>{% endif %}{% endmacro %}
+  {% macro liq(v, n) %}{% if n %}<b class="{{ 'neg' if v < 0 else ('pos' if v > 0) }}">{{ reais(v) }}</b>{% else %}<span class="mv-0">—</span>{% endif %}{% endmacro %}
+  <div class="mv-wrap">
+  <table class="mv-tab mv-t2">
+    <thead><tr><th class="mv-cab">Condomínio</th>{% for l in mov.linhas %}<th class="num">{{ l.rotulo }}</th>{% endfor %}<th class="num tot">Total</th></tr></thead>
+    <tbody>
+    {% for c in mov.conds %}{% set t = mov.tot[c.code] %}
+      <tr class="mv-cond" data-g="{{ c.code }}">
+        <td class="mv-nome"><button type="button" class="mv-abre" style="--c:{{ COND_CORES.get(c.code) }}"><i></i>{{ COND_NOMES.get(c.code, c.name) }}<span class="mv-seta">▸</span></button></td>
+        {% for l in mov.linhas %}{% set x = l.c[c.code] %}<td class="num">{{ liq(x.aq_v - x.rt_v, x.aq_n + x.rt_n) }}</td>{% endfor %}
+        <td class="num tot">{{ liq(t.aq_v - t.rt_v, t.aq_n + t.rt_n) }}</td>
+      </tr>
+      <tr class="mv-sub" data-g="{{ c.code }}" hidden><td class="mv-rot">↳ Entradas</td>
+        {% for l in mov.linhas %}{% set x = l.c[c.code] %}<td class="num">{{ cel(x.aq_v, x.aq_n, l.mes ~ '|' ~ c.code, 'aq') }}</td>{% endfor %}
+        <td class="num tot">{{ cel(t.aq_v, t.aq_n, '*|' ~ c.code, 'aq') }}</td></tr>
+      <tr class="mv-sub" data-g="{{ c.code }}" hidden><td class="mv-rot">↳ Retiradas</td>
+        {% for l in mov.linhas %}{% set x = l.c[c.code] %}<td class="num">{{ cel(x.rt_v, x.rt_n, l.mes ~ '|' ~ c.code, 'rt') }}</td>{% endfor %}
+        <td class="num tot">{{ cel(t.rt_v, t.rt_n, '*|' ~ c.code, 'rt') }}</td></tr>
+    {% endfor %}
+    </tbody>
+    <tbody class="mv-res">
+      <tr class="mv-cond" data-g="tot">
+        <td class="mv-nome"><button type="button" class="mv-abre"><i style="background:#111827"></i>Resultado do mês<span class="mv-seta">▸</span></button></td>
+        {% for l in mov.linhas %}<td class="num">{{ liq(l.aq_v - l.rt_v, l.aq_n + l.rt_n) }}</td>{% endfor %}
+        <td class="num tot">{{ liq(mov.geral.aq_v - mov.geral.rt_v, mov.geral.aq_n + mov.geral.rt_n) }}</td>
+      </tr>
+      <tr class="mv-sub" data-g="tot" hidden><td class="mv-rot">↳ Entradas</td>
+        {% for l in mov.linhas %}<td class="num">{{ cel(l.aq_v, l.aq_n, l.mes ~ '|*', 'aq') }}</td>{% endfor %}
+        <td class="num tot">{{ cel(mov.geral.aq_v, mov.geral.aq_n, '*|*', 'aq') }}</td></tr>
+      <tr class="mv-sub" data-g="tot" hidden><td class="mv-rot">↳ Retiradas</td>
+        {% for l in mov.linhas %}<td class="num">{{ cel(l.rt_v, l.rt_n, l.mes ~ '|*', 'rt') }}</td>{% endfor %}
+        <td class="num tot">{{ cel(mov.geral.rt_v, mov.geral.rt_n, '*|*', 'rt') }}</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<div class="vg-cols">
+  <section class="vg-box">
+    <header><h3>Vencimentos — próximos {{ dias }} dias</h3>
+      <span class="mv-dias">{% for n in [15, 30, 60, 90] %}<a class="{{ 'on' if dias == n }}" href="?dias={{ n }}&periodo={{ periodo }}">{{ n }}d</a>{% endfor %}</span></header>
+    <p class="fin-sub" style="margin:-.3rem 0 .5rem">{{ n_cli_venc }} cliente(s) · {{ n_cotas_venc }} cota(s) · <b>{{ reais(venc_total) }}</b>. Clique no dia para ver os clientes e no cliente para ver as cotas.</p>
+    <div class="vc-lista">
+      {% for dia in venc_dias %}
+      <details class="vc-dia">
+        <summary>
+          <span class="vc-data"><b>{{ data_br(dia.data) }}</b><small>{{ dia.sem }}</small></span>
+          <span class="vc-nome"><small>{{ dia.clientes|length }} cliente{{ 's' if dia.clientes|length > 1 }} · {{ dia.n }} cota{{ 's' if dia.n > 1 }}</small></span>
+          <span class="vc-tot">{{ reais(dia.total) }}</span>
+        </summary>
+        <div class="vc-clis">
+        {% for c in dia.clientes %}
+          <details class="vc-cli">
+            <summary><span class="vc-nome"><b>{{ c.nome }}</b><small>{{ c.cotas|length }} cota{{ 's' if c.cotas|length > 1 }}</small></span><span class="vc-tot">{{ reais(c.total) }}</span></summary>
+            <table class="pr-tabela">
+              <thead><tr><th>Produto</th><th>Cota</th><th class="num">Valor</th><th></th></tr></thead>
+              <tbody>{% for s in c.cotas %}<tr><td>{{ COND_NOMES[s.code] }}</td><td class="mono">{{ s.share_number }}</td><td class="num">{{ reais(s.share_value) }}</td>
+                <td class="num"><a class="fin-link" href="{{ url_for('financas.cond_cota_editar', slug=empresa.slug, sid=s.id) }}">abrir</a></td></tr>{% endfor %}</tbody>
+            </table>
+            <div class="vc-links"><a class="fin-link" href="{{ url_for('financas.cond_cotista', slug=empresa.slug, cid=c.client_id) }}">Abrir cotista →</a>
+              <a class="fin-link" href="{{ url_for('financas.cond_vencimentos', slug=empresa.slug, dias=dias) }}">Renovar / retirar →</a></div>
+          </details>
+        {% endfor %}
+        </div>
+      </details>
+      {% else %}<p class="fin-vazio">Nenhuma cota vence nos próximos {{ dias }} dias.</p>{% endfor %}
+    </div>
+  </section>
+  <section class="vg-box">
+    <header><h3>Últimas apurações</h3><a href="{{ url_for('financas.cond_apuracao', slug=empresa.slug) }}">Histórico</a></header>
+    <div class="vg-linhas">
+      {% for a in ultimas %}
+        <a href="{{ url_for('financas.cond_apuracao_detalhe', slug=empresa.slug, calc_id=a.id) }}"><span>{{ '%02d'|format(a.calculation_month) }}/{{ a.calculation_year }} · {{ COND_NOMES.get(a.code, 'Todos') }}</span><b>{{ reais(a.total) }}</b></a>
+      {% else %}<div><span>Nenhuma apuração registrada.</span></div>{% endfor %}
+    </div>
+  </section>
+</div>
+
+{# detalhe ao clicar num valor da tabela #}
+<dialog class="dlg fin-dlg mv-dlg" id="dlg-mov">
+  <div class="dlg-head"><h3 id="mv-tit"></h3><button type="button" class="ico" data-fechar>{{ ic('close') }}</button></div>
+  <p class="fin-sub" id="mv-sub"></p>
+  <table class="pr-tabela"><thead><tr><th>Data</th><th></th><th>Produto</th><th>Cota</th><th class="num">Valor</th></tr></thead><tbody id="mv-corpo"></tbody>
+    <tfoot><tr><td colspan="4"><b>Total</b></td><td class="num"><b id="mv-total"></b></td></tr></tfoot></table>
+</dialog>
+{% set det = {} %}
+{% for l in mov.linhas %}{% for code, x in l.c.items() %}{% if x.aq or x.rt %}{% set _ = pyset(det, l.mes ~ '|' ~ code, {'aq': x.aq, 'rt': x.rt}) %}{% endif %}{% endfor %}{% endfor %}
+<script>
+(function () {
+  var DET = {{ det | tojson }}, NOMES = {{ COND_NOMES | tojson }}, ROT = {}, dlg = document.getElementById('dlg-mov');
+  {% for l in mov.linhas %}ROT['{{ l.mes }}'] = '{{ l.rotulo }}';{% endfor %} ROT['*'] = 'Período todo';
+  function br(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+  function dt(s) { return s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : ''; }
+  function esc(s) { return String(s || '').replace(/[&<>]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c]; }); }
+  var URL_CLI = '{{ url_for("financas.cond_cotista", slug=empresa.slug, cid=0) }}'.replace(/0$/, '');
+  document.querySelectorAll('.mv-cond').forEach(function (tr) {
+    tr.addEventListener('click', function (e) {
+      if (e.target.closest('.mv-v')) return;
+      var g = tr.dataset.g, abre = !tr.classList.contains('aberto');
+      tr.classList.toggle('aberto', abre);
+      document.querySelectorAll('.mv-sub[data-g="' + g + '"]').forEach(function (x) { x.hidden = !abre; });
+    });
+  });
+  document.querySelectorAll('.mv-v').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var k = b.dataset.k.split('|'), mes = k[0], code = k[1], tp = k[2], itens = [];
+      Object.keys(DET).forEach(function (chave) {
+        var p = chave.split('|'); if ((mes !== '*' && p[0] !== mes) || (code !== '*' && p[1] !== code)) return;
+        DET[chave][tp].forEach(function (x) { itens.push(Object.assign({code: p[1]}, x)); });
+      });
+      itens.sort(function (a, b) { return a.dt < b.dt ? -1 : a.dt > b.dt ? 1 : a.cli.localeCompare(b.cli); });
+      document.getElementById('mv-tit').textContent = (tp === 'aq' ? 'Aquisições' : 'Retiradas') + ' · ' + ROT[mes] + (code !== '*' ? ' · ' + NOMES[code] : '');
+      // agrupa por cliente no subtítulo
+      var porCli = {}; itens.forEach(function (x) { porCli[x.cli] = (porCli[x.cli] || 0) + x.v; });
+      document.getElementById('mv-sub').textContent = Object.keys(porCli).length + ' cliente(s) · ' + itens.length + ' cota(s)';
+      var grupos = {}, ordem = [];
+      itens.forEach(function (x) { if (!grupos[x.cid]) { grupos[x.cid] = {cli: x.cli, cid: x.cid, v: 0, l: []}; ordem.push(x.cid); } grupos[x.cid].v += x.v; grupos[x.cid].l.push(x); });
+      ordem.sort(function (a, b) { return grupos[b].v - grupos[a].v; });
+      document.getElementById('mv-corpo').innerHTML = ordem.map(function (id) {
+        var g = grupos[id];
+        return '<tr class="mv-gcli"><td colspan="4"><a href="' + URL_CLI + g.cid + '">' + esc(g.cli) + '</a> <small>' + g.l.length + ' cota' + (g.l.length > 1 ? 's' : '') + '</small></td><td class="num"><b>' + br(g.v) + '</b></td></tr>' +
+          g.l.map(function (x) { return '<tr class="mv-gcota"><td>' + dt(x.dt) + '</td><td></td><td>' + esc(NOMES[x.code]) + '</td><td class="mono">' + esc(x.cota) + '</td><td class="num">' + br(x.v) + '</td></tr>'; }).join('');
+      }).join('');
+      document.getElementById('mv-total').textContent = br(itens.reduce(function (a, x) { return a + x.v; }, 0));
+      dlg.showModal();
+    });
+  });
+})();
+</script>
+{% endblock %}

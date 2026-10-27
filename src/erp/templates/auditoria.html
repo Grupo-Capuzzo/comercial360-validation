@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Auditoria — Grupo Capuzzo{% endblock %}
+
+{% block content %}
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+  <div>
+    <div class="page-header-icon">🔍</div>
+    <div class="page-header-title">Auditoria</div>
+    <div class="page-header-sub">Registro de todas as operações do sistema</div>
+  </div>
+</div>
+
+<!-- Filtros -->
+<form method="get" class="toolbar">
+  <div class="toolbar-left">
+    <select name="entity" class="form-control form-control-sm" style="width:180px;">
+      <option value="">Todas as entidades</option>
+      <option value="clients" {{ 'selected' if entity_filtro == 'clients' else '' }}>Clientes</option>
+      <option value="shares"  {{ 'selected' if entity_filtro == 'shares'  else '' }}>Cotas</option>
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+    {% if entity_filtro %}
+      <a href="{{ url_for('auditoria') }}" class="btn btn-secondary btn-sm">Limpar</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if logs %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Data/Hora</th>
+        <th>Entidade</th>
+        <th>ID</th>
+        <th>Ação</th>
+        <th>Observação</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td class="text-mono text-dim" style="font-size:12px;">{{ log.created_at }}</td>
+        <td>
+          {% if log.entity_type == 'clients' %}
+            <span class="badge badge-civil">👤 Clientes</span>
+          {% elif log.entity_type == 'shares' %}
+            <span class="badge badge-agro">📄 Cotas</span>
+          {% else %}
+            <span class="badge badge-inactive">{{ log.entity_type }}</span>
+          {% endif %}
+        </td>
+        <td class="text-dim">{{ log.entity_id or '—' }}</td>
+        <td style="font-weight:500;color:#ccc;">{{ log.action }}</td>
+        <td class="text-dim" style="font-size:12px;">{{ log.user_note or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="text-dim" style="font-size:12px;margin-top:10px;text-align:right;">
+  {{ logs | length }} registro(s)
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">🔍</div>
+  <div class="empty-state-title">Nenhum registro de auditoria</div>
+  <div class="empty-state-sub">As operações realizadas no sistema aparecerão aqui.</div>
+</div>
+{% endif %}
+
+{% endblock %}

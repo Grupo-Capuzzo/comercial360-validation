@@ -1,0 +1,198 @@
+{% extends "financas/_layout.html" %}
+{% block fin_titulo %}Clientes e fornecedores{% endblock %}
+{% block fin_conteudo %}
+<div class="fin-head"><div><div class="eyebrow-line">Cadastros</div><h1>Clientes e fornecedores</h1>
+  <p>Digite o CPF ou CNPJ e o sistema busca os dados. Os dados bancários serão usados nos arquivos de remessa (pagar e receber).</p></div>
+  <div class="fin-acoes">
+    {% if pode_importar %}
+    <form method="post" action="{{ url_for('financas.cad_pessoas_importar', slug=empresa.slug) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <button class="btn-pill outline fin-btn" type="submit" title="Copia nome, CPF, contato, endereço e dados bancários dos clientes do módulo Condomínios">Trazer clientes dos Condomínios</button></form>
+    {% endif %}
+    <a class="btn-pill fin-btn" href="{{ url_for('financas.cad_pessoas', slug=empresa.slug, tipo=tipo or None) }}#form-pessoa">{{ fic('add') }} Novo cadastro</a>
+  </div>
+</div>
+
+<div class="pe-grid">
+  <div>
+    <form class="fin-filtros" method="get">
+      <div class="chips">
+        {% for k, rot in [('', 'Todos'), ('cliente', 'Clientes'), ('fornecedor', 'Fornecedores')] %}
+          <a class="chip {{ 'on' if tipo == k }}" href="{{ url_for('financas.cad_pessoas', slug=empresa.slug, tipo=k or None, q=busca or None) }}">{{ rot }}</a>{% endfor %}
+      </div>
+      <input type="hidden" name="tipo" value="{{ tipo }}">
+      <label class="search">{{ ic('search') }}<input type="search" name="q" value="{{ busca }}" placeholder="Nome, CPF/CNPJ ou e-mail"></label>
+    </form>
+    <div class="fin-tabela-wrap">
+      <table class="fin-tabela">
+        <thead><tr><th>Nome</th><th>Tipo</th><th>CPF/CNPJ</th><th>Contato</th><th>Banco</th></tr></thead>
+        <tbody>
+        {% for p in lista %}
+          <tr class="{{ 'inativa' if not p.ativo }} {{ 'pe-sel' if editar and editar.id == p.id }}">
+            <td data-rot="Nome" class="desc"><a href="{{ url_for('financas.cad_pessoas', slug=empresa.slug, editar=p.id, tipo=tipo or None, q=busca or None) }}"><b>{{ p.nome }}</b></a>
+              {% set extra = [p.nome_fantasia, (p.cidade ~ ('/' ~ p.uf if p.uf else '')) if p.cidade else '', {'condominios': 'Condomínios', 'supabase': 'Supabase'}.get(p.origem, '') if p.origem != 'local' else ''] | select | list %}
+              {% if extra %}<small>{{ extra | join(' · ') }}</small>{% endif %}</td>
+            <td data-rot="Tipo">{{ TIPOS_PESSOA.get(p.tipo) }}</td>
+            <td data-rot="CPF/CNPJ" class="dt">{{ p.documento|doc_fmt if p.documento else '—' }}</td>
+            <td data-rot="Contato" title="{{ p.email }} {{ p.telefone }}">{{ p.email or p.telefone or '—' }}</td>
+            <td data-rot="Banco">{% if p.banco_codigo or p.pix_chave %}<span class="fin-chip" title="{{ p.banco_nome }} ag. {{ p.agencia }} cc {{ p.conta }}{{ '-' ~ p.conta_dv if p.conta_dv }}">{{ p.banco_codigo or 'PIX' }}</span>{% else %}<span style="color:var(--muted)">—</span>{% endif %}</td>
+          </tr>
+        {% else %}
+          <tr class="vazio"><td colspan="5">Nenhum cadastro encontrado.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% set p = editar or {} %}
+  <section class="fin-box pe-form" id="form-pessoa">
+    <header><h3>{{ 'Editar: ' ~ p.nome if editar else 'Novo cadastro' }}</h3>{% if editar %}<a class="fin-link" href="{{ url_for('financas.cad_pessoas', slug=empresa.slug, tipo=tipo or None) }}">+ novo</a>{% endif %}</header>
+    <form method="post" class="fin-form" id="f-pessoa" action="{{ url_for('financas.cad_pessoas', slug=empresa.slug, tipo=tipo or None) }}" autocomplete="off">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" id="pe-id" value="{{ p.id or '' }}">
+
+      <div class="pe-sec">Identificação</div>
+      <div class="pe-doc">
+        <div><label class="lbl">CPF / CNPJ</label>
+          <input class="inp" name="documento" id="pe-doc" maxlength="18" value="{{ p.documento|doc_fmt if p.documento else '' }}" placeholder="Digite e o sistema busca os dados" inputmode="numeric"></div>
+        <button type="button" class="btn-pill fin-btn mini" id="pe-buscar">{{ ic('search') }} Buscar</button>
+      </div>
+      <div class="pe-msg" id="pe-msg" hidden></div>
+      <div class="fin-2col">
+        <div><label class="lbl">Tipo</label>
+          <select class="inp" name="tipo">{% for k, v in TIPOS_PESSOA.items() %}<option value="{{ k }}" {{ 'selected' if (p.tipo or tipo or 'cliente') == k }}>{{ v }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Situação na Receita</label><input class="inp" name="situacao_receita" data-campo="situacao" value="{{ p.situacao_receita or '' }}" readonly placeholder="preenchido pela consulta do CNPJ"></div>
+      </div>
+      <label class="lbl">Nome / razão social *</label><input class="inp" name="nome" data-campo="nome" required maxlength="160" value="{{ p.nome or request.args.get('nome', '') }}">
+      <label class="lbl">Nome fantasia</label><input class="inp" name="nome_fantasia" data-campo="nome_fantasia" maxlength="160" value="{{ p.nome_fantasia or '' }}">
+      <input type="hidden" name="atividade" data-campo="atividade" value="{{ p.atividade or '' }}">
+      <div class="pe-ativ" id="pe-ativ" {{ 'hidden' if not p.atividade }}>{{ p.atividade }}</div>
+
+      <div class="pe-sec">Contato</div>
+      <div class="fin-2col">
+        <div><label class="lbl">E-mail</label><input class="inp" type="email" name="email" data-campo="email" maxlength="160" value="{{ p.email or '' }}"></div>
+        <div><label class="lbl">Telefone</label><input class="inp" name="telefone" data-campo="telefone" maxlength="40" value="{{ p.telefone or '' }}"></div>
+      </div>
+
+      <div class="pe-sec">Endereço</div>
+      <div class="pe-3col">
+        <div><label class="lbl">CEP</label><input class="inp" name="cep" id="pe-cep" data-campo="cep" maxlength="9" inputmode="numeric" value="{{ p.cep or '' }}"></div>
+        <div style="grid-column:span 2"><label class="lbl">Logradouro</label><input class="inp" name="logradouro" data-campo="logradouro" maxlength="160" value="{{ p.logradouro or '' }}"></div>
+      </div>
+      <div class="pe-3col">
+        <div><label class="lbl">Número</label><input class="inp" name="numero" data-campo="numero" maxlength="20" value="{{ p.numero or '' }}"></div>
+        <div style="grid-column:span 2"><label class="lbl">Complemento</label><input class="inp" name="complemento" data-campo="complemento" maxlength="80" value="{{ p.complemento or '' }}"></div>
+      </div>
+      <div class="pe-3col">
+        <div><label class="lbl">Bairro</label><input class="inp" name="bairro" data-campo="bairro" maxlength="80" value="{{ p.bairro or '' }}"></div>
+        <div><label class="lbl">Cidade</label><input class="inp" name="cidade" data-campo="cidade" maxlength="80" value="{{ p.cidade or '' }}"></div>
+        <div><label class="lbl">UF</label><input class="inp" name="uf" data-campo="uf" maxlength="2" style="text-transform:uppercase" value="{{ p.uf or '' }}"></div>
+      </div>
+
+      <div class="pe-sec">Dados bancários <small>para remessas de pagamento e cobrança</small></div>
+      <label class="lbl">Banco</label>
+      <input class="inp" name="banco_codigo" id="pe-banco" data-campo="banco_codigo" list="pe-bancos" maxlength="60"
+             value="{{ (p.banco_codigo ~ ' - ' ~ p.banco_nome) if p.banco_codigo else '' }}" placeholder="Código ou nome — ex.: 341 - Itaú Unibanco">
+      <datalist id="pe-bancos">{% for c, n in BANCOS %}<option value="{{ c }} - {{ n }}">{% endfor %}</datalist>
+      <input type="hidden" name="banco_nome" data-campo="banco_nome" value="{{ p.banco_nome or '' }}">
+      <div class="pe-banco">
+        <div><label class="lbl">Agência</label><input class="inp" name="agencia" data-campo="agencia" maxlength="6" inputmode="numeric" value="{{ p.agencia or '' }}"></div>
+        <div><label class="lbl">Dígito</label><input class="inp" name="agencia_dv" data-campo="agencia_dv" maxlength="2" value="{{ p.agencia_dv or '' }}"></div>
+        <div><label class="lbl">Conta</label><input class="inp" name="conta" data-campo="conta" maxlength="15" inputmode="numeric" value="{{ p.conta or '' }}"></div>
+        <div><label class="lbl">Dígito</label><input class="inp" name="conta_dv" data-campo="conta_dv" maxlength="2" value="{{ p.conta_dv or '' }}"></div>
+      </div>
+      <div class="fin-2col">
+        <div><label class="lbl">Tipo de conta</label>
+          <select class="inp" name="conta_tipo" data-campo="conta_tipo"><option value="">—</option>{% for k, v in CONTA_TIPOS.items() %}<option value="{{ k }}" {{ 'selected' if p.conta_tipo == k }}>{{ v }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">CPF/CNPJ do titular</label><input class="inp" name="titular_documento" data-campo="titular_documento" maxlength="18" value="{{ p.titular_documento|doc_fmt if p.titular_documento else '' }}" placeholder="vazio = o próprio cadastro"></div>
+      </div>
+      <label class="lbl">Titular da conta</label><input class="inp" name="titular_nome" data-campo="titular_nome" maxlength="160" value="{{ p.titular_nome or '' }}" placeholder="vazio = o próprio cadastro">
+      <div class="fin-2col">
+        <div><label class="lbl">Tipo da chave PIX</label>
+          <select class="inp" name="pix_tipo" id="pe-pixtipo" data-campo="pix_tipo"><option value="">—</option>{% for k, v in PIX_TIPOS.items() %}<option value="{{ k }}" {{ 'selected' if p.pix_tipo == k }}>{{ v }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Chave PIX</label><input class="inp" name="pix_chave" id="pe-pix" data-campo="pix_chave" maxlength="120" value="{{ p.pix_chave or '' }}"></div>
+      </div>
+
+      <div class="pe-sec">Outros</div>
+      <label class="lbl">Observações</label><textarea class="inp" name="obs" rows="2">{{ p.obs or '' }}</textarea>
+      {% if editar %}<label class="fin-check"><input type="hidden" name="ativo" value="0"><input type="checkbox" name="ativo" value="1" {{ 'checked' if p.ativo }}> Cadastro ativo</label>{% endif %}
+      <button class="btn-pill fin-btn" type="submit" style="margin-top:.6rem">Salvar</button>
+    </form>
+  </section>
+</div>
+{% endblock %}
+
+{% block fin_scripts %}
+<script>
+(function () {
+  var f = document.getElementById('f-pessoa'), doc = document.getElementById('pe-doc'), msg = document.getElementById('pe-msg');
+  var novo = !document.getElementById('pe-id').value, ultimo = '';
+  function dig(s) { return (s || '').replace(/\D/g, ''); }
+  function mascaraDoc(el) {
+    var d = dig(el.value).slice(0, 14);
+    el.value = d.length <= 11
+      ? d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+      : d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  function aviso(t, tipo, html) { msg.hidden = false; msg.className = 'pe-msg ' + (tipo || ''); msg[html ? 'innerHTML' : 'textContent'] = t; }
+  function preencher(dados, sobrescrever) {
+    var n = 0;
+    Object.keys(dados).forEach(function (k) {
+      var v = dados[k]; if (!v) return;
+      var el = f.querySelector('[data-campo="' + k + '"]'); if (!el) return;
+      if (k === 'banco_codigo') { v = v + (dados.banco_nome ? ' - ' + dados.banco_nome : ''); }
+      if (sobrescrever || !el.value) { el.value = v; el.classList.add('pe-auto'); n++; }
+    });
+    var at = document.getElementById('pe-ativ'); if (dados.atividade) { at.hidden = false; at.textContent = dados.atividade; }
+    return n;
+  }
+  function buscar() {
+    var d = dig(doc.value);
+    if (d.length !== 11 && d.length !== 14) return;
+    if (d === ultimo) return; ultimo = d;
+    aviso(d.length === 14 ? 'Consultando a Receita Federal…' : 'Verificando CPF…', 'carregando');
+    fetch('{{ url_for("financas.cad_pessoas_consulta", slug=empresa.slug) }}?doc=' + d + '&id=' + (document.getElementById('pe-id').value || 0),
+          {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.ja_cadastrado) {
+        aviso('Este documento já está cadastrado: <a href="' + j.ja_cadastrado.url + '">' + j.ja_cadastrado.nome + ' — abrir</a>', 'erro', true);
+        return;
+      }
+      if (!j.ok) { aviso(j.msg, 'erro'); return; }
+      if (j.cpf_sem_dados) { aviso(j.msg, ''); return; }
+      var n = preencher(j.dados || {}, novo);
+      var sit = (j.dados || {}).situacao;
+      aviso('✓ ' + n + ' campo(s) preenchido(s) com dados de ' + j.fonte + '.' + (sit && sit !== 'ATIVA' ? ' Atenção: situação ' + sit + '.' : '')
+            + (j.aviso ? ' (' + j.aviso + ')' : '') + (!novo ? ' Campos já preenchidos foram mantidos.' : ''), sit && sit !== 'ATIVA' ? 'erro' : 'ok');
+    }).catch(function () { ultimo = ''; aviso('Falha na consulta. Verifique a internet e tente de novo.', 'erro'); });
+  }
+  doc.addEventListener('input', function () { mascaraDoc(doc); var d = dig(doc.value); if (d.length === 14 || (d.length === 11 && novo)) buscar(); });
+  doc.addEventListener('blur', buscar);
+  document.getElementById('pe-buscar').addEventListener('click', function () { ultimo = ''; buscar(); });
+
+  // CEP → endereço (ViaCEP)
+  var cep = document.getElementById('pe-cep');
+  cep.addEventListener('input', function () { var d = dig(cep.value).slice(0, 8); cep.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d; });
+  cep.addEventListener('blur', function () {
+    var d = dig(cep.value); if (d.length !== 8) return;
+    fetch('https://viacep.com.br/ws/' + d + '/json/').then(function (r) { return r.json(); }).then(function (j) {
+      if (j.erro) return;
+      preencher({logradouro: j.logradouro, bairro: j.bairro, cidade: j.localidade, uf: j.uf}, false);
+    }).catch(function () {});
+  });
+
+  // Banco: guarda só o código; mostra "341 - Itaú"
+  var banco = document.getElementById('pe-banco');
+  banco.addEventListener('change', function () { var m = banco.value.match(/^\s*(\d{1,3})\s*(?:-\s*(.*))?$/);
+    if (m) f.querySelector('[name=banco_nome]').value = m[2] || ''; });
+  f.addEventListener('submit', function () { var m = banco.value.match(/^\s*(\d{1,3})/); banco.value = m ? m[1] : ''; });
+
+  // Tipo da chave PIX pelo formato
+  var pix = document.getElementById('pe-pix'), pt = document.getElementById('pe-pixtipo');
+  pix.addEventListener('blur', function () {
+    if (pt.value || !pix.value) return; var v = pix.value.trim(), d = dig(v);
+    pt.value = v.indexOf('@') > 0 ? 'email' : (/^[0-9a-f-]{32,36}$/i.test(v) ? 'aleatoria' : (d.length === 14 || (d.length === 11 && !/^\(?\d{2}\)?\s?9/.test(v)) ? 'cpf_cnpj' : (d.length >= 10 ? 'telefone' : '')));
+  });
+  {% if editar %}document.getElementById('form-pessoa').scrollIntoView({block: 'nearest'});{% endif %}
+})();
+</script>
+{% endblock %}

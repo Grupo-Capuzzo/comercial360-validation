@@ -1,0 +1,50 @@
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Títulos Privados{% endblock %}
+{% block fin_conteudo %}
+{% call m.cabecalho('Títulos Privados', 'Empréstimos privados: carteira, parcelas a receber e atrasos.', 'Produto · Títulos Privados') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('titulos_privados_emprestimos') }}">{{ fic('abrir') }} Abrir no módulo</a>
+{% endcall %}
+<div class="vg-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="vg-kpi escuro"><small>Carteira a receber</small><b>{{ res.a_receber_fmt }}</b><em>{{ res.ativos }} empréstimo(s) ativo(s)</em></div>
+  <div class="vg-kpi {{ 'alerta' if res.vencidas }}"><small>Parcelas vencidas</small><b class="{{ 'neg' if res.vencidas }}">{{ res.vencido_fmt }}</b><em>{{ res.vencidas }} parcela(s)</em></div>
+  <div class="vg-kpi"><small>Próxima parcela</small><b style="font-size:1rem">{{ res.proxima or '—' }}</b><em>em aberto</em></div>
+  <div class="vg-kpi"><small>Recebido no mês (ERP)</small><b>{{ moeda(fin.receitas_mes) }}</b><em>centro de custo do produto</em></div>
+</div>
+<div class="pr-abas">
+  <a class="{{ 'on' if aba != 'parcelas' }}" href="?aba=carteira">Carteira</a>
+  <a class="{{ 'on' if aba == 'parcelas' }}" href="?aba=parcelas">Parcelas a receber</a>
+</div>
+<section class="vg-box">
+{% if aba == 'parcelas' %}
+  <table class="pr-tabela">
+    <thead><tr><th>Vencimento</th><th>Cliente</th><th>Empréstimo</th><th>Parcela</th><th class="num">Principal</th><th class="num">Juros</th><th class="num">Parcela</th><th>Situação</th></tr></thead>
+    <tbody>
+    {% for p in parcelas %}
+      <tr class="clic" onclick="location.href='{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=p.loan_id) }}'">
+        <td>{{ data_br(p.due_date) }}</td><td>{{ p.cliente or '—' }}</td><td class="mono">{{ p.loan_number or ('#' ~ p.loan_id) }}</td>
+        <td>{{ p.installment_number }}</td><td class="num">{{ reais(p.principal_amount) }}</td><td class="num">{{ reais(p.interest_amount) }}</td>
+        <td class="num"><b>{{ reais(p.installment_amount - (p.paid_amount or 0)) }}</b></td>
+        <td>{% if p.due_date < hoje %}<span class="pr-st risco">Vencida</span>{% else %}<span class="pr-st aviso">A vencer</span>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="8" class="fin-vazio">Nenhuma parcela em aberto.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <table class="pr-tabela">
+    <thead><tr><th>Cliente</th><th>Empréstimo</th><th class="num">Contratado</th><th class="num">Taxa</th><th>Parcelas</th><th class="num">Saldo a receber</th><th>Próx. vencimento</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for l in emprestimos %}
+      <tr class="clic" onclick="location.href='{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=l.id) }}'">
+        <td><b>{{ l.cliente or '—' }}</b></td><td class="mono">{{ l.loan_number or ('#' ~ l.id) }}</td>
+        <td class="num">{{ reais(l.contracted_amount) }}</td><td class="num">{{ '%.2f'|format((l.interest_rate_monthly or 0) * 100) }}% a.m.</td>
+        <td>{{ l.pagas }}/{{ l.installments_count }}</td><td class="num"><b>{{ reais(l.saldo) }}</b></td>
+        <td style="{{ 'color:var(--fin-neg);font-weight:600' if l.prox and l.prox < hoje }}">{{ data_br(l.prox) if l.prox else '—' }}</td>
+        <td><span class="pr-st {{ 'ok' if l.status == 'active' else 'neutro' }}">{{ {'active':'Ativo','paid':'Quitado','closed':'Encerrado'}.get(l.status, l.status) }}</span></td></tr>
+    {% else %}<tr><td colspan="8" class="fin-vazio">Nenhum empréstimo cadastrado.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+</section>
+<div class="pr-aviso" style="margin-top:1rem">{{ fic('tatica') }}<div><b>Próximos passos (a definir com você):</b> lançar cada parcela automaticamente em
+  Contas a receber (centro de custo “Títulos Privados”), baixa da parcela ao conciliar o extrato e relatório de rentabilidade da carteira.</div></div>
+{% endblock %}

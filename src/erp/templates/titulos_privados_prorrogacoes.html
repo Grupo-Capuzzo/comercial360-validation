@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Prorrogações — Títulos Privados{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">⏳</div>
+  <div class="page-header-title">Prorrogações</div>
+  <div class="page-header-sub">Todas as prorrogações registradas nos empréstimos privados.</div>
+</div>
+
+{% if prorrogacoes %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th><th>Empréstimo</th><th>Data do Pagamento</th>
+        <th style="text-align:right;">Valor Pago</th><th>Coberto Até</th><th style="text-align:right;">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in prorrogacoes %}
+      <tr>
+        <td>{{ e.client_name }}</td>
+        <td class="text-mono">{{ e.loan_number or ('#' ~ e.loan_id) }}</td>
+        <td class="text-dim">{{ formatar_data(e.paid_date) }}</td>
+        <td style="text-align:right;font-weight:600;">{{ formatar_moeda(e.extension_amount) }}</td>
+        <td style="color:#d4af37;font-weight:600;">{{ formatar_data(e.covered_until_date) }}</td>
+        <td style="text-align:right;">
+          <a href="{{ url_for('titulos_privados_emprestimo_detalhe', loan_id=e.loan_id) }}" class="btn btn-secondary btn-sm">Ver Empréstimo</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="text-dim" style="font-size:12px;margin-top:10px;text-align:right;">
+  {{ prorrogacoes | length }} prorrogação(ões) encontrada(s)
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">⏳</div>
+  <div class="empty-state-title">Nenhuma prorrogação registrada ainda</div>
+</div>
+{% endif %}
+
+{% endblock %}
