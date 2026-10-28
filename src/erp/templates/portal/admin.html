@@ -20,7 +20,7 @@
         <td><b>{{ u.nome }}</b></td><td>{{ u.email }}</td>
         <td>{{ 'Administrador' if u.perfil == 'admin' else 'Usuário' }}</td>
         <td>{% if u.ativo %}<span class="tag tag-on">Ativo</span>{% else %}<span class="tag tag-off">Bloqueado</span>{% endif %}</td>
-        <td>{% if u.perfil == 'admin' %}Todas{% else %}{{ empresas|selectattr('slug', 'in', u.empresas)|map(attribute='nome')|join(', ') or '—' }}{% endif %}</td>
+        <td>{% if u.perfil == 'admin' %}Todas{% else %}{% for e in empresas if e.slug in u.empresas %}{{ e.nome }}{% if u.modulos.get(e.slug) %} <small>({{ e.modulos|selectattr('id', 'in', u.modulos.get(e.slug))|map(attribute='nome')|join(', ') }})</small>{% endif %}{{ ', ' if not loop.last }}{% else %}—{% endfor %}{% endif %}</td>
         <td>{{ (u.ultimo_login or '—')|replace('T', ' ') }}</td>
         <td><a class="lnk" href="{{ url_for('portal_admin', u=u.id) }}">Editar</a></td>
       </tr>
@@ -51,6 +51,9 @@
       {% for e in empresas %}
         <label><input type="checkbox" name="empresas" value="{{ e.slug }}" {% if u and e.slug in u.empresas %}checked{% endif %}>
           <span class="logo-circle xxs"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt=""></span>{{ e.nome }}</label>
+        {% if e.modulos %}<div class="hint" style="margin:-.15rem 0 .45rem 1.7rem">Módulos:
+          {% for m in e.modulos %}<label style="display:inline-flex;align-items:center;gap:.25rem;margin-right:.7rem;font-weight:400"><input type="checkbox" name="mod_{{ e.slug }}" value="{{ m.id }}" {% if u and m.id in (u.modulos.get(e.slug) or []) %}checked{% endif %}>{{ m.nome }}</label>{% endfor %}
+          <span style="opacity:.75">(nenhum marcado = todos)</span></div>{% endif %}
       {% endfor %}
     </div>
     <label class="lbl">{{ 'Redefinir senha (opcional)' if u else 'Senha provisória' }}</label>
