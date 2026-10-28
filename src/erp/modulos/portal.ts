@@ -22,7 +22,7 @@ export const EMPRESAS: any[] = [
     tema: { primary: "#0A0A0A", secondary: "#2A2418", accent: "#C7A955", accent_dark: "#9E7C34", on_primary: "#F3EBD6", on_accent: "#141210", bg: "#F5F2EA", text: "#16140F", muted: "#6E6552", font_head: "Montserrat" },
     modulos: [
       { id: "condominios", nome: "Condomínios de Investimento", icone: "apartment", desc: "Clientes, cotas, apuração, vencimentos e títulos privados.", destino: "/" },
-      { id: "comercial", nome: "Comercial", icone: "handshake", desc: "Gestão comercial da Capuzzo Assessoria.", destino: "/comercial" },
+      { id: "comercial", nome: "Comercial", icone: "handshake", desc: "Gestão comercial da Capuzzo Assessoria.", destino: "/comercial/40ca9f00-a17c-4605-9323-a15974c52817" },
     ],
   },
   {
@@ -33,7 +33,9 @@ export const EMPRESAS: any[] = [
   {
     slug: "ethernexus", nome: "Ether Nexus", descricao: "Centro de Excelência Médica e Empresarial", logo: "ethernexus.png",
     tema: { primary: "#1B4D91", secondary: "#236A9D", accent: "#2F8FD8", accent_dark: "#1B4D91", on_primary: "#FFFFFF", on_accent: "#FFFFFF", bg: "#EEF3FA", text: "#10223D", muted: "#5A6B85", font_head: "Mulish" },
-    modulos: [],
+    modulos: [
+      { id: "comercial", nome: "Comercial", icone: "handshake", desc: "Gestão comercial da Ether Nexus.", destino: "/comercial/eedb1f91-0f95-4072-a80c-ff216f97e8de" },
+    ],
   },
   {
     slug: "grao", nome: "Grão", descricao: "", logo: "grao.png",
@@ -53,7 +55,9 @@ export const EMPRESAS: any[] = [
   {
     slug: "worldgym", nome: "World Gym", descricao: "Health Club", logo: "worldgym.png",
     tema: { primary: "#111111", secondary: "#2B2618", accent: "#C0A040", accent_dark: "#8C7328", on_primary: "#FFFFFF", on_accent: "#111111", bg: "#F3F2EF", text: "#141414", muted: "#66625A", font_head: "Roboto Slab" },
-    modulos: [],
+    modulos: [
+      { id: "comercial", nome: "Comercial", icone: "handshake", desc: "Gestão comercial da World Gym.", destino: "/comercial/05cf491e-d9ad-4dd5-93da-6a3ffef74241" },
+    ],
   },
 ];
 // Módulo Finanças nas empresas que o utilizam.
@@ -100,6 +104,23 @@ export async function empresas_liberadas(usuario_id: number): Promise<Set<string
 export async function pode_ver(user: any, slug: string) {
   return user.perfil === "admin" || (await empresas_liberadas(user.id)).has(slug);
 }
+/** Módulos liberados para o usuário numa empresa (null = todos). Admin vê todos; sem nenhuma
+ *  linha em portal_usuario_modulos para a empresa, também vê todos (como era antes). */
+export async function modulos_liberados(user: any, slug: string): Promise<Set<string> | null> {
+  if (!user || user.perfil === "admin") return null;
+  const l = await q("SELECT modulo_id FROM portal_usuario_modulos WHERE usuario_id = ? AND empresa_slug = ?", [user.id, slug]);
+  return l.length ? new Set(l.map((r) => r.modulo_id)) : null;
+}
+export async function pode_ver_modulo(user: any, slug: string, modulo: string) {
+  if (!(await pode_ver(user, slug))) return false;
+  const lib = await modulos_liberados(user, slug);
+  return lib === null || lib.has(modulo);
+}
+async function modulos_visiveis(user: any, e: any) {
+  const lib = await modulos_liberados(user, e.slug);
+  return modulos_da_empresa(e).filter((m: any) => lib === null || lib.has(m.id));
+}
+
 export async function empresas_visiveis(user: any) {
   const todas = await empresas_com_status();
   if (user.perfil === "admin") return todas;
@@ -164,7 +185,10 @@ export function registrar() {
     for (const [prefixo, slug] of Object.entries(PREFIXOS_MODULOS)) {
       if (caminho === prefixo || caminho.startsWith(prefixo + "/")) return (await pode_ver(G.portal_user, slug)) ? null : abort(403);
     }
-    if (!(await pode_ver(G.portal_user, EMPRESA_CONDOMINIOS))) abort(403);
+    const fin = /^\/financas\/([^/]+)/.exec(caminho);
+    if (fin) return (await pode_ver_modulo(G.portal_user, fin[1], "financas")) ? null : abort(403);
+    if (caminho.startsWith("/operacao/")) return null; // cada rota confere a empresa
+    if (!(await pode_ver_modulo(G.portal_user, EMPRESA_CONDOMINIOS, "condominios"))) abort(403);
     return null;
   });
 
@@ -240,12 +264,12 @@ export function registrar() {
 
   get("portal_empresa", "/grupo/empresa/<slug>", async (slug: string) => {
     const e = await empresa_ou_404(slug);
-    return render_template("portal/empresa.html", { t: e.tema_full, empresa: e, modulos: modulos_da_empresa(e) });
+    return render_template("portal/empresa.html", { t: e.tema_full, empresa: e, modulos: await modulos_visiveis(g().portal_user, e) });
   });
 
   get("portal_modulo", "/grupo/empresa/<slug>/modulo/<modulo_id>", async (slug: string, modulo_id: string) => {
     const e = await empresa_ou_404(slug);
-    const mods = modulos_da_empresa(e);
+    const mods = await modulos_visiveis(g().portal_user, e);
     const mod = mods.find((m: any) => m.id === modulo_id);
     if (!mod) abort(404);
     if (mod.destino) return redirect(destinoModulo(mod.destino));
@@ -276,7 +300,11 @@ export function registrar() {
   get("portal_admin", "/grupo/admin", async () => {
     exige_admin();
     const usuarios = await q("SELECT * FROM portal_usuarios ORDER BY nome");
-    for (const u of usuarios) u.empresas = await empresas_liberadas(u.id);
+    for (const u of usuarios) {
+      u.empresas = await empresas_liberadas(u.id);
+      u.modulos = {} as Record<string, string[]>;
+      for (const r of await q("SELECT empresa_slug, modulo_id FROM portal_usuario_modulos WHERE usuario_id = ?", [u.id])) (u.modulos[r.empresa_slug] ??= []).push(r.modulo_id);
+    }
     const sel = request().args.get("u", null, "int");
     const editar = usuarios.find((u) => u.id === sel) ?? null;
     return render_template("portal/admin.html", { t: TEMA_GRUPO, usuarios, editar, empresas: await empresas_com_status(), aba: request().args.get("aba", "usuarios") });
@@ -314,6 +342,12 @@ export function registrar() {
     }
     await run("DELETE FROM portal_usuario_empresas WHERE usuario_id = ?", [uid]);
     for (const s of empresas) await run("INSERT INTO portal_usuario_empresas VALUES (?, ?)", [uid, s]);
+    // módulos por empresa (nenhum marcado = todos os módulos da empresa)
+    await run("DELETE FROM portal_usuario_modulos WHERE usuario_id = ?", [uid]);
+    for (const s of empresas) {
+      const validos = new Set(modulos_da_empresa(EMPRESAS_POR_SLUG[s]).map((m: any) => m.id));
+      for (const m of f.getlist("mod_" + s)) if (validos.has(m)) await run("INSERT INTO portal_usuario_modulos (usuario_id, empresa_slug, modulo_id) VALUES (?, ?, ?)", [uid, s, m]);
+    }
     return redirect(url_for("portal_admin", { u: uid }));
   });
 
@@ -335,6 +369,7 @@ export function registrar() {
 
 /** Destinos dos módulos: caminhos do app viram /erp/...; o Comercial é o da Bia. */
 export function destinoModulo(destino: string) {
-  if (destino === "/comercial") return "/comercial";
+  // Comercial: módulo da Bia (rota /comercial/<empresa_id do portal_acesso>), fora do /erp.
+  if (destino === "/comercial" || destino.startsWith("/comercial/")) return destino;
   return "/erp" + destino;
 }

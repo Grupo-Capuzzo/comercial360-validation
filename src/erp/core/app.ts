@@ -137,6 +137,8 @@ export function urlFor(endpoint: string, valores: Record<string, any> = {}): str
     });
     const mont = montagens.find(([i]) => caminho === i || caminho.startsWith(i + "/"));
     caminho = mont ? mont[1] + caminho.slice(mont[0].length) : PREFIXO + caminho;
+    // sem barra final (o Next.js a removeria com um redirecionamento a mais)
+    if (caminho.length > 1 && caminho.endsWith("/")) caminho = caminho.slice(0, -1);
   }
   // query string como o Werkzeug: quote_plus com safe="!$'()*,/:;?@~"
   const enc = (t: string) => encodeURIComponent(t).replace(/%20/g, "+")
@@ -278,17 +280,18 @@ export async function despachar(r: Request, preparar?: (req: Req) => Promise<voi
     let resp: Resposta;
     try {
       if (preparar) await preparar(req);
-      const m = casar(req);
+      let m = casar(req);
+      // O Next.js tira a barra final das URLs (/x/ → /x). As regras do Flask com barra final
+      // (/financas/<slug>/) casam também sem ela, em vez de redirecionar (o que daria laço).
+      if (m === null && !req.rota.endsWith("/")) {
+        const alt = casar(Object.assign(Object.create(Object.getPrototypeOf(req)), req, { rota: req.rota + "/" }));
+        if (alt !== null) { req.rota = req.rota + "/"; m = alt; }
+      }
       if (m && m !== "405") { req.endpoint = m.rota.endpoint; req.view_args = m.params; }
       let antes: any = undefined;
       for (const f of antesDaRequisicao) { antes = await f(); if (antes !== undefined && antes !== null) break; }
       if (antes !== undefined && antes !== null) resp = paraResposta(antes);
-      else if (m === null) {
-        // como o Werkzeug: /x sem a barra final redireciona para /x/ quando essa regra existe
-        const comBarra = req.rota.endsWith("/") ? null : casar(Object.assign(Object.create(Object.getPrototypeOf(req)), req, { rota: req.rota + "/" }));
-        if (comBarra && comBarra !== "405") resp = redir(req.path + "/" + (req.query ? "?" + req.query : ""), 308);
-        else throw new HttpErro(404);
-      }
+      else if (m === null) throw new HttpErro(404);
       else if (m === "405") throw new HttpErro(405);
       else {
         const nomes = m.rota.convs.map((c) => c.nome);
