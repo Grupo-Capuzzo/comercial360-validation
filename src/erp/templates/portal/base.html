@@ -19,17 +19,23 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='portal/portal.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='portal/tema.css') }}?v=1">
   <script>try { if (localStorage.getItem('tema') === 'escuro') document.documentElement.setAttribute('data-tema', 'escuro'); } catch (e) {}</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='portal/inicio.css') }}?v=1">
   {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
 {% block topbar %}{% if portal_user %}
 <header class="topbar">
   <div class="topbar-in">
-    <a class="tb-brand" href="{{ url_for('portal_grupo') }}">{% block brand %}
+    <a class="tb-brand" href="{{ url_for('portal_inicio') }}">{% block brand %}
       <img class="brand" src="{{ url_for('static', filename='portal/logos/grupo_word_light.png') }}" alt="Grupo Capuzzo">
     {% endblock %}</a>
     <nav class="tb-nav">
-      {% block tb_links %}{% endblock %}
+      {% block tb_links %}
+        <a class="tb-btn {{ 'tb-on' if request.endpoint == 'portal_inicio' }}" href="{{ url_for('portal_inicio') }}">{{ ic('home') }}<span class="lbl">Início</span></a>
+        <a class="tb-btn {{ 'tb-on' if request.endpoint == 'portal_grupo' }}" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span class="lbl">Empresas</span></a>
+        <a class="tb-btn {{ 'tb-on' if request.endpoint == 'portal_treinamentos' }}" href="{{ url_for('portal_treinamentos') }}">{{ ic('school') }}<span class="lbl">Treinamentos</span></a>
+        {% if portal_user.crm %}<a class="tb-btn" href="{{ url_for('portal_crm') }}">{{ ic('handshake') }}<span class="lbl">CRM Geral</span></a>{% endif %}
+      {% endblock %}
       {% if portal_user.admin %}
         <a class="tb-btn" href="/erp/central/plano">{{ ic('checklist') }}<span class="lbl">Plano de ação</span></a>
         <a class="tb-btn" href="{{ url_for('portal_admin') }}">{{ ic('admin_panel_settings') }}<span class="lbl">Administração</span></a>
@@ -74,5 +80,21 @@
 })();
 </script>
 {% block scripts %}{% endblock %}
+<script>
+/* Navegação mais rápida: ao passar o mouse num link, a página começa a carregar antes do clique. */
+(function () {
+  var feitos = {}, NAO = /sair|logout|excluir|inativar|reativar|renovar|retirar|baixar|gerar|exportar|download|arquivo|cancelar|marcar|quitar|recalcular|autenticar|crm-geral|\/comercial/;
+  function pre(a) {
+    var h = a.href; if (!h || feitos[h] || a.target || a.hasAttribute('download') || h.indexOf(location.origin) !== 0 || a.hash) return;
+    if (a.pathname.indexOf('/erp') !== 0 || NAO.test(h) || h === location.href) return;
+    feitos[h] = 1; var l = document.createElement('link'); l.rel = 'prefetch'; l.href = h; document.head.appendChild(l);
+  }
+  document.addEventListener('mouseover', function (e) {
+    var a = e.target.closest && e.target.closest('a'); if (!a) return;
+    clearTimeout(a._pf); a._pf = setTimeout(function () { pre(a); }, 70);
+  }, { passive: true });
+  document.addEventListener('touchstart', function (e) { var a = e.target.closest && e.target.closest('a'); if (a) pre(a); }, { passive: true });
+})();
+</script>
 </body>
 </html>

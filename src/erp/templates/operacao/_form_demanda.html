@@ -1,10 +1,12 @@
 {# Campos da demanda (nova ou edição). Espera: d (dict ou none), usuarios, portal_user #}
 {% set d = d or {} %}
+{% set travada = d.fixa and not portal_user.admin %}
+{% if travada %}<p class="hint">Rotina fixa definida pelo administrador: título e recorrência não podem ser alterados.</p>{% endif %}
 <label class="lbl" for="f-titulo">Título</label>
-<input class="inp" id="f-titulo" name="titulo" maxlength="200" required value="{{ d.titulo or '' }}" placeholder="O que precisa ser feito">
+<input class="inp" id="f-titulo" name="titulo" maxlength="200" required value="{{ d.titulo or '' }}" placeholder="O que precisa ser feito" {{ 'readonly' if travada }}>
 <label class="lbl" for="f-desc">Descrição <small>(opcional)</small></label>
 <textarea class="inp" id="f-desc" name="descricao" rows="3" placeholder="Detalhes, passo a passo, onde encontrar">{{ d.descricao or '' }}</textarea>
-<div class="op-2col">
+<div class="op-2col" {{ 'hidden' if travada }}>
   <div>
     <label class="lbl">Tipo</label>
     <div class="seg op-seg">

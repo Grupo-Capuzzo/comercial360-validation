@@ -340,18 +340,24 @@ export function situacao(l: any, pago: any, hoje_iso: string): string {
 /** Acrescenta pago, saldo, situação e nomes aos lançamentos. */
 export async function completar(lancs: any[], slug: string): Promise<any[]> {
   const hoje_iso = hoje().isoformat();
-  const pagos = await pago_por_lancamento(lancs.map((l) => l.id));
-  const nomes_p = new Map<number, string>((await q("SELECT id, nome FROM financas_pessoas WHERE empresa_slug = ?", [slug])).map((p: any) => [p.id, p.nome]));
-  const nomes_c = new Map<number, any>((await q("SELECT id, nome, grupo_dre FROM financas_categorias WHERE empresa_slug = ?", [slug])).map((c: any) => [c.id, c]));
-  const nomes_k = new Map<number, string>((await q("SELECT id, nome FROM financas_contas WHERE empresa_slug = ?", [slug])).map((c: any) => [c.id, c.nome]));
+  // As consultas abaixo são independentes: vão ao banco ao mesmo tempo (bem mais rápido online).
   const ids = lancs.map((l) => l.id);
   const rat = new Map<number, number>(), anx = new Map<number, number>();
-  for (let i = 0; i < ids.length; i += 800) {
-    const b = ids.slice(i, i + 800);
-    const ph = marcas(b.length);
-    for (const r of await q(`SELECT lancamento_id, COUNT(*) n FROM financas_rateios WHERE lancamento_id IN (${ph}) GROUP BY lancamento_id`, b)) rat.set(r.lancamento_id, r.n);
-    for (const r of await q(`SELECT lancamento_id, COUNT(*) n FROM financas_anexos WHERE lancamento_id IN (${ph}) GROUP BY lancamento_id`, b)) anx.set(r.lancamento_id, r.n);
-  }
+  const blocos: number[][] = [];
+  for (let i = 0; i < ids.length; i += 20000) blocos.push(ids.slice(i, i + 20000));
+  const [pagos, pessoas, cats, contas, rats, anxs] = await Promise.all([
+    pago_por_lancamento(ids),
+    q("SELECT id, nome FROM financas_pessoas WHERE empresa_slug = ?", [slug]),
+    q("SELECT id, nome, grupo_dre FROM financas_categorias WHERE empresa_slug = ?", [slug]),
+    q("SELECT id, nome FROM financas_contas WHERE empresa_slug = ?", [slug]),
+    Promise.all(blocos.map((b) => q(`SELECT lancamento_id, COUNT(*) n FROM financas_rateios WHERE lancamento_id IN (${marcas(b.length)}) GROUP BY lancamento_id`, b))),
+    Promise.all(blocos.map((b) => q(`SELECT lancamento_id, COUNT(*) n FROM financas_anexos WHERE lancamento_id IN (${marcas(b.length)}) GROUP BY lancamento_id`, b))),
+  ]);
+  const nomes_p = new Map<number, string>(pessoas.map((p: any) => [p.id, p.nome]));
+  const nomes_c = new Map<number, any>(cats.map((c: any) => [c.id, c]));
+  const nomes_k = new Map<number, string>(contas.map((c: any) => [c.id, c.nome]));
+  for (const r of rats.flat()) rat.set(r.lancamento_id, r.n);
+  for (const r of anxs.flat()) anx.set(r.lancamento_id, r.n);
   for (const l of lancs) {
     const p = pagos.get(l.id) ?? {};
     l.pago = p.pago || 0;
@@ -852,8 +858,8 @@ export async function excluir_anexo(a: any) {
 export async function partes_por_lancamento(ids: number[]): Promise<Map<number, [any, number][]>> {
   const bruto = new Map<number, [any, number][]>();
   if (!ids.length) return bruto;
-  for (let i = 0; i < ids.length; i += 800) {
-    const bloco = ids.slice(i, i + 800);
+  for (let i = 0; i < ids.length; i += 20000) {
+    const bloco = ids.slice(i, i + 20000);
     for (const r of await q(`SELECT lancamento_id, categoria_id, valor FROM financas_rateios WHERE lancamento_id IN (${marcas(bloco.length)}) ORDER BY id`, bloco)) {
       if (!bruto.has(r.lancamento_id)) bruto.set(r.lancamento_id, []);
       bruto.get(r.lancamento_id)!.push([r.categoria_id, r.valor]);

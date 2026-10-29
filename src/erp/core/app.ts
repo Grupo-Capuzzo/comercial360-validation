@@ -7,7 +7,7 @@ import { criarAmbiente, marcarSeguro, separarKwargs } from "./jinja";
 import { HttpErro, MultiDict, PREFIXO, Req, Resposta, jsonify, multiDictTemplate, redirect as redir } from "./http";
 import { Sessao } from "./sessao";
 import { PyDate } from "./py";
-import { comCacheDeLeitura } from "./db";
+import { comCacheDeLeitura, medidasBanco } from "./db";
 import { FONTES } from "../templates.gen";
 
 export type Handler = (...params: any[]) => Promise<any> | any;
@@ -272,6 +272,7 @@ export interface OpcoesDespacho { usuarioTeste?: string }
 
 /** Processa uma requisição do Next.js como o Flask faria. */
 export async function despachar(r: Request, preparar?: (req: Req) => Promise<void> | void): Promise<Response> {
+  const t0 = performance.now();
   const req = await Req.deRequest(r);
   const mont = montagens.find(([, e]) => req.path === e || req.path.startsWith(e + "/"));
   if (mont) req.rota = mont[0] + req.path.slice(mont[1].length);
@@ -303,6 +304,13 @@ export async function despachar(r: Request, preparar?: (req: Req) => Promise<voi
         console.error("[erp]", req.method, req.path, e);
         resp = paginaErro(500);
       }
+    }
+    // Medição de tempo (ver no navegador: Ctrl+U e procurar "erp:" no fim da página)
+    const db = medidasBanco();
+    const total = Math.round(performance.now() - t0);
+    resp.headers.set("server-timing", `erp;dur=${total}, db;desc="${db.n} consultas";dur=${db.ms}`);
+    if (typeof resp.body === "string" && (resp.headers.get("content-type") ?? "").startsWith("text/html")) {
+      resp.body = resp.body + `\n<!-- erp: ${total} ms no servidor; ${db.n} consultas ao banco em ${db.ms} ms -->\n`;
     }
     for (const c of req.cookiesSaida) resp.headers.append("set-cookie", c);
     if (sessao.alterada) resp.headers.append("set-cookie", sessao.cookie());

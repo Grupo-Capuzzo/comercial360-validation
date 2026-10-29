@@ -227,11 +227,31 @@ export function registrar() {
     const hoje = d.hoje();
     const hoje_iso = hoje.isoformat();
     // saldo de caixa: só contas correntes, poupança, aplicações e caixa (cartão de crédito não compõe o saldo)
-    const contas = (await d.contas(slug, true)).filter((c) => d.TIPOS_SALDO.includes(c.tipo));
+    // As leituras são independentes: vão ao banco ao mesmo tempo (bem mais rápido online).
+    const mes_ini = hoje.replace({ day: 1 }).isoformat();
+    const [contas0, todos, mes, ctx, sem_lanc, produtos] = await Promise.all([
+      d.contas(slug, true),
+      (async () => (await d.completar(await d.q(
+        "SELECT * FROM financas_lancamentos WHERE empresa_slug = ? AND cancelado = 0" + d.filtro_consideradas() + " ORDER BY id", [slug]), slug))
+        .filter((l) => ABERTAS.includes(l.situacao)))(),
+      d.resumo_periodo(slug, mes_ini, hoje_iso),
+      _ctx(e, "painel"),
+      (async () => !(await d.q("SELECT 1 FROM financas_lancamentos WHERE empresa_slug = ? LIMIT 1", [slug])).length)(),
+      (async () => {
+        if (slug !== "assessoria") return null;
+        try {
+          const capuzzo: any = await import("./capuzzo");
+          return typeof capuzzo.resumo_produtos === "function" ? await capuzzo.resumo_produtos(slug) : null;
+        } catch (exc) { // indicadores de produto nunca derrubam a visão geral
+          console.error("Falha nos indicadores de produtos", exc);
+          return null;
+        }
+      })(),
+    ]);
+    const contas = contas0.filter((c: any) => d.TIPOS_SALDO.includes(c.tipo));
     const em7 = hoje.addDays(7).isoformat();
-    const abertos = (await d.completar(await d.q(
-      "SELECT * FROM financas_lancamentos WHERE empresa_slug = ? AND cancelado = 0 AND vencimento <= ?" + d.filtro_consideradas() + " ORDER BY id",
-      [slug, hoje.addDays(30).isoformat()]), slug)).filter((l) => ABERTAS.includes(l.situacao));
+    const lim30 = hoje.addDays(30).isoformat();
+    const abertos = todos.filter((l: any) => l.vencimento <= lim30);
     const somaT = (tipo: string, cond: (l: any) => boolean) => abertos.filter((l) => l.tipo === tipo && cond(l)).reduce((a, l) => a + l.saldo, 0);
     const cards = {
       receber_vencido: somaT("receber", (l) => l.vencimento < hoje_iso),
@@ -241,8 +261,6 @@ export function registrar() {
       pagar_hoje: somaT("pagar", (l) => l.vencimento === hoje_iso),
       pagar_7: somaT("pagar", (l) => hoje_iso < l.vencimento && l.vencimento <= em7),
     };
-    const mes_ini = hoje.replace({ day: 1 }).isoformat();
-    const mes = await d.resumo_periodo(slug, mes_ini, hoje_iso);
     // projeção de saldo nos próximos 30 dias (saldo atual + a receber − a pagar)
     const saldo_atual = soma(contas, "saldo");
     const proj: any[] = [];
@@ -259,9 +277,6 @@ export function registrar() {
     }
     const proximos = d.ordenar(abertos.filter((l) => l.vencimento <= em7), (l) => [l.vencimento, l.tipo]).slice(0, 12);
     // tudo o que está em aberto (sem limite de data) para os indicadores gerais
-    const todos = (await d.completar(await d.q(
-      "SELECT * FROM financas_lancamentos WHERE empresa_slug = ? AND cancelado = 0" + d.filtro_consideradas() + " ORDER BY id", [slug]), slug))
-      .filter((l) => ABERTAS.includes(l.situacao));
     const em30 = hoje.addDays(30).isoformat();
     const tot = (tipo: string, cond: (l: any) => boolean = () => true) => {
       const lst = todos.filter((l) => l.tipo === tipo && cond(l));
@@ -280,19 +295,10 @@ export function registrar() {
     ind.liquido_30 = saldo_atual + ind.receber_30.valor - ind.pagar_30.valor
       + ind.receber_venc.valor - ind.pagar_venc.valor;
     const maior = Math.max(...contas.map((c) => Math.abs(c.saldo)), 1);
-    let produtos: any = null;
-    if (slug === "assessoria") {
-      try {
-        const capuzzo: any = await import("./capuzzo");
-        if (typeof capuzzo.resumo_produtos === "function") produtos = await capuzzo.resumo_produtos(slug);
-      } catch (exc) { // indicadores de produto nunca derrubam a visão geral
-        console.error("Falha nos indicadores de produtos", exc);
-      }
-    }
     return render_template("financas/painel.html", {
-      ...(await _ctx(e, "painel")), contas, cards, mes,
+      ...ctx, contas, cards, mes,
       saldo_atual, proj, proximos, ind, maior, produtos,
-      sem_contas: !contas.length, sem_lanc: !(await d.q("SELECT 1 FROM financas_lancamentos WHERE empresa_slug = ? LIMIT 1", [slug])).length,
+      sem_contas: !contas.length, sem_lanc,
     });
   });
 

@@ -7,6 +7,7 @@ import {
 } from "../core/flask";
 import { definirUsuarioAuth, emailLogado, entrar, sair, senhaConfere } from "../core/auth";
 import { ICONES_PORTAL } from "../dados/icones";
+import { limparMemo, memo } from "../core/memo";
 
 export const TEMA_GRUPO: Record<string, string> = {
   primary: "#0B0B0B", secondary: "#1C1A16", accent: "#C9A45C",
@@ -22,7 +23,6 @@ export const EMPRESAS: any[] = [
     tema: { primary: "#0A0A0A", secondary: "#2A2418", accent: "#C7A955", accent_dark: "#9E7C34", on_primary: "#F3EBD6", on_accent: "#141210", bg: "#F5F2EA", text: "#16140F", muted: "#6E6552", font_head: "Montserrat" },
     modulos: [
       { id: "condominios", nome: "Condomínios de Investimento", icone: "apartment", desc: "Clientes, cotas, apuração, vencimentos e títulos privados.", destino: "/" },
-      { id: "comercial", nome: "Comercial", icone: "handshake", desc: "Gestão comercial da Capuzzo Assessoria.", destino: "/comercial/40ca9f00-a17c-4605-9323-a15974c52817" },
     ],
   },
   {
@@ -33,9 +33,7 @@ export const EMPRESAS: any[] = [
   {
     slug: "ethernexus", nome: "Ether Nexus", descricao: "Centro de Excelência Médica e Empresarial", logo: "ethernexus.png",
     tema: { primary: "#1B4D91", secondary: "#236A9D", accent: "#2F8FD8", accent_dark: "#1B4D91", on_primary: "#FFFFFF", on_accent: "#FFFFFF", bg: "#EEF3FA", text: "#10223D", muted: "#5A6B85", font_head: "Mulish" },
-    modulos: [
-      { id: "comercial", nome: "Comercial", icone: "handshake", desc: "Gestão comercial da Ether Nexus.", destino: "/comercial/eedb1f91-0f95-4072-a80c-ff216f97e8de" },
-    ],
+    modulos: [],
   },
   {
     slug: "grao", nome: "Grão", descricao: "", logo: "grao.png",
@@ -55,9 +53,7 @@ export const EMPRESAS: any[] = [
   {
     slug: "worldgym", nome: "World Gym", descricao: "Health Club", logo: "worldgym.png",
     tema: { primary: "#111111", secondary: "#2B2618", accent: "#C0A040", accent_dark: "#8C7328", on_primary: "#FFFFFF", on_accent: "#111111", bg: "#F3F2EF", text: "#141414", muted: "#66625A", font_head: "Roboto Slab" },
-    modulos: [
-      { id: "comercial", nome: "Comercial", icone: "handshake", desc: "Gestão comercial da World Gym.", destino: "/comercial/05cf491e-d9ad-4dd5-93da-6a3ffef74241" },
-    ],
+    modulos: [],
   },
 ];
 // Módulo Finanças nas empresas que o utilizam.
@@ -88,8 +84,10 @@ export function modulos_da_empresa(empresa: any) {
 
 function agora() { return PyDate.now().isoformat("T"); }
 
+// Leituras feitas em toda página ficam 30 s em memória; as telas de administração limpam o cache.
+const TTL = 30000;
 export async function status_empresas(): Promise<Record<string, any>> {
-  return Object.fromEntries((await q("SELECT slug, status, obs FROM portal_empresa_status")).map((r) => [r.slug, r]));
+  return memo("portal:status", TTL, async () => Object.fromEntries((await q("SELECT slug, status, obs FROM portal_empresa_status")).map((r) => [r.slug, r])));
 }
 export async function empresas_com_status() {
   const st = await status_empresas();
@@ -99,7 +97,8 @@ export async function empresas_com_status() {
   });
 }
 export async function empresas_liberadas(usuario_id: number): Promise<Set<string>> {
-  return new Set((await q("SELECT empresa_slug FROM portal_usuario_empresas WHERE usuario_id = ?", [usuario_id])).map((r) => r.empresa_slug));
+  const l = await memo(`portal:emp:${usuario_id}`, TTL, async () => (await q("SELECT empresa_slug FROM portal_usuario_empresas WHERE usuario_id = ?", [usuario_id])).map((r) => r.empresa_slug as string));
+  return new Set(l);
 }
 export async function pode_ver(user: any, slug: string) {
   return user.perfil === "admin" || (await empresas_liberadas(user.id)).has(slug);
@@ -108,9 +107,19 @@ export async function pode_ver(user: any, slug: string) {
  *  linha em portal_usuario_modulos para a empresa, também vê todos (como era antes). */
 export async function modulos_liberados(user: any, slug: string): Promise<Set<string> | null> {
   if (!user || user.perfil === "admin") return null;
-  const l = await q("SELECT modulo_id FROM portal_usuario_modulos WHERE usuario_id = ? AND empresa_slug = ?", [user.id, slug]);
+  const todos = await memo(`portal:mod:${user.id}`, TTL, async () => await q("SELECT empresa_slug, modulo_id FROM portal_usuario_modulos WHERE usuario_id = ?", [user.id]));
+  const l = todos.filter((r) => r.empresa_slug === slug && r.empresa_slug !== "_grupo");
   return l.length ? new Set(l.map((r) => r.modulo_id)) : null;
 }
+/** CRM Geral (Comercial da Bia): administradores e usuários com o acesso liberado em Administração. */
+export const CRM_DESTINO = "/comercial/40ca9f00-a17c-4605-9323-a15974c52817";
+export async function tem_crm(user: any): Promise<boolean> {
+  if (!user) return false;
+  if (user.perfil === "admin") return true;
+  const todos = await memo(`portal:mod:${user.id}`, TTL, async () => await q("SELECT empresa_slug, modulo_id FROM portal_usuario_modulos WHERE usuario_id = ?", [user.id]));
+  return todos.some((r) => r.empresa_slug === "_grupo" && r.modulo_id === "crm");
+}
+
 export async function pode_ver_modulo(user: any, slug: string, modulo: string) {
   if (!(await pode_ver(user, slug))) return false;
   const lib = await modulos_liberados(user, slug);
@@ -163,10 +172,12 @@ export function registrar() {
     G.portal_user = null;
     const email = await emailLogado();
     if (email) {
-      const u = await q1("SELECT id, nome, email, perfil, ativo FROM portal_usuarios WHERE lower(email) = ?", [email]);
+      const u0 = await memo(`portal:user:${email}`, TTL, async () => await q1("SELECT id, nome, email, perfil, ativo FROM portal_usuarios WHERE lower(email) = ?", [email]));
+      const u = u0 ? { ...u0 } : null;
       if (u && u.ativo) {
         const visao = session().get("portal_visao") ?? (u.perfil === "admin" ? "admin" : "usuario");
         u.admin = u.perfil === "admin" && visao === "admin";
+        u.crm = await tem_crm(u);
         G.portal_user = u;
       }
     }
@@ -180,7 +191,7 @@ export function registrar() {
       return redirect(url_for("portal_login", { next: caminho !== "/" ? request().path : null }));
     }
     if (caminho === "/central") return redirect(url_for("portal_grupo"));
-    if (caminho.startsWith("/grupo") || caminho.startsWith("/logout")) return null;
+    if (caminho.startsWith("/grupo") || caminho.startsWith("/logout") || caminho.startsWith("/inicio") || caminho.startsWith("/treinamentos") || caminho === "/crm-geral") return null;
     if (caminho.startsWith("/central/")) return G.portal_user.admin ? null : abort(403);
     for (const [prefixo, slug] of Object.entries(PREFIXOS_MODULOS)) {
       if (caminho === prefixo || caminho.startsWith(prefixo + "/")) return (await pode_ver(G.portal_user, slug)) ? null : abort(403);
@@ -195,7 +206,7 @@ export function registrar() {
   // ── Login ──
   route("portal_login", "/login", ["GET", "POST"], async () => {
     const req = request();
-    if (g().portal_user) return redirect(url_for("portal_grupo"));
+    if (g().portal_user) return redirect(url_for("portal_inicio"));
     let erro: string | null = null, email = "", acesso = "usuario";
     if (req.method === "POST") {
       checar_csrf();
@@ -214,7 +225,7 @@ export function registrar() {
         s.clear();
         s.set("portal_visao", acesso);
         let destino = req.args.get("next") ?? "";
-        if (!destino.startsWith("/") || destino.startsWith("//")) destino = url_for("portal_grupo");
+        if (!destino.startsWith("/") || destino.startsWith("//")) destino = url_for("portal_inicio");
         return redirect(destino);
       }
     }
@@ -276,6 +287,12 @@ export function registrar() {
     return render_template("portal/modulo.html", { t: e.tema_full, empresa: e, modulos: mods, modulo: mod });
   });
 
+  // ── CRM Geral: o Comercial (Bia) para administradores e quem tem o acesso liberado ──
+  get("portal_crm", "/crm-geral", async () => {
+    if (!g().portal_user.crm) abort(403);
+    return redirect(CRM_DESTINO);
+  });
+
   // ── Alterar a própria senha ──
   route("portal_minha_senha", "/grupo/minha-senha", ["GET", "POST"], async () => {
     const req = request();
@@ -304,6 +321,7 @@ export function registrar() {
       u.empresas = await empresas_liberadas(u.id);
       u.modulos = {} as Record<string, string[]>;
       for (const r of await q("SELECT empresa_slug, modulo_id FROM portal_usuario_modulos WHERE usuario_id = ?", [u.id])) (u.modulos[r.empresa_slug] ??= []).push(r.modulo_id);
+      u.crm = u.perfil === "admin" || (u.modulos["_grupo"] ?? []).includes("crm");
     }
     const sel = request().args.get("u", null, "int");
     const editar = usuarios.find((u) => u.id === sel) ?? null;
@@ -340,14 +358,24 @@ export function registrar() {
       uid = (await run("INSERT INTO portal_usuarios (nome, email, senha_hash, perfil, criado_em) VALUES (?, ?, ?, ?, ?)", [nome, email, "", perfil, agora()])).lastrowid;
       flash(`Usuário ${nome} criado.`, "ok");
     }
+    limparMemo("portal:");
     await run("DELETE FROM portal_usuario_empresas WHERE usuario_id = ?", [uid]);
     for (const s of empresas) await run("INSERT INTO portal_usuario_empresas VALUES (?, ?)", [uid, s]);
-    // módulos por empresa (nenhum marcado = todos os módulos da empresa)
+    // módulos por empresa (nenhum marcado = todos os módulos da empresa) + CRM Geral
+    const crmAntes = !!(await q1("SELECT 1 AS x FROM portal_usuario_modulos WHERE usuario_id = ? AND empresa_slug = '_grupo' AND modulo_id = 'crm'", [uid]));
     await run("DELETE FROM portal_usuario_modulos WHERE usuario_id = ?", [uid]);
+    const crmAgora = !!f.get("crm");
+    if (crmAgora) await run("INSERT INTO portal_usuario_modulos (usuario_id, empresa_slug, modulo_id) VALUES (?, '_grupo', 'crm')", [uid]);
+    if (crmAntes !== crmAgora && perfil !== "admin") {
+      const em = (await q1("SELECT email FROM portal_usuarios WHERE id = ?", [uid]))?.email;
+      const erro = em ? await sincronizar_acesso_comercial(em, crmAgora) : null;
+      if (erro) flash(`CRM Geral salvo no portal, mas não foi possível ajustar o acesso no sistema Comercial: ${erro}`, "erro");
+    }
     for (const s of empresas) {
       const validos = new Set(modulos_da_empresa(EMPRESAS_POR_SLUG[s]).map((m: any) => m.id));
       for (const m of f.getlist("mod_" + s)) if (validos.has(m)) await run("INSERT INTO portal_usuario_modulos (usuario_id, empresa_slug, modulo_id) VALUES (?, ?, ?)", [uid, s, m]);
     }
+    limparMemo("portal:");
     return redirect(url_for("portal_admin", { u: uid }));
   });
 
@@ -359,12 +387,23 @@ export function registrar() {
     status = STATUS[status] ? status : "ativo";
     const obs = status === "ativo" ? "" : (request().form.get("obs") ?? "").trim().slice(0, 120);
     await run("INSERT INTO portal_empresa_status (slug, status, obs) VALUES (?, ?, ?) ON CONFLICT(slug) DO UPDATE SET status = excluded.status, obs = excluded.obs", [slug, status, obs]);
+    limparMemo("portal:status");
     flash(`Situação de ${EMPRESAS_POR_SLUG[slug].nome} atualizada.`, "ok");
     const destino = request().form.get("voltar") || url_for("portal_grupo");
     return redirect(destino.startsWith("/") && !destino.startsWith("//") ? destino : url_for("portal_grupo"));
   });
 
   errorHandler(403, () => [render_template("portal/erro.html", { t: TEMA_GRUPO, codigo: 403, msg: "Você não tem acesso a esta área." }), 403]);
+}
+
+/** Libera (ou retira) a leitura do Comercial da Bia (portal_acesso.permissoes) — via função erp.acesso_comercial. */
+async function sincronizar_acesso_comercial(email: string, liberar: boolean): Promise<string | null> {
+  try {
+    const r = await q1("SELECT erp.acesso_comercial(?, ?) AS erro", [email, liberar]);
+    return r?.erro ?? null;
+  } catch (e: any) {
+    return e?.message ?? String(e);
+  }
 }
 
 /** Destinos dos módulos: caminhos do app viram /erp/...; o Comercial é o da Bia. */

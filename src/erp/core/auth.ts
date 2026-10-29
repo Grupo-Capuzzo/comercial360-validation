@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Login: o mesmo do Supabase Auth usado no site da Bia. Os dados do usuário
 // (perfil, empresas liberadas) continuam em erp.portal_usuarios, ligados pelo e-mail.
+import crypto from "node:crypto";
+
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 
@@ -44,15 +46,30 @@ export function supabaseAdmin() {
 /** E-mail do usuário logado no Supabase (ou null). */
 export async function emailLogado(): Promise<string | null> {
   if (process.env.NODE_ENV !== "production" && process.env.ERP_TESTE_USUARIO) return process.env.ERP_TESTE_USUARIO;
+  // O mesmo cookie de sessão já validado há menos de 1 minuto não precisa ser validado de novo.
+  const req = request();
+  const chave = Array.from(req.cookies.entries()).filter(([k]) => k.startsWith("sb-")).sort().map(([k, v]) => k + "=" + v).join(";");
+  if (!chave) return null;
+  const hash = crypto.createHash("sha256").update(chave).digest("hex");
+  const c = cacheSessao.get(hash);
+  if (c && c.ate > Date.now()) return c.email;
   try {
     const sb = supabaseDaRequisicao();
     const { data } = await sb.auth.getClaims();
     const email = (data?.claims as any)?.email;
-    return email ? String(email).toLowerCase() : null;
+    const r = email ? String(email).toLowerCase() : null;
+    if (r && req.cookiesSaida.length === 0) {
+      cacheSessao.set(hash, { email: r, ate: Date.now() + 60000 });
+      if (cacheSessao.size > 2000) for (const [k, x] of cacheSessao) if (x.ate < Date.now()) cacheSessao.delete(k);
+    }
+    return r;
   } catch {
     return null;
   }
 }
+const cacheSessao: Map<string, { email: string; ate: number }> = ((globalThis as any).__erpSessoes ??= new Map());
+/** Esquece a validação em cache (ao sair). */
+export function esquecerSessoes() { cacheSessao.clear(); }
 
 export async function entrar(email: string, senha: string): Promise<string | null> {
   const sb = supabaseDaRequisicao();

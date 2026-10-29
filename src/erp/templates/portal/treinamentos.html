@@ -1,0 +1,52 @@
+{% extends "portal/base.html" %}
+{% block title %}Treinamentos · Portal Grupo Capuzzo{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <div class="eyebrow-line">Portal do Grupo Capuzzo</div>
+    <h1><b>Treinamentos</b></h1>
+    <p>Escolha a empresa para ver os POPs, os cursos básicos e as ferramentas.</p>
+  </div>
+  <div class="tr-etapas-leg">
+    {% for k, nome, desc in ETAPAS %}<span class="tr-etapa-chip e-{{ k }}"><i>{{ loop.index }}</i>{{ nome }}</span>{% endfor %}
+  </div>
+</section>
+
+{% if not empresas %}
+  <div class="vazio">Nenhuma empresa liberada para o seu usuário. Fale com o administrador.</div>
+{% else %}
+<div class="toolbar"><label class="search">{{ ic('search') }}<input id="tr-busca" type="search" placeholder="Buscar empresa…" autocomplete="off"></label></div>
+<div class="tr-emp-grid" id="tr-emp-grid">
+  {% for e in empresas %}
+  <a class="tr-emp-card" href="{{ url_for('portal_treinamentos_empresa', slug=e.slug) }}" data-nome="{{ e.nome|lower }}"
+     style="--e1: {{ e.tema_full.primary }}; --e2: {{ e.tema_full.secondary }}; --ea: {{ e.tema_full.accent }}">
+    <div class="tr-emp-topo">
+      <span class="logo-circle sm"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt=""></span>
+      <div><b>{{ e.nome }}</b><small>{{ e.total }} conteúdo{{ 's' if e.total != 1 }}</small></div>
+    </div>
+    <ol class="tr-emp-etapas">
+      {% for k, nome, desc in ETAPAS %}
+      <li class="{{ 'tem' if e.por_etapa[k] }}"><i>{{ loop.index }}</i><span>{{ nome }}</span><b>{{ e.por_etapa[k] }}</b></li>
+      {% endfor %}
+    </ol>
+    <span class="tr-emp-ir">Abrir treinamentos {{ ic('chevron_right') }}</span>
+  </a>
+  {% endfor %}
+</div>
+<div class="vazio" id="tr-semres" hidden>Nenhuma empresa encontrada.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var b = document.getElementById('tr-busca'); if (!b) return;
+  var cards = [].slice.call(document.querySelectorAll('#tr-emp-grid .tr-emp-card'));
+  b.addEventListener('input', function () {
+    var q = b.value.trim().toLowerCase(), vis = 0;
+    cards.forEach(function (c) { var ok = !q || c.dataset.nome.indexOf(q) >= 0; c.hidden = !ok; if (ok) vis++; });
+    document.getElementById('tr-semres').hidden = vis > 0;
+  });
+})();
+</script>
+{% endblock %}

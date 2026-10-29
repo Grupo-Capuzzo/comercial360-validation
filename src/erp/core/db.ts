@@ -17,7 +17,8 @@ function criar(): Sql {
   return postgres(url, {
     prepare: false,
     max: Number(process.env.ERP_DB_POOL ?? 5),
-    idle_timeout: 30,
+    idle_timeout: 600,      // mantém as conexões abertas (abrir conexão TLS com o Supabase é lento)
+    max_lifetime: 60 * 30,
     connect_timeout: 15,
     types: { bigint: num } as any,
     onnotice: () => {},
@@ -130,8 +131,12 @@ type Exec = { unsafe: (q: string, p?: any[]) => Promise<any> };
 
 // Cache de leitura por requisição: a mesma consulta SELECT (fora de transação) repetida na
 // mesma página é respondida da memória; qualquer gravação limpa o cache. Reduz idas ao banco.
-const cacheReq = new AsyncLocalStorage<Map<string, Cursor>>();
-export function comCacheDeLeitura<T>(fn: () => Promise<T>): Promise<T> { return cacheReq.run(new Map(), fn); }
+interface EstadoReq { cache: Map<string, Cursor>; n: number; ms: number }
+const reqAls = new AsyncLocalStorage<EstadoReq>();
+const cacheReq = { getStore: () => reqAls.getStore()?.cache };
+export function comCacheDeLeitura<T>(fn: () => Promise<T>): Promise<T> { return reqAls.run({ cache: new Map(), n: 0, ms: 0 }, fn); }
+/** Quantas consultas e quanto tempo de banco a requisição atual gastou. */
+export function medidasBanco() { const e = reqAls.getStore(); return e ? { n: e.n, ms: Math.round(e.ms) } : { n: 0, ms: 0 }; }
 
 async function executar(alvo: Exec, q: string, params: any[] = []): Promise<Cursor> {
   const t = traduzir(q);
@@ -143,7 +148,10 @@ async function executar(alvo: Exec, q: string, params: any[] = []): Promise<Curs
   if (chave && cache!.has(chave)) { const c = cache!.get(chave)!; return new Cursor(c.rows.map((r) => ({ ...r })), c.rowcount, c.lastrowid); }
   (globalThis as any).__erpSqlCount = ((globalThis as any).__erpSqlCount ?? 0) + 1;
   if ((globalThis as any).__erpSqlLog) (globalThis as any).__erpSqlLog.push(t + " " + JSON.stringify(params));
+  const t0 = performance.now();
   const res: any = await alvo.unsafe(t, ps);
+  const est = reqAls.getStore();
+  if (est) { est.n++; est.ms += performance.now() - t0; }
   const rows: Row[] = Array.from(res as any[]).map((r: any) => ({ ...r }));
   const ins = /^\s*INSERT\b/i.test(t);
   const lastrowid = ins && rows.length && rows[rows.length - 1].id !== undefined ? Number(rows[rows.length - 1].id) : null;
