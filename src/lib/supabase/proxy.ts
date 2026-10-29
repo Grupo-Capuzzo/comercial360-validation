@@ -4,6 +4,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { supabaseConfig } from "@/lib/supabase/config";
 
 export async function updateSession(request: NextRequest) {
+  if (["/forgot-password", "/reset-password"].includes(request.nextUrl.pathname)) {
+    const response = NextResponse.next({ request });
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+  }
   // Exact public intake boundary. No CRM/customer/output endpoints are public.
   if (["/contato", "/api/comercial/input", "/api/comercial/catalogo"].includes(request.nextUrl.pathname)) {
     return NextResponse.next({ request });
