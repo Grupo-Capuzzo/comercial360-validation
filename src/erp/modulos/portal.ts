@@ -229,7 +229,7 @@ export function registrar() {
         return redirect(destino);
       }
     }
-    return render_template("portal/login.html", { t: TEMA_GRUPO, erro, email, acesso, marcas: [...EMPRESAS], ano: PyDate.now().year });
+    return render_template("portal/login.html", { t: TEMA_GRUPO, erro, email, acesso, marcas: [...EMPRESAS], ano: PyDate.now().year, senha_alterada: req.args.get("message") === "password-updated" });
   });
 
   get("portal_logout", "/logout", async () => {
