@@ -56,6 +56,8 @@
           <span style="opacity:.75">(nenhum marcado = todos)</span></div>{% endif %}
       {% endfor %}
     </div>
+    <label class="check-line"><input type="checkbox" name="crm" value="1" {% if u and u.crm %}checked{% endif %} {% if u and u.perfil == 'admin' %}disabled{% endif %}> Acesso ao <b>CRM Geral</b> (Comercial)</label>
+    <p class="hint">Administradores sempre acessam o CRM Geral.</p>
     <label class="lbl">{{ 'Redefinir senha (opcional)' if u else 'Senha provisória' }}</label>
     <input class="inp" name="senha" type="password" {% if not u %}required{% endif %} minlength="8" autocomplete="new-password">
     <p class="hint">Mínimo de 8 caracteres, com letras e números.</p>

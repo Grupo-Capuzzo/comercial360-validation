@@ -1,0 +1,117 @@
+{% extends "portal/base.html" %}
+{% block title %}Treinamentos · {{ empresa.nome }}{% endblock %}
+{% block brand %}
+  <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt=""></span>
+  <span class="tb-name"><b>{{ empresa.nome }}</b><small>Treinamentos</small></span>
+{% endblock %}
+{% block tb_links %}
+  <a class="tb-btn" href="{{ url_for('portal_inicio') }}">{{ ic('home') }}<span class="lbl">Início</span></a>
+  <a class="tb-btn tb-on" href="{{ url_for('portal_treinamentos') }}">{{ ic('school') }}<span class="lbl">Treinamentos</span></a>
+  <a class="tb-btn" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">{{ ic('apps') }}<span class="lbl">Módulos</span></a>
+{% endblock %}
+{% block content %}
+<section class="emp-head">
+  <span class="logo-square"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt="{{ empresa.nome }}"></span>
+  <div>
+    <div class="eyebrow-line"><a href="{{ url_for('portal_treinamentos') }}">Treinamentos</a></div>
+    <h1>{{ empresa.nome }}</h1>
+    <p>Siga as três etapas: primeiro os POPs, depois os cursos básicos e por fim as ferramentas.</p>
+  </div>
+</section>
+
+<nav class="tr-passos" role="tablist">
+  {% for et in etapas %}
+  <button type="button" class="tr-passo {{ 'on' if aba == et.id }}" data-aba="{{ et.id }}" role="tab">
+    <i>{{ et.n }}</i><span><b>{{ et.nome }}</b><small>{{ et.itens|length }} conteúdo{{ 's' if et.itens|length != 1 }}</small></span>
+  </button>
+  {% if not loop.last %}<span class="tr-seta">{{ ic('chevron_right') }}</span>{% endif %}
+  {% endfor %}
+</nav>
+
+{% for et in etapas %}
+<section class="tr-etapa" id="etapa-{{ et.id }}" {% if aba != et.id %}hidden{% endif %}>
+  <div class="tr-etapa-head">
+    <div><h2><span>{{ et.n }}</span>{{ et.nome }}</h2><p>{{ et.desc }}</p></div>
+    {% if portal_user.admin %}<button type="button" class="btn-pill" data-novo="{{ et.id }}">{{ ic('add') }} Adicionar em {{ et.nome }}</button>{% endif %}
+  </div>
+  {% if not et.itens %}
+    <div class="tr-vazio">{{ ic('school') }}<p>Ainda não há conteúdo nesta etapa.{% if portal_user.admin %} Use “Adicionar” para publicar o primeiro.{% endif %}</p></div>
+  {% else %}
+  <div class="tr-lista">
+    {% for t in et.itens %}
+    <article class="tr-item">
+      <span class="tr-fmt f-{{ t.formato }}">{{ ic({'video': 'play_circle', 'arquivo': 'description', 'link': 'link'}[t.formato]) }}</span>
+      <div class="tr-item-txt">
+        <h3>{{ t.titulo }}</h3>
+        {% if t.descricao %}<p>{{ t.descricao }}</p>{% endif %}
+        <small>{% if not t.empresa_slug %}Todas as empresas · {% endif %}Publicado em {{ t.data }}</small>
+      </div>
+      <div class="tr-acoes">
+        {% if t.link %}<a class="btn-pill outline" href="{{ t.link }}" target="_blank" rel="noopener">{{ ic('play_circle' if t.formato == 'video' else 'open_in_new') }} {{ 'Assistir' if t.formato == 'video' else 'Abrir' }}</a>{% endif %}
+        {% if t.arquivo_nome %}<a class="btn-pill outline" href="{{ url_for('portal_treinamento_arquivo', tid=t.id) }}" target="_blank" title="{{ t.arquivo_nome }}">{{ ic('download') }} Arquivo <small>{{ t.tam }}</small></a>{% endif %}
+        {% if portal_user.admin %}<span class="tr-admin">
+          <a class="ico" href="{{ url_for('portal_treinamentos_empresa', slug=empresa.slug, t=t.id) }}" title="Editar">{{ ic('edit') }}</a>
+          <form method="post" action="{{ url_for('portal_treinamento_excluir', tid=t.id) }}" onsubmit="return confirm('Excluir este conteúdo{{ ' (vale para todas as empresas)' if not t.empresa_slug }}?')">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="origem" value="{{ empresa.slug }}">
+            <button class="ico" title="Excluir">{{ ic('delete') }}</button></form>
+        </span>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+
+{% if portal_user.admin %}
+<dialog id="dlg-trein" class="dlg dlg-largo" {% if editar %}data-abrir-ja="1"{% endif %}>
+  <form method="post" action="{{ url_for('portal_treinamento_salvar') }}" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="origem" value="{{ empresa.slug }}">
+    {% if editar %}<input type="hidden" name="id" value="{{ editar.id }}">{% endif %}
+    <div class="dlg-head"><h3>{{ 'Editar conteúdo' if editar else 'Novo conteúdo' }}</h3>
+      <a class="ico" href="{{ url_for('portal_treinamentos_empresa', slug=empresa.slug, etapa=aba) }}" data-fechar>{{ ic('close') }}</a></div>
+    <label class="lbl">Título</label>
+    <input class="inp" name="titulo" required maxlength="160" value="{{ editar.titulo if editar else '' }}" placeholder="Ex.: POP — Conciliação bancária diária">
+    <div class="tr-2col">
+      <div><label class="lbl">Etapa</label>
+        <select class="inp" name="categoria" id="tr-etapa-sel">{% for k, nome, desc in ETAPAS %}<option value="{{ k }}" {% if (editar.etapa if editar else aba) == k %}selected{% endif %}>{{ loop.index }}. {{ nome }}</option>{% endfor %}</select></div>
+      <div><label class="lbl">Empresa</label>
+        <select class="inp" name="empresa_slug">
+          <option value="{{ empresa.slug }}" {% if not editar or editar.empresa_slug %}selected{% endif %}>Só {{ empresa.nome }}</option>
+          <option value="" {% if editar and not editar.empresa_slug %}selected{% endif %}>Todas as empresas</option>
+        </select></div>
+    </div>
+    <label class="lbl">Descrição</label>
+    <textarea class="inp" name="descricao" rows="3" maxlength="2000">{{ editar.descricao if editar else '' }}</textarea>
+    <label class="lbl">Link <small>(vídeo no YouTube, pasta no Drive, sistema, planilha…)</small></label>
+    <input class="inp" name="link" type="url" value="{{ editar.link if editar else '' }}" placeholder="https://…">
+    <label class="lbl">Arquivo <small>(PDF, Word, Excel, imagem — até {{ max_mb|int }} MB)</small></label>
+    <input class="inp" name="arquivo" type="file">
+    {% if editar and editar.arquivo_nome %}<label class="check-line"><input type="checkbox" name="remover_arquivo" value="1"> Remover o arquivo atual ({{ editar.arquivo_nome }})</label>{% endif %}
+    <div class="row-btns"><button class="btn-pill" type="submit">{{ 'Salvar alterações' if editar else 'Publicar' }}</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var passos = [].slice.call(document.querySelectorAll('.tr-passo'));
+  function abrir(id) {
+    passos.forEach(function (p) { p.classList.toggle('on', p.dataset.aba === id); });
+    document.querySelectorAll('.tr-etapa').forEach(function (s) { s.hidden = s.id !== 'etapa-' + id; });
+    try { history.replaceState(null, '', location.pathname + '?etapa=' + id); } catch (e) {}
+  }
+  passos.forEach(function (p) { p.addEventListener('click', function () { abrir(p.dataset.aba); }); });
+  var dlg = document.getElementById('dlg-trein'); if (!dlg) return;
+  if (dlg.dataset.abrirJa) dlg.showModal();
+  document.querySelectorAll('[data-novo]').forEach(function (b) {
+    b.addEventListener('click', function () { document.getElementById('tr-etapa-sel').value = b.dataset.novo; dlg.showModal(); });
+  });
+  var x = dlg.querySelector('[data-fechar]');
+  if (x && !dlg.dataset.abrirJa) x.addEventListener('click', function (ev) { ev.preventDefault(); dlg.close(); });
+})();
+</script>
+{% endblock %}

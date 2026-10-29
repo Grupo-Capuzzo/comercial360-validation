@@ -1,0 +1,141 @@
+{% extends "portal/base.html" %}
+{% block title %}Início · Portal Grupo Capuzzo{% endblock %}
+{% block content %}
+<section class="hero ini-hero">
+  <div>
+    <div class="eyebrow-line">{{ hoje_extenso }}</div>
+    <h1>{{ saudacao }}, <b>{{ portal_user.nome.split()[0] }}</b>.</h1>
+    <p>Este é o resumo das empresas que você acompanha.</p>
+  </div>
+  <div class="ini-atalhos">
+    <a class="ini-atalho" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span><b>Empresas</b><small>Módulos de cada empresa</small></span>{{ ic('chevron_right') }}</a>
+    <a class="ini-atalho" href="{{ url_for('portal_treinamentos') }}">{{ ic('school') }}<span><b>Treinamentos</b><small>{{ n_trein }} conteúdo{{ 's' if n_trein != 1 }} disponíve{{ 'is' if n_trein != 1 else 'l' }}</small></span>{{ ic('chevron_right') }}</a>
+    {% if portal_user.crm %}<a class="ini-atalho" href="{{ url_for('portal_crm') }}">{{ ic('handshake') }}<span><b>CRM Geral</b><small>Comercial do Grupo</small></span>{{ ic('chevron_right') }}</a>{% endif %}
+  </div>
+</section>
+
+<div class="ini-kpis">
+  <div class="ini-kpi k-cham"><span class="ini-kpi-ic">{{ ic('support_agent') }}</span>
+    <div><b>{{ tot.chamados }}</b><span>Chamados em aberto</span>{% if tot.atendimento %}<small>{{ tot.atendimento }} em atendimento</small>{% endif %}</div></div>
+  <div class="ini-kpi k-atr {{ 'tem' if tot.atrasadas }}"><span class="ini-kpi-ic">{{ ic('warning') }}</span>
+    <div><b>{{ tot.atrasadas }}</b><span>Demandas em atraso</span>{% if not portal_user.admin %}<small>sob sua responsabilidade</small>{% endif %}</div></div>
+  <div class="ini-kpi k-hoje"><span class="ini-kpi-ic">{{ ic('today') }}</span>
+    <div><b>{{ tot.hoje }}</b><span>Demandas do dia</span>{% if not portal_user.admin %}<small>sob sua responsabilidade</small>{% endif %}</div></div>
+  <div class="ini-kpi k-emp"><span class="ini-kpi-ic">{{ ic('account_balance') }}</span>
+    <div><b>{{ empresas|length }}</b><span>Empresas com acesso</span></div></div>
+</div>
+
+<div class="ini-cols">
+  <section class="box ini-emp">
+    <div class="ini-box-head"><div class="box-title">Suas empresas</div>
+      <label class="search ini-busca">{{ ic('search') }}<input id="ini-busca" type="search" placeholder="Buscar empresa…" autocomplete="off"></label></div>
+    {% if not empresas %}
+      <div class="vazio">Nenhuma empresa liberada para o seu usuário. Fale com o administrador.</div>
+    {% else %}
+    <div class="ini-lista" id="ini-lista">
+      <div class="ini-linha ini-cab"><span>Empresa</span><span>Chamados</span><span>Atrasadas</span><span>Hoje</span><span></span></div>
+      {% for e in empresas %}
+      <a class="ini-linha" href="{{ url_for('portal_empresa', slug=e.slug) }}" data-nome="{{ e.nome|lower }}">
+        <span class="ini-nome"><span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt=""></span>
+          <span><b>{{ e.nome }}</b>{% if e.status != 'ativo' %}<small class="ini-st st-{{ e.status }}">{{ STATUS[e.status] }}{% if e.obs %} · {{ e.obs }}{% endif %}</small>{% endif %}</span></span>
+        <span class="ini-num {{ 'n-cham' if e.chamados }}" data-rot="Chamados">{{ e.chamados }}</span>
+        <span class="ini-num {{ 'n-atr' if e.atrasadas }}" data-rot="Atrasadas">{{ e.atrasadas }}</span>
+        <span class="ini-num {{ 'n-hoje' if e.hoje }}" data-rot="Hoje">{{ e.hoje }}</span>
+        <span class="ini-ir">{{ ic('chevron_right') }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    <div class="vazio" id="ini-semres" hidden>Nenhuma empresa encontrada.</div>
+    {% endif %}
+  </section>
+
+  <aside class="box ini-rotina" id="agenda">
+    <div class="ini-box-head"><div class="box-title">Minha rotina de hoje</div>
+      <button type="button" class="lnk" data-abrir="dlg-agenda">{{ 'Agenda conectada' if agenda.conectada else 'Conectar agenda' }}</button></div>
+
+    {% if demandas %}
+    <div class="ini-sub">Demandas</div>
+    <ul class="ini-tl">
+      {% for d in demandas %}
+      <li class="{{ 'atrasada' if d.atrasada else 'hoje' }}">
+        <a href="{{ url_for('operacao.demanda', slug=d.empresa_slug, tid=d.id) }}">
+          <span class="ini-tl-hora">{{ 'Atrasada' if d.atrasada else 'Hoje' }}{% if d.atrasada %}<small>{{ d.venc_br }}</small>{% endif %}</span>
+          <span class="ini-tl-txt"><b>{{ d.titulo }}</b><small>{% for e in empresas if e.slug == d.empresa_slug %}{{ e.nome }}{% endfor %}{% if d.prioridade == 'alta' %} · prioridade alta{% endif %}</small></span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="ini-sub">Agenda</div>
+    {% if not agenda.conectada %}
+      <div class="ini-agenda-vazia">{{ ic('event') }}
+        <p>Conecte a sua agenda do <b>Google</b> ou do <b>Outlook</b> para ver aqui os compromissos do dia.</p>
+        <button type="button" class="btn-pill outline" data-abrir="dlg-agenda">Conectar agenda</button></div>
+    {% elif agenda.erro %}
+      <div class="ini-agenda-vazia erro">{{ ic('warning') }}<p>{{ agenda.erro }}</p></div>
+    {% elif not agenda.itens %}
+      <p class="ini-nada">Nenhum compromisso hoje.</p>
+    {% else %}
+    <ul class="ini-tl">
+      {% for c in agenda.itens %}
+      <li class="evento"><div>
+        <span class="ini-tl-hora">{{ 'Dia todo' if c.diaInteiro else c.inicio }}{% if not c.diaInteiro %}<small>até {{ c.fim }}</small>{% endif %}</span>
+        <span class="ini-tl-txt"><b>{{ c.titulo }}</b>{% if c.local %}<small>{{ c.local }}</small>{% endif %}</span></div></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if agenda.conectada and not agenda.erro and agenda.amanha %}
+      <div class="ini-sub">Amanhã</div>
+      <ul class="ini-tl leve">
+        {% for c in agenda.amanha[:4] %}<li class="evento"><div><span class="ini-tl-hora">{{ 'Dia todo' if c.diaInteiro else c.inicio }}</span><span class="ini-tl-txt"><b>{{ c.titulo }}</b></span></div></li>{% endfor %}
+        {% if agenda.amanha|length > 4 %}<li class="mais">+ {{ agenda.amanha|length - 4 }} compromisso(s)</li>{% endif %}
+      </ul>
+    {% endif %}
+    {% if not demandas and agenda.conectada and not agenda.erro and not agenda.itens %}{% endif %}
+  </aside>
+</div>
+
+<dialog id="dlg-agenda" class="dlg dlg-largo">
+  <form method="post" action="{{ url_for('portal_agenda') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="dlg-head"><h3>Conectar minha agenda</h3>
+      <button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
+    <p class="hint">Cole o <b>endereço secreto (iCal / .ics)</b> da sua agenda. Ela aparece só para você, aqui no Início.</p>
+    <div class="ini-passos">
+      <div><b>Google Agenda</b><ol>
+        <li>Abra <i>calendar.google.com</i> no computador.</li>
+        <li>Na lista "Minhas agendas", passe o mouse na sua agenda → <i>⋮</i> → <b>Configurações e compartilhamento</b>.</li>
+        <li>Desça até <b>Endereço secreto no formato iCal</b> e copie.</li></ol></div>
+      <div><b>Outlook / Microsoft 365</b><ol>
+        <li>Abra o Outlook na web → <b>Configurações</b> (engrenagem) → <b>Calendário</b> → <b>Calendários compartilhados</b>.</li>
+        <li>Em <b>Publicar um calendário</b>, escolha a agenda e "Pode ver todos os detalhes" → <b>Publicar</b>.</li>
+        <li>Copie o link <b>ICS</b>.</li></ol></div>
+    </div>
+    <label class="lbl">Endereço da agenda (.ics)</label>
+    <input class="inp" name="ics_url" type="url" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" {% if not agenda.conectada %}required{% endif %}>
+    {% if agenda.conectada %}<p class="hint">Sua agenda já está conectada. Cole um novo endereço para trocar.</p>{% endif %}
+    <div class="row-btns">
+      {% if agenda.conectada %}<button class="btn-pill outline" type="submit" name="acao" value="remover" formnovalidate>Desconectar</button>{% endif %}
+      <button class="btn-pill" type="submit" name="acao" value="salvar">Salvar</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  document.querySelectorAll('[data-abrir]').forEach(function (b) {
+    b.addEventListener('click', function () { var d = document.getElementById(b.dataset.abrir); if (d) d.showModal(); });
+  });
+  var busca = document.getElementById('ini-busca'); if (!busca) return;
+  var linhas = [].slice.call(document.querySelectorAll('#ini-lista a.ini-linha'));
+  busca.addEventListener('input', function () {
+    var q = busca.value.trim().toLowerCase(), vis = 0;
+    linhas.forEach(function (l) { var ok = !q || l.dataset.nome.indexOf(q) >= 0; l.hidden = !ok; if (ok) vis++; });
+    document.getElementById('ini-semres').hidden = vis > 0;
+  });
+})();
+</script>
+{% endblock %}

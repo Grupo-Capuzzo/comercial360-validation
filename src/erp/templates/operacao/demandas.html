@@ -4,127 +4,154 @@
 <div class="op-head">
   <div>
     <div class="eyebrow-line">Demandas e rotinas</div>
-    <h1>{{ 'Demandas da equipe' if portal_user.admin else 'Minhas demandas' }}</h1>
-    <p>Tudo o que precisa ser feito na {{ empresa.nome }}: lance, acompanhe, anote e conclua.</p>
+    <h1>{{ 'Minhas demandas' if de == 'eu' else ('Demandas de ' ~ alvo_nome if de != 'equipe' else 'Demandas da equipe') }}</h1>
+    <p>Arraste os cartões entre as colunas para mudar a situação. Clique no cartão para ver etapas, observações e tempo.</p>
   </div>
   <button class="btn-pill" type="button" onclick="document.getElementById('dlg-nova').showModal()">{{ oic('add') }} Nova demanda</button>
 </div>
 
 <div class="op-kpis">
-  <div class="op-kpi {{ 'risco' if cont.atrasadas }}"><b>{{ cont.atrasadas }}</b><span>Atrasadas</span></div>
-  <div class="op-kpi"><b>{{ cont.hoje }}</b><span>Vencem hoje</span></div>
-  <div class="op-kpi"><b>{{ cont.abertas }}</b><span>Em aberto</span></div>
+  {% set n_atr = colunas[2].itens|length %}
+  <div class="op-kpi {{ 'risco' if n_atr }}"><b>{{ n_atr }}</b><span>Em atraso</span></div>
+  <div class="op-kpi"><b>{{ lista|selectattr('situacao', 'equalto', 'hoje')|list|length }}</b><span>Vencem hoje</span></div>
+  <div class="op-kpi"><b>{{ abas.abertas }}</b><span>Em aberto</span></div>
   <div class="op-kpi dark"><b>{{ hhmm(semana[-1].s) }}</b><span>Na empresa hoje</span></div>
 </div>
 
 <form class="op-toolbar" method="get">
-  <input type="hidden" name="aba" value="{{ aba }}">
   <div class="chips">
-    {% for k, rot in [('hoje','Hoje e atrasadas'),('proximas','Próximas'),('recorrentes','Recorrentes'),('todas','Todas abertas'),('concluidas','Concluídas')] %}
-      <a class="chip {{ 'on' if aba == k }}" href="{{ url_for('operacao.demandas', slug=empresa.slug, aba=k, resp=resp, q=busca or None) }}">{{ rot }} <small>{{ abas[k] }}</small></a>
+    {% for k, rot in [('', 'Todas'), ('rotina', 'Rotinas'), ('avulsa', 'Avulsas')] %}
+      <a class="chip {{ 'on' if tipo_f == k }}" href="{{ url_for('operacao.demandas', slug=empresa.slug, tipo=k or None, de=de if de != 'eu' else None, q=busca or None) }}">{{ rot }}</a>
     {% endfor %}
   </div>
   <div class="op-filtros">
+    {% if tipo_f %}<input type="hidden" name="tipo" value="{{ tipo_f }}">{% endif %}
     {% if portal_user.admin %}
-    <select class="inp" name="resp" onchange="this.form.submit()" aria-label="Responsável">
-      <option value="">Toda a equipe</option>
-      {% for x in usuarios %}<option value="{{ x.id }}" {{ 'selected' if resp == x.id }}>{{ x.nome }}</option>{% endfor %}
+    <select class="inp" name="de" onchange="this.form.submit()" aria-label="De quem">
+      <option value="eu" {{ 'selected' if de == 'eu' }}>Minhas demandas</option>
+      <option value="equipe" {{ 'selected' if de == 'equipe' }}>Toda a equipe</option>
+      {% for x in usuarios if x.id != portal_user.id %}<option value="{{ x.id }}" {{ 'selected' if resp == x.id }}>{{ x.nome }}</option>{% endfor %}
     </select>
     {% endif %}
     <label class="search">{{ ic('search') }}<input type="search" name="q" value="{{ busca }}" placeholder="Buscar demanda…"></label>
   </div>
 </form>
 
-<div class="op-cols">
-  <div class="op-lista">
-    {% for t in lista %}
-    <article class="op-tarefa sit-{{ t.situacao }} {{ 'rodando' if t.rodando }}">
-      <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=t.id) }}">
-        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <input type="hidden" name="voltar" value="{{ request.full_path }}">
-        {% if t.status == 'concluida' %}
-          <button class="op-check feito" name="acao" value="reabrir" title="Reabrir">{{ oic('check') }}</button>
-        {% else %}
-          <button class="op-check" name="acao" value="concluir" title="Marcar como concluída">{{ oic('check') }}</button>
-        {% endif %}
-      </form>
-      <a class="op-tarefa-corpo" href="{{ url_for('operacao.demanda', slug=empresa.slug, tid=t.id) }}">
-        <b>{{ t.titulo }}</b>
-        <span class="op-meta">
-          {% if t.status == 'concluida' %}<span class="op-venc ok">Concluída em {{ data_hora_br(t.concluida_em) }}</span>
-          {% elif t.situacao == 'atrasada' %}<span class="op-venc risco">Venceu {{ data_br(t.vencimento) }}</span>
-          {% elif t.situacao == 'hoje' %}<span class="op-venc aviso">Vence hoje</span>
-          {% elif t.vencimento %}<span class="op-venc">Vence {{ data_br(t.vencimento) }}</span>
-          {% else %}<span class="op-venc">Sem data</span>{% endif %}
-          {% if t.tipo == 'recorrente' %}<span class="op-tag">{{ oic('repeat') }}{{ RECORRENCIAS.get(t.recorrencia, '') }}</span>{% endif %}
-          {% if t.prioridade == 'alta' %}<span class="op-tag risco">Prioridade alta</span>{% endif %}
-          {% if t.chamado_id %}<span class="op-tag">Chamado nº {{ numero_chamado(t.chamado_id) }}</span>{% endif %}
-          {% if t.status == 'andamento' %}<span class="op-tag andamento">Em andamento</span>{% endif %}
-          {% if portal_user.admin %}<span class="op-resp">{{ t.resp_nome }}</span>{% endif %}
-        </span>
-      </a>
-      <div class="op-tempo">
-        <span class="op-tempo-n" {% if t.rodando %}data-op-tarefa-tempo="{{ t.id }}"{% endif %}>{{ hhmmss(t.segundos) }}</span>
-        {% if t.status != 'concluida' and t.responsavel_id == portal_user.id %}
-        <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=t.id) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-          <input type="hidden" name="voltar" value="{{ request.full_path }}">
-          {% if t.rodando %}
-            <button class="op-play on" name="acao" value="parar" title="Pausar o tempo desta demanda">{{ oic('pause') }}</button>
-          {% else %}
-            <button class="op-play" name="acao" value="iniciar" title="Começar a contar o tempo nesta demanda">{{ oic('play') }}</button>
+<div class="kb" id="kb" data-csrf="{{ csrf_token() }}">
+  {% for col in colunas %}
+  <section class="kb-col kb-{{ col.id }}" data-col="{{ col.id }}">
+    <header class="kb-col-head"><span class="kb-dot"></span><b>{{ col.nome }}</b><span class="kb-n">{{ col.itens|length }}</span>
+      <small>{{ col.desc }}</small></header>
+    <div class="kb-lista" data-drop="{{ col.id if col.id != 'atraso' else '' }}">
+      {% for t in col.itens %}
+      <article class="kb-card prio-{{ t.prioridade }} {{ 'rodando' if t.rodando }} {{ 'feita' if t.status == 'concluida' }}" draggable="true"
+               data-id="{{ t.id }}" data-status="{{ t.status }}" data-acao="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=t.id) }}">
+        <a class="kb-link" href="{{ url_for('operacao.demanda', slug=empresa.slug, tid=t.id) }}">
+          <span class="kb-tags">
+            {% if t.fixa %}<span class="op-tag fixa">{{ oic('repeat') }}Rotina fixa</span>
+            {% elif t.tipo == 'recorrente' %}<span class="op-tag">{{ oic('repeat') }}{{ RECORRENCIAS.get(t.recorrencia, '') }}</span>{% endif %}
+            {% if t.prioridade == 'alta' %}<span class="op-tag risco">Alta</span>{% endif %}
+            {% if col.id == 'atraso' %}<span class="op-tag {{ 'andamento' if t.status == 'andamento' }}">{{ STATUS_TAREFA[t.status] }}</span>{% endif %}
+          </span>
+          <b class="kb-tit">{{ t.titulo }}</b>
+          {% if t.etapas_n %}
+          <span class="kb-prog" title="{{ t.etapas_f }} de {{ t.etapas_n }} etapas"><i style="width: {{ (t.etapas_f * 100 / t.etapas_n)|round|int }}%"></i></span>
           {% endif %}
-        </form>
-        {% endif %}
-      </div>
-    </article>
-    {% else %}
-    <div class="op-vazio">
-      {% if aba == 'hoje' %}Nada vencendo hoje nem atrasado. {% if abas.proximas %}Veja as <a href="{{ url_for('operacao.demandas', slug=empresa.slug, aba='proximas', resp=resp) }}">próximas</a>.{% endif %}
-      {% elif aba == 'concluidas' %}Nenhuma demanda concluída ainda.
-      {% else %}Nenhuma demanda aqui. Use “Nova demanda” para lançar.{% endif %}
-    </div>
-    {% endfor %}
-  </div>
-
-  <aside class="op-resumo">
-    <section class="op-card">
-      <h3>Onde o tempo foi gasto</h3>
-      <p class="op-sub">Demandas com mais tempo nos últimos 7 dias</p>
-      {% for r in gasto %}
-        <a class="op-barra" href="{{ url_for('operacao.demanda', slug=empresa.slug, tid=r.id) }}">
-          <span class="op-barra-rot"><span>{{ r.titulo }}</span><b>{{ hhmm(r.s) }}</b></span>
-          <span class="op-barra-trilha"><i style="width: {{ ((r.s or 0) * 100 / maior)|round|int }}%"></i></span>
+          <span class="kb-meta">
+            {% if t.status == 'concluida' %}<span class="op-venc ok">{{ oic('check') }}{{ data_br(t.concluida_em) }}</span>
+            {% elif t.situacao == 'atrasada' %}<span class="op-venc risco">Venceu {{ data_br(t.vencimento) }}</span>
+            {% elif t.situacao == 'hoje' %}<span class="op-venc aviso">Hoje</span>
+            {% elif t.vencimento %}<span class="op-venc">{{ data_br(t.vencimento) }}</span>{% endif %}
+            {% if t.etapas_n %}<span class="kb-mini">{{ oic('check') }}{{ t.etapas_f }}/{{ t.etapas_n }}</span>{% endif %}
+            {% if t.notas_n %}<span class="kb-mini">{{ oic('nota') }}{{ t.notas_n }}</span>{% endif %}
+            {% if de != 'eu' %}<span class="kb-resp">{{ t.resp_nome.split()[0] }}</span>{% endif %}
+          </span>
         </a>
+        <div class="kb-tempo">
+          <span class="op-tempo-n" {% if t.rodando %}data-op-tarefa-tempo="{{ t.id }}"{% endif %}>{{ hhmmss(t.segundos) }}</span>
+          {% if t.status != 'concluida' and t.responsavel_id == portal_user.id %}
+          <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=t.id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <input type="hidden" name="voltar" value="{{ request.full_path }}">
+            {% if t.rodando %}<button class="op-play on" name="acao" value="parar" title="Pausar o tempo">{{ oic('pause') }}</button>
+            {% else %}<button class="op-play" name="acao" value="iniciar" title="Iniciar o tempo nesta demanda">{{ oic('play') }}</button>{% endif %}
+          </form>
+          {% endif %}
+        </div>
+      </article>
       {% else %}
-        <p class="op-sub">Use o ▶ de uma demanda para começar a medir.</p>
+      <div class="kb-vazio">{{ 'Nada atrasado.' if col.id == 'atraso' else ('Nenhuma concluída nos últimos 14 dias.' if col.id == 'concluida' else 'Arraste uma demanda para cá.') }}</div>
       {% endfor %}
-    </section>
-    <section class="op-card">
-      <h3>Tempo na empresa</h3>
-      <p class="op-sub">Cronômetro da barra superior, por dia</p>
-      {% set maxd = (semana|map(attribute='s')|max) or 1 %}
-      <div class="op-semana">
-        {% for d in semana %}
-          <div class="op-dia" title="{{ d.dia.strftime('%d/%m') }}: {{ hhmm(d.s) }}">
-            <span class="op-dia-col"><i style="height: {{ (d.s * 100 / maxd)|round|int }}%"></i></span>
-            <small>{{ ['seg','ter','qua','qui','sex','sáb','dom'][d.dia.weekday()] }}</small>
-          </div>
-        {% endfor %}
-      </div>
-      <p class="op-sub">Semana: <b>{{ hhmm(semana|sum(attribute='s')) }}</b></p>
-    </section>
-  </aside>
+    </div>
+  </section>
+  {% endfor %}
+</div>
+
+<div class="op-cols op-cols-baixo">
+  <section class="op-card">
+    <h3>Onde o tempo foi gasto</h3>
+    <p class="op-sub">Demandas com mais tempo nos últimos 7 dias</p>
+    {% for r in gasto %}
+      <a class="op-barra" href="{{ url_for('operacao.demanda', slug=empresa.slug, tid=r.id) }}">
+        <span class="op-barra-rot"><span>{{ r.titulo }}</span><b>{{ hhmm(r.s) }}</b></span>
+        <span class="op-barra-trilha"><i style="width: {{ ((r.s or 0) * 100 / maior)|round|int }}%"></i></span>
+      </a>
+    {% else %}
+      <p class="op-sub">Use o ▶ de uma demanda para começar a medir.</p>
+    {% endfor %}
+  </section>
+  <section class="op-card">
+    <h3>Tempo na empresa</h3>
+    <p class="op-sub">Cronômetro da barra superior, por dia</p>
+    {% set maxd = (semana|map(attribute='s')|max) or 1 %}
+    <div class="op-semana">
+      {% for d in semana %}
+        <div class="op-dia" title="{{ d.dia.strftime('%d/%m') }}: {{ hhmm(d.s) }}">
+          <span class="op-dia-col"><i style="height: {{ (d.s * 100 / maxd)|round|int }}%"></i></span>
+          <small>{{ ['seg','ter','qua','qui','sex','sáb','dom'][d.dia.weekday()] }}</small>
+        </div>
+      {% endfor %}
+    </div>
+    <p class="op-sub">Semana: <b>{{ hhmm(semana|sum(attribute='s')) }}</b></p>
+  </section>
 </div>
 
 <dialog id="dlg-nova" class="dlg op-dlg">
   <form method="post" action="{{ url_for('operacao.demanda_nova', slug=empresa.slug) }}">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="voltar" value="{{ request.full_path }}">
     <div class="dlg-head"><h3>Nova demanda</h3>
       <button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
+    {% if portal_user.admin %}<p class="hint">Para uma <b>rotina fixa</b> de um colaborador, escolha o responsável e o tipo <b>Recorrente</b>.</p>{% endif %}
     {% with d=none %}{% include "operacao/_form_demanda.html" %}{% endwith %}
     <button class="btn-pill" type="submit">Lançar demanda</button>
   </form>
 </dialog>
 {% include "operacao/_js_form.html" %}
+<script>
+(function () {
+  var kb = document.getElementById('kb'); if (!kb) return;
+  var csrf = kb.dataset.csrf, arrastando = null;
+  kb.querySelectorAll('.kb-card').forEach(function (c) {
+    c.addEventListener('dragstart', function (e) { arrastando = c; c.classList.add('arrastando'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', c.dataset.id); } catch (x) {} });
+    c.addEventListener('dragend', function () { c.classList.remove('arrastando'); kb.querySelectorAll('.kb-lista').forEach(function (l) { l.classList.remove('alvo'); }); });
+  });
+  kb.querySelectorAll('.kb-lista').forEach(function (l) {
+    var destino = l.dataset.drop;
+    l.addEventListener('dragover', function (e) { if (!destino || !arrastando) return; e.preventDefault(); l.classList.add('alvo'); });
+    l.addEventListener('dragleave', function () { l.classList.remove('alvo'); });
+    l.addEventListener('drop', function (e) {
+      e.preventDefault(); l.classList.remove('alvo');
+      var c = arrastando; arrastando = null;
+      if (!c || !destino || c.dataset.status === destino) return;
+      var vazio = l.querySelector('.kb-vazio'); if (vazio) vazio.remove();
+      l.prepend(c); c.classList.add('salvando');
+      var fd = new FormData(); fd.append('_csrf', csrf); fd.append('acao', 'status'); fd.append('novo', destino);
+      fetch(c.dataset.acao, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'x-requested-with': 'fetch' } })
+        .then(function () { location.reload(); })
+        .catch(function () { location.reload(); });
+    });
+  });
+})();
+</script>
 {% endblock %}

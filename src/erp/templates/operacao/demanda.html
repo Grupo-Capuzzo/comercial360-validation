@@ -8,7 +8,7 @@
     <div>
       <div class="op-meta">
         <span class="op-tag {{ 'ok' if tarefa.status == 'concluida' else ('andamento' if tarefa.status == 'andamento') }}">{{ STATUS_TAREFA[tarefa.status] }}</span>
-        {% if tarefa.tipo == 'recorrente' %}<span class="op-tag">{{ oic('repeat') }}Recorrente · {{ RECORRENCIAS.get(tarefa.recorrencia, '') }}</span>{% else %}<span class="op-tag">Pontual</span>{% endif %}
+        {% if tarefa.tipo == 'recorrente' %}<span class="op-tag {{ 'fixa' if tarefa.fixa }}">{{ oic('repeat') }}{{ 'Rotina fixa' if tarefa.fixa else 'Recorrente' }} · {{ RECORRENCIAS.get(tarefa.recorrencia, '') }}</span>{% else %}<span class="op-tag">Pontual</span>{% endif %}
         {% if tarefa.prioridade != 'normal' %}<span class="op-tag {{ 'risco' if tarefa.prioridade == 'alta' }}">Prioridade {{ PRIORIDADES[tarefa.prioridade]|lower }}</span>{% endif %}
         {% if chamado %}<a class="op-tag" href="{{ url_for('operacao.chamado', slug=empresa.slug, cid=chamado.id) }}">Chamado nº {{ numero_chamado(chamado.id) }}</a>{% endif %}
       </div>
@@ -55,15 +55,40 @@
   </div>
 </section>
 
+<section class="op-card op-etapas" id="etapas">
+  <div class="op-etapas-head">
+    <div><h3>Etapas</h3><p class="op-sub">{% if etapas %}{{ etapas_feitas }} de {{ etapas|length }} concluídas{% else %}Divida a demanda em passos, se precisar{% endif %}</p></div>
+    {% if etapas %}<span class="kb-prog grande"><i style="width: {{ (etapas_feitas * 100 / etapas|length)|round|int }}%"></i></span>{% endif %}
+  </div>
+  <ul class="op-check-lista">
+    {% for x in etapas %}
+    <li class="{{ 'feito' if x.feito }}">
+      <form method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=tarefa.id) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="etapa_id" value="{{ x.id }}">
+        <button class="op-check {{ 'feito' if x.feito }}" name="acao" value="etapa_toggle" title="{{ 'Desmarcar' if x.feito else 'Marcar como feita' }}">{{ oic('check') }}</button>
+        <span class="op-check-txt">{{ x.texto }}{% if x.feito and x.feito_em %}<small>feita em {{ data_hora_br(x.feito_em) }}</small>{% endif %}</span>
+        <button class="ico op-check-del" name="acao" value="etapa_del" title="Remover etapa" onclick="return confirm('Remover esta etapa?')">{{ oic('delete') }}</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  <form class="op-etapa-nova" method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=tarefa.id) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="acao" value="etapa_add">
+    <input class="inp" name="texto" maxlength="300" required placeholder="+ Nova etapa (ex.: conferir extrato, lançar no sistema…)">
+    <button class="btn-pill outline op-btn" type="submit">{{ oic('add') }} Adicionar</button>
+  </form>
+  {% if tarefa.tipo == 'recorrente' %}<p class="op-sub">As etapas se repetem nas próximas ocorrências desta rotina.</p>{% endif %}
+</section>
+
 <div class="op-cols">
   <section class="op-card">
-    <h3>Acompanhamento</h3>
-    <p class="op-sub">Anotações e histórico do que foi feito</p>
+    <h3>Observações e histórico</h3>
+    <p class="op-sub">Anote o que foi feito, pendências e contatos</p>
     <form class="op-nota-form" method="post" action="{{ url_for('operacao.demanda_acao', slug=empresa.slug, tid=tarefa.id) }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <input type="hidden" name="acao" value="nota">
       <textarea class="inp" name="texto" rows="3" required placeholder="Escreva o que foi feito, uma pendência, um contato…"></textarea>
-      <button class="btn-pill op-btn" type="submit">{{ oic('nota') }} Adicionar anotação</button>
+      <button class="btn-pill op-btn" type="submit">{{ oic('nota') }} Adicionar observação</button>
     </form>
     <ol class="op-timeline">
       {% for n in notas %}
@@ -72,7 +97,7 @@
           <span class="op-texto">{{ n.texto }}</span>
         </li>
       {% else %}
-        <li class="evento"><span class="op-texto">Nenhuma anotação ainda.</span></li>
+        <li class="evento"><span class="op-texto">Nenhuma observação ainda.</span></li>
       {% endfor %}
     </ol>
   </section>

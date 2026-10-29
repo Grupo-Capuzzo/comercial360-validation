@@ -318,14 +318,22 @@ export function registrar() {
   contextProcessor(() => ({ oic }));
 
   // Qualquer página aberta conta como uso: mantém o cronômetro vivo.
+  const SINAIS: Map<number, number> = ((globalThis as any).__erpSinais ??= new Map());
   beforeRequest(async () => {
     const u = g().portal_user;
     if (u && !request().rota.startsWith("/static/")) {
-      try {
-        await fechar_abandonados(u.id);
-        await sinal(u.id);
-      } catch {
-        // cronômetro nunca pode derrubar uma página
+      // No máximo 1 sinal por minuto por usuário, sem segurar a página (roda em segundo plano).
+      const ult = SINAIS.get(u.id) ?? 0;
+      if (Date.now() - ult > 60000) {
+        SINAIS.set(u.id, Date.now());
+        void (async () => {
+          try {
+            await fechar_abandonados(u.id);
+            await sinal(u.id);
+          } catch {
+            // cronômetro nunca pode derrubar uma página
+          }
+        })();
       }
     }
     return null;
@@ -353,53 +361,65 @@ export function registrar() {
     const u = _usuario();
     const hoje = PyDate.today();
     const hoje_iso = hoje.isoformat();
-    let aba: string = request().args.get("aba", "hoje");
-    const resp: number | null = request().args.get("resp", null, "int");
     const busca = (request().args.get("q") || "").trim();
+    const tipo_f: string = request().args.get("tipo", "");
+    // Quadro do usuário logado. O administrador pode ver o de outra pessoa ou o da equipe toda.
+    let de: string = request().args.get("de", "eu");
+    let resp: number | null = null;
+    if (!u.admin) de = "eu";
+    else if (/^\d+$/.test(de)) resp = Number(de);
+    else if (de !== "equipe") de = "eu";
+    const alvo_id = de === "eu" ? u.id : resp;
 
     let sql = "SELECT * FROM operacao_tarefas WHERE empresa_slug = ?";
     let params: any[] = [slug];
-    if (!u.admin) {
-      sql += " AND responsavel_id = ?";
-      params.push(u.id);
-    } else if (resp) {
-      sql += " AND responsavel_id = ?";
-      params.push(resp);
-    }
-    if (busca) {
-      sql += " AND (titulo LIKE ? OR descricao LIKE ?)";
-      params = [...params, `%${busca}%`, `%${busca}%`];
-    }
-    const todas = await _q(sql + " ORDER BY CASE WHEN vencimento = '' THEN 1 ELSE 0 END, vencimento, id", params);
+    if (alvo_id) { sql += " AND responsavel_id = ?"; params.push(alvo_id); }
+    if (busca) { sql += " AND (titulo LIKE ? OR descricao LIKE ?)"; params = [...params, `%${busca}%`, `%${busca}%`]; }
+    if (tipo_f === "rotina") sql += " AND tipo = 'recorrente'";
+    else if (tipo_f === "avulsa") sql += " AND tipo <> 'recorrente'";
+    const corte = hoje.addDays(-14).isoformat();
+    sql += " AND (status <> 'concluida' OR concluida_em >= ?)";
+    params.push(corte);
+    const todas = await _q(sql + " ORDER BY CASE WHEN vencimento = '' THEN 1 ELSE 0 END, vencimento, " +
+      "CASE prioridade WHEN 'alta' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END, id", params);
 
-    const abertas = todas.filter((t) => t.status !== "concluida");
-    const abas: Record<string, any[]> = {
-      hoje: abertas.filter((t) => t.vencimento && t.vencimento <= hoje_iso),
-      proximas: abertas.filter((t) => !t.vencimento || t.vencimento > hoje_iso),
-      recorrentes: abertas.filter((t) => t.tipo === "recorrente"),
-      // sorted(reverse=True) do Python é estável: empates mantêm a ordem original
-      concluidas: todas.filter((t) => t.status === "concluida")
-        .sort((a, b) => (a.concluida_em < b.concluida_em ? 1 : a.concluida_em > b.concluida_em ? -1 : 0)).slice(0, 100),
-      todas: abertas,
-    };
-    if (!(aba in abas)) aba = "hoje";
-    const lista = abas[aba];
-    const tempos = await segundos_por_tarefa(todas.map((t) => t.id));
-    const nomes = await nomes_usuarios();
-    const em_andamento = await tarefa_em_andamento(u.id);
-    for (const t of lista) {
+    const ids = todas.map((t) => t.id);
+    const [tempos, nomes, em_andamento, etapas, notas] = await Promise.all([
+      segundos_por_tarefa(ids), nomes_usuarios(), tarefa_em_andamento(u.id),
+      ids.length ? _q(`SELECT tarefa_id, COUNT(*) AS n, SUM(feito) AS f FROM operacao_tarefa_etapas WHERE tarefa_id IN (${ids.map(() => "?").join(",")}) GROUP BY tarefa_id`, ids) : Promise.resolve([]),
+      ids.length ? _q(`SELECT tarefa_id, COUNT(*) AS n FROM operacao_tarefa_notas WHERE tipo = 'nota' AND tarefa_id IN (${ids.map(() => "?").join(",")}) GROUP BY tarefa_id`, ids) : Promise.resolve([]),
+    ]);
+    const et = new Map(etapas.map((r: any) => [r.tarefa_id, r]));
+    const nt = new Map(notas.map((r: any) => [r.tarefa_id, r.n]));
+    for (const t of todas) {
       t.situacao = situacao_tarefa(t, hoje_iso);
       t.segundos = tempos.get(t.id) ?? 0;
       t.resp_nome = nomes.get(t.responsavel_id) ?? "—";
       t.rodando = !!(em_andamento && em_andamento.tarefa_id === t.id);
+      t.fixa = t.tipo === "recorrente" && t.criado_por !== t.responsavel_id;
+      const x: any = et.get(t.id);
+      t.etapas_n = x ? Number(x.n) : 0;
+      t.etapas_f = x ? Number(x.f || 0) : 0;
+      t.notas_n = Number(nt.get(t.id) ?? 0);
     }
+    const abertas = todas.filter((t) => t.status !== "concluida");
+    const colunas = [
+      { id: "aberta", nome: "A fazer", desc: "Ainda não iniciadas", itens: abertas.filter((t) => t.situacao !== "atrasada" && t.status === "aberta") },
+      { id: "andamento", nome: "Em andamento", desc: "Iniciadas, ainda abertas", itens: abertas.filter((t) => t.situacao !== "atrasada" && t.status === "andamento") },
+      { id: "atraso", nome: "Em atraso", desc: "Passaram do vencimento", itens: abertas.filter((t) => t.situacao === "atrasada") },
+      { id: "concluida", nome: "Concluídas", desc: "Últimos 14 dias", itens: todas.filter((t) => t.status === "concluida")
+        .sort((a, b) => (a.concluida_em < b.concluida_em ? 1 : a.concluida_em > b.concluida_em ? -1 : 0)).slice(0, 40) },
+    ];
+    const lista = todas;
+    const aba = "quadro";
+    const abas = { abertas: abertas.length };
 
     // Onde o tempo foi gasto (7 dias): por tarefa
     const d6 = hoje.addDays(-6);
     const desde = _iso(new PyDate(d6.year, d6.month, d6.day, 0, 0, 0, true));
-    const todos = u.admin && !resp;
+    const todos = !alvo_id;
     const filtro_u = todos ? "" : " AND tt.usuario_id = ?";
-    const p2 = [slug, desde, ...(todos ? [] : [resp || u.id])];
+    const p2 = [slug, desde, ...(todos ? [] : [alvo_id])];
     const gasto = await _q(`SELECT t.id, t.titulo, CAST(SUM(${SEG("COALESCE(tt.fim, ?)")} - ${SEG("tt.inicio")}) AS bigint) AS s ` +
       "FROM operacao_tarefa_tempo tt JOIN operacao_tarefas t ON t.id = tt.tarefa_id " +
       `WHERE t.empresa_slug = ? AND tt.inicio >= ?${filtro_u} GROUP BY t.id ORDER BY s DESC LIMIT 8`,
@@ -407,7 +427,7 @@ export function registrar() {
     const maior = Math.max(...(gasto.length ? gasto.map((r) => r.s || 0) : [1])) || 1;
 
     // Tempo na empresa: hoje e nos últimos 7 dias (do usuário filtrado)
-    const alvo = u.admin && resp ? resp : u.id;
+    const alvo = alvo_id || u.id;
     const semana: any[] = [];
     for (let i = 6; i >= 0; i--) {
       const dia = hoje.addDays(-i);
@@ -416,9 +436,8 @@ export function registrar() {
 
     const ctx = await _ctx(e, "demandas");
     return render_template("operacao/demandas.html", {
-      ...ctx, aba, lista, abas: Object.fromEntries(Object.entries(abas).map(([k, v]) => [k, v.length])),
-      busca, resp, usuarios: await usuarios_da_empresa(slug), gasto, maior,
-      semana, hoje_iso,
+      ...ctx, aba, lista, abas, colunas, busca, resp, de, tipo_f, usuarios: await usuarios_da_empresa(slug), gasto, maior,
+      semana, hoje_iso, alvo_nome: alvo_id ? (nomes.get(alvo_id) ?? "—") : "Toda a equipe",
     });
   });
 
@@ -482,13 +501,16 @@ export function registrar() {
         "ORDER BY vencimento DESC, id DESC LIMIT 12", [t.serie_id]);
     }
     const chamado = t.chamado_id ? await _q1("SELECT id, assunto FROM operacao_chamados WHERE id = ?", [t.chamado_id]) : null;
+    const etapas = await _q("SELECT * FROM operacao_tarefa_etapas WHERE tarefa_id = ? ORDER BY ordem, id", [tid]);
     t.situacao = situacao_tarefa(t);
+    t.fixa = t.tipo === "recorrente" && t.criado_por !== t.responsavel_id;
     const ctx = await _ctx(e, "demandas");
     return render_template("operacao/demanda.html", {
       ...ctx, tarefa: t, notas, tempos: tempos.slice(0, 30),
       total: tempos.reduce((s, x) => s + x.segundos, 0), rodando: !!(em_andamento && em_andamento.tarefa_id === tid),
       resp_nome: nomes.get(t.responsavel_id) ?? "—", criador: nomes.get(t.criado_por) ?? "—",
-      usuarios: await usuarios_da_empresa(slug), serie, chamado,
+      usuarios: await usuarios_da_empresa(slug), serie, chamado, etapas,
+      etapas_feitas: etapas.filter((x) => x.feito).length,
     });
   });
 
@@ -503,18 +525,60 @@ export function registrar() {
     let voltar = f.get("voltar") || url_for("operacao.demanda", { slug, tid });
     if (!voltar.startsWith("/") || voltar.startsWith("//")) voltar = url_for("operacao.demanda", { slug, tid });
 
-    if (acao === "iniciar") {
+    const viaQuadro = (request().headers.get("x-requested-with") ?? "") === "fetch";
+    // Mover no quadro: A fazer / Em andamento / Concluídas
+    let acao_ef = acao;
+    if (acao === "status") {
+      const novo = f.get("novo");
+      if (novo === "concluida") acao_ef = "concluir";
+      else if (novo === "aberta" || novo === "andamento") {
+        if (t.status === "concluida") {
+          await _exec("UPDATE operacao_tarefas SET status = ?, concluida_em = '', atualizado_em = ? WHERE id = ?", [novo, agora, tid]);
+          await nota(tid, u.id, "Reaberta", "evento");
+        } else if (t.status !== novo) {
+          if (novo === "aberta") { const r = await tarefa_em_andamento(u.id); if (r && r.tarefa_id === tid) await parar_tarefa(u.id); }
+          await _exec("UPDATE operacao_tarefas SET status = ?, atualizado_em = ? WHERE id = ?", [novo, agora, tid]);
+          await nota(tid, u.id, novo === "andamento" ? "Movida para Em andamento" : "Movida para A fazer", "evento");
+        }
+        if (viaQuadro) return jsonify({ ok: true });
+        return redirect(voltar);
+      }
+    }
+    if (acao_ef === "etapa_add") {
+      const texto = (f.get("texto") || "").trim().slice(0, 300);
+      if (texto) {
+        const o = await _q1("SELECT COALESCE(MAX(ordem), 0) + 1 AS o FROM operacao_tarefa_etapas WHERE tarefa_id = ?", [tid]);
+        await _exec("INSERT INTO operacao_tarefa_etapas (tarefa_id, ordem, texto) VALUES (?, ?, ?)", [tid, o?.o ?? 1, texto]);
+        await _exec("UPDATE operacao_tarefas SET atualizado_em = ? WHERE id = ?", [agora, tid]);
+      }
+      return redirect(voltar + "#etapas");
+    }
+    if (acao_ef === "etapa_toggle" || acao_ef === "etapa_del") {
+      const eid = f.get("etapa_id", null, "int");
+      const etp = eid ? await _q1("SELECT * FROM operacao_tarefa_etapas WHERE id = ? AND tarefa_id = ?", [eid, tid]) : null;
+      if (etp) {
+        if (acao_ef === "etapa_del") await _exec("DELETE FROM operacao_tarefa_etapas WHERE id = ?", [eid]);
+        else {
+          await _exec("UPDATE operacao_tarefa_etapas SET feito = ?, feito_em = ? WHERE id = ?", [etp.feito ? 0 : 1, etp.feito ? "" : agora, eid]);
+          if (!etp.feito && t.status === "aberta") await _exec("UPDATE operacao_tarefas SET status = 'andamento', atualizado_em = ? WHERE id = ?", [agora, tid]);
+        }
+      }
+      if (viaQuadro) return jsonify({ ok: true });
+      return redirect(voltar + "#etapas");
+    }
+
+    if (acao_ef === "iniciar") {
       if (t.status === "concluida") flash("Reabra a demanda para registrar tempo nela.", "erro");
       else await iniciar_tarefa(u.id, t);
-    } else if (acao === "parar") {
+    } else if (acao_ef === "parar") {
       await parar_tarefa(u.id);
-    } else if (acao === "nota") {
+    } else if (acao_ef === "nota") {
       const texto = (f.get("texto") || "").trim();
       if (texto) {
         await nota(tid, u.id, texto.slice(0, 4000));
         await _exec("UPDATE operacao_tarefas SET atualizado_em = ? WHERE id = ?", [agora, tid]);
       }
-    } else if (acao === "concluir" && t.status !== "concluida") {
+    } else if (acao_ef === "concluir" && t.status !== "concluida") {
       const rodando = await tarefa_em_andamento(u.id);
       if (rodando && rodando.tarefa_id === tid) await parar_tarefa(u.id);
       await _exec("UPDATE operacao_tarefas SET status = 'concluida', concluida_em = ?, atualizado_em = ? WHERE id = ?",
@@ -531,6 +595,7 @@ export function registrar() {
             [slug, t.responsavel_id, u.id, t.titulo, t.descricao, t.recorrencia,
               t.prioridade, prox, t.serie_id || tid, agora, agora]))!;
           await nota(nid, u.id, `Gerada pela recorrência (${RECORRENCIAS[t.recorrencia].toLowerCase()})`, "evento");
+          await _exec("INSERT INTO operacao_tarefa_etapas (tarefa_id, ordem, texto) SELECT ?, ordem, texto FROM operacao_tarefa_etapas WHERE tarefa_id = ? ORDER BY ordem, id", [nid, tid]);
           flash(`Concluída. Próxima ocorrência criada para ${data_br(prox)}.`, "ok");
         } else {
           flash("Demanda concluída.", "ok");
@@ -538,20 +603,22 @@ export function registrar() {
       } else {
         flash("Demanda concluída.", "ok");
       }
-    } else if (acao === "reabrir" && t.status === "concluida") {
+    } else if (acao_ef === "reabrir" && t.status === "concluida") {
       await _exec("UPDATE operacao_tarefas SET status = 'aberta', concluida_em = '', atualizado_em = ? WHERE id = ?",
         [agora, tid]);
       await nota(tid, u.id, "Reaberta", "evento");
-    } else if (acao === "editar") {
-      const titulo = (f.get("titulo") || "").trim().slice(0, 200) || t.titulo;
+    } else if (acao_ef === "editar") {
+      // Rotina fixa (lançada pelo administrador para o colaborador): só o administrador muda título e recorrência.
+      const fixa = t.tipo === "recorrente" && t.criado_por !== t.responsavel_id && !u.admin;
+      const titulo = fixa ? t.titulo : (f.get("titulo") || "").trim().slice(0, 200) || t.titulo;
       let venc = (f.get("vencimento") || "").trim();
       try {
         venc = venc ? _data_iso(venc) : "";
       } catch {
         venc = t.vencimento;
       }
-      const tipo = f.get("tipo") === "recorrente" ? "recorrente" : "pontual";
-      let rec = tipo === "recorrente" && f.get("recorrencia") in RECORRENCIAS ? f.get("recorrencia") : "";
+      const tipo = fixa ? t.tipo : f.get("tipo") === "recorrente" ? "recorrente" : "pontual";
+      let rec = fixa ? t.recorrencia : tipo === "recorrente" && f.get("recorrencia") in RECORRENCIAS ? f.get("recorrencia") : "";
       if (tipo === "recorrente" && !rec) rec = "mensal";
       const prio = f.get("prioridade") in PRIORIDADES ? f.get("prioridade") : t.prioridade;
       let resp = t.responsavel_id;
@@ -571,15 +638,17 @@ export function registrar() {
       if (mudancas.length) await nota(tid, u.id, "Alterado: " + mudancas.join(", "), "evento");
       flash("Demanda atualizada.", "ok");
       if (resp !== u.id && !u.admin) return redirect(url_for("operacao.demandas", { slug }));
-    } else if (acao === "excluir") {
+    } else if (acao_ef === "excluir") {
       if (!(u.admin || t.criado_por === u.id)) abort(403);
       if ((await tarefa_em_andamento(u.id))?.tarefa_id === tid) await parar_tarefa(u.id);
       await _exec("DELETE FROM operacao_tarefa_notas WHERE tarefa_id = ?", [tid]);
       await _exec("DELETE FROM operacao_tarefa_tempo WHERE tarefa_id = ?", [tid]);
+      await _exec("DELETE FROM operacao_tarefa_etapas WHERE tarefa_id = ?", [tid]);
       await _exec("DELETE FROM operacao_tarefas WHERE id = ?", [tid]);
       flash("Demanda excluída.", "ok");
       return redirect(url_for("operacao.demandas", { slug }));
     }
+    if (viaQuadro) return jsonify({ ok: true });
     return redirect(voltar);
   });
 
