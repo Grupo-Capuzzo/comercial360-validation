@@ -16,6 +16,12 @@ export function getSupabaseBrowserClient(): SupabaseClient<Database> {
   browserClient ??= createBrowserClient<Database>(
     supabaseConfig.url,
     supabaseConfig.publishableKey,
+    {
+      auth: {
+        // Recovery is explicitly exchanged once by the reset page.
+        detectSessionInUrl: typeof window !== "undefined" && window.location.pathname !== "/reset-password",
+      },
+    },
   );
 
   return browserClient;

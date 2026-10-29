@@ -2,8 +2,9 @@
 // Uso: node tools/erp/gerar_templates.mjs
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const raiz = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const pasta = path.join(raiz, "src/erp/templates");
 const saida = path.join(raiz, "src/erp/templates.gen.ts");
 const fontes = {};
@@ -11,7 +12,7 @@ const fontes = {};
   for (const n of fs.readdirSync(d).sort()) {
     const p = path.join(d, n);
     if (fs.statSync(p).isDirectory()) andar(p);
-    else if (n.endsWith(".html")) fontes[path.relative(pasta, p).split(path.sep).join("/")] = fs.readFileSync(p, "utf8");
+    else if (n.endsWith(".html")) fontes[path.relative(pasta, p).split(path.sep).join("/")] = fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");
   }
 })(pasta);
 const corpo = Object.entries(fontes).map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)},`).join("\n");

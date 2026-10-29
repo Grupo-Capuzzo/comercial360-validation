@@ -49,10 +49,11 @@
           onclick="const i=document.getElementById('senha');i.type=i.type==='password'?'text':'password'">{{ ic('visibility') }}</button>
       </div>
 
+      {% if senha_alterada %}<p role="status">Senha alterada com sucesso.</p>{% endif %}
       {% if erro %}<div class="alert">{{ ic('error') }}{{ erro }}</div>{% endif %}
 
       <button class="btn-gold" type="submit">Entrar</button>
-      <div class="login-help">Esqueceu a senha? Fale com o administrador do portal.</div>
+      <div class="login-help"><a href="/forgot-password">Esqueci minha senha</a></div>
       <div class="login-secure">{{ ic('lock') }} Conexão protegida · senhas armazenadas com criptografia</div>
     </form>
   </section>
