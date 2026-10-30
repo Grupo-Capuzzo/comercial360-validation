@@ -136,6 +136,9 @@
 </div>
 
 {# ── Produtos (Capuzzo Assessoria) ── #}
+{% if produtos_indisponiveis %}
+<div class="flash flash-erro" role="alert">Não foi possível consultar os indicadores dos produtos. Dados indisponíveis; tente novamente. Os valores desses produtos não estão sendo exibidos.</div>
+{% endif %}
 {% if produtos %}
 {% set pc = produtos.condominios %}{% set pt = produtos.titulos %}{% set pg = produtos.tatica %}
 <div class="vg-secao"><h2>Produtos</h2></div>

@@ -16,6 +16,7 @@ import {
   templateFilter, url_for, get,
 } from "../../core/flask";
 import { lerArquivo } from "../../core/arquivos";
+import { erroSeguro } from "../../core/diagnostico-assessoria";
 import * as portal from "../portal";
 import * as d from "./dados";
 import { cnpj_valido, consultar, consultar_local, cpf_valido, fmt_doc } from "./consulta_doc";
@@ -229,6 +230,7 @@ export function registrar() {
     // saldo de caixa: só contas correntes, poupança, aplicações e caixa (cartão de crédito não compõe o saldo)
     // As leituras são independentes: vão ao banco ao mesmo tempo (bem mais rápido online).
     const mes_ini = hoje.replace({ day: 1 }).isoformat();
+    let produtos_indisponiveis = false;
     const [contas0, todos, mes, ctx, sem_lanc, produtos] = await Promise.all([
       d.contas(slug, true),
       (async () => (await d.completar(await d.q(
@@ -243,7 +245,8 @@ export function registrar() {
           const capuzzo: any = await import("./capuzzo");
           return typeof capuzzo.resumo_produtos === "function" ? await capuzzo.resumo_produtos(slug) : null;
         } catch (exc) { // indicadores de produto nunca derrubam a visão geral
-          console.error("Falha nos indicadores de produtos", exc);
+          produtos_indisponiveis = true;
+          console.error("[erp] assessoria: produtos indisponiveis", erroSeguro(exc));
           return null;
         }
       })(),
@@ -297,7 +300,7 @@ export function registrar() {
     const maior = Math.max(...contas.map((c) => Math.abs(c.saldo)), 1);
     return render_template("financas/painel.html", {
       ...ctx, contas, cards, mes,
-      saldo_atual, proj, proximos, ind, maior, produtos,
+      saldo_atual, proj, proximos, ind, maior, produtos, produtos_indisponiveis,
       sem_contas: !contas.length, sem_lanc,
     });
   });
