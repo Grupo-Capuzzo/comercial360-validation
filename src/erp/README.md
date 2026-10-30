@@ -23,10 +23,12 @@ caminhos que começam com `/login` e `/auth`.
 ## Variáveis de ambiente (Hostinger → configurar no painel; NUNCA no código)
 | Variável | Valor |
 |---|---|
-| `ERP_DATABASE_URL` | `postgresql://erp_app.<ref>:<senha>@<host do pooler>:6543/postgres` (Supabase → Connect → Transaction pooler, usuário `erp_app`) |
+| `ERP_DATABASE_URL` | `postgresql://erp_app.<ref>:<senha>@<host do pooler>:5432/postgres` (Supabase → Connect → Session pooler, usuário `erp_app`; servidor Node.js persistente na Hostinger) |
 | `ERP_SESSION_SECRET` | texto aleatório longo (assina o cookie de sessão do ERP) |
 | `SUPABASE_SECRET_KEY` | chave secreta do Supabase (só servidor) — usada para criar usuários e trocar senhas no portal |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | as que o site já usa |
+
+Na Hostinger, use o **Session pooler**. O Supabase documenta que o pipelining do `postgres.js` no shared transaction pooler (porta 6543) pode deixar consultas pendentes ou retornar linhas desencontradas. `prepare: false` não elimina esse problema. Referência: https://supabase.com/docs/guides/database/postgres-js. Evidências e procedimento: `docs/ASSESSORIA_HTTP500.md`. Não troque usuário, senha ou projeto ao ajustar o modo de conexão.
 | `ERP_SEM_AGENDADOR` | opcional: `1` desliga a sincronização automática do Omie |
 
 ## Banco
