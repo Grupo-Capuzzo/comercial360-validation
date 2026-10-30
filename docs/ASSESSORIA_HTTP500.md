@@ -1,6 +1,28 @@
 # Assessoria Financeira: investigação de 30/10/2026
 
-## Situação comprovada
+## Causa reproduzida e correção de configuração
+
+Após o PR #12, a implantação ativa usa `main` no SHA `b08639f8f9c3c646106bbb243f4cd7b26a734813` (Hostinger `01a18d8a-2720-7355-8e0a-12f9378b6940`). Os traces autenticados de 14:11 e 14:12 (Brasília) não alcançaram `painel.leituras.fim`; não entraram nos cálculos finais ou no template. Portanto a hipótese anterior de bloqueio na renderização não foi confirmada.
+
+O teste local de produção com Node 22, driver `postgres` 3.4.9, `prepare: false`, conexão real `erp_app` e somente SELECT reproduziu a espera no shared transaction pooler (`aws-1-us-east-1.pooler.supabase.com:6543`). Ao encerrar o teste, permaneceu pendente a consulta de soma dos movimentos por conta, hash `684e6ea0439d`. O mesmo ocorreu com `max_pipeline` 100 e 1. Aumentar timeout não resolve a causa.
+
+O Supabase documenta que o pipelining do postgres.js combinado com esse pooler transacional pode deixar consultas pendentes ou retornar linhas desencontradas: https://supabase.com/docs/guides/database/postgres-js. Para servidor com conexões persistentes, recomenda Session pooler.
+
+Mantendo **exatamente o código publicado** (sem mudanças no cache, queries, cálculos ou templates) e alterando apenas a porta da conexão para **5432**, o teste local concluiu todas as 31 consultas e retornou **HTTP 200 em 8.591 ms**, com renderização em aproximadamente 106 ms. A reprodução na porta 6543 não terminou em 30 segundos (um teste anterior também não terminou em 45 segundos). Esses tempos medem o processo local contra o Supabase, não o carregamento autenticado da Hostinger. A identidade de teste é sintética e apenas local; login e permissões reais precisam de validação final no Portal.
+
+### Aplicação na Hostinger após autorização
+
+1. Site `portal.grupocapuzzo.com.br` → Variáveis de ambiente → editar **somente** `ERP_DATABASE_URL`.
+2. Manter esquema URI, host `aws-1-us-east-1.pooler.supabase.com`, usuário `erp_app.umvldqzzliqmgkvoedyd`, senha existente, banco `postgres` e eventuais opções. Trocar exclusivamente a porta `6543` por `5432` (Session pooler).
+3. Salvar/aplicar e reimplantar a mesma fonte `b08639f8`, sem importar dados, migrations ou atualizar dependências.
+4. Manter o diagnóstico temporário; entrar normalmente e abrir Assessoria. Confirmar `painel.leituras.fim`, `template.render.fim` e `resposta` 200 nos logs, conferindo dados e permissões.
+5. Depois da validação, desligar `ERP_ASSESSORIA_DIAGNOSTICO`. Monitorar o limite de conexões: o pool da aplicação continua no máximo 5 por processo. Não aumentar sem necessidade medida.
+
+Rollback de configuração: restaurar apenas a porta anterior e reaplicar a mesma fonte. Isso restaura o modo anterior, incluindo o risco de timeout; não reverte nem altera dados. A alteração de conexão ainda não foi aplicada automaticamente. Este PR corrige a documentação da configuração; nenhum código de runtime foi modificado.
+
+Os experimentos locais de cache/pipeline que não resolveram o bloqueio foram excluídos da alteração final. Credenciais usadas no teste não foram exibidas, versionadas ou mantidas em arquivo temporário após os testes.
+
+## Histórico da investigação inicial
 
 - Base da branch: `acc73cf2` (ver SHA completo em `git rev-parse HEAD` na base). O `origin/main` foi atualizado antes da análise. Os outros checkouts, inclusive `release-qa`, foram preservados.
 - Implantação informada: `01a18d0b-abef-711f-bc6f-c171598f785d`. O log informa `Source: previous deployment source`; não contém o SHA. Portanto o SHA efetivamente publicado **não está confirmado** por esse log.
