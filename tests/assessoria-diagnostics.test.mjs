@@ -12,6 +12,37 @@ require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule
 const { diagnosticoAssessoria, erroSeguro } = require('../src/erp/core/diagnostico-assessoria.ts');
 const db = require('../src/erp/core/db.ts');
 
+test('marcadores de processamento permanecem isolados por requisição e não expõem contexto', async () => {
+  const app = require('../src/erp/core/app.ts');
+  const before = process.env.ERP_ASSESSORIA_DIAGNOSTICO;
+  const original = console.info;
+  const logs = [];
+  try {
+    process.env.ERP_ASSESSORIA_DIAGNOSTICO = '1';
+    console.info = (...args) => logs.push(JSON.parse(args[1]));
+    app.get('diagnostic-stage-fixture', '/inicio', async () => {
+      app.marcarEtapaDiagnostico('painel.leituras.fim');
+      await new Promise(resolve => setTimeout(resolve, 2));
+      app.marcarEtapaDiagnostico('painel.calculos.fim');
+      return 'PRIVATE-context';
+    });
+    const responses = await Promise.all([1, 2].map(() => app.despachar(new Request('http://localhost/erp/inicio'))));
+    const ids = responses.map(response => response.headers.get('x-erp-diagnostic-id'));
+    assert.notEqual(ids[0], ids[1]);
+    for (const id of ids) assert.deepEqual(logs.filter(log => log.id === id).map(log => log.fase),
+      ['handler.inicio', 'painel.leituras.fim', 'painel.calculos.fim', 'resposta']);
+    assert.doesNotMatch(JSON.stringify(logs), /PRIVATE/);
+    logs.length = 0;
+    delete process.env.ERP_ASSESSORIA_DIAGNOSTICO;
+    assert.equal((await app.despachar(new Request('http://localhost/erp/inicio'))).status, 200);
+    assert.equal(logs.length, 0);
+  } finally {
+    console.info = original;
+    if (before === undefined) delete process.env.ERP_ASSESSORIA_DIAGNOSTICO;
+    else process.env.ERP_ASSESSORIA_DIAGNOSTICO = before;
+  }
+});
+
 function proxyFixture(getClaims) {
   const source = readFileSync(new URL('../src/lib/supabase/proxy.ts', import.meta.url), 'utf8');
   const js = ts.transpileModule(source, { compilerOptions: {

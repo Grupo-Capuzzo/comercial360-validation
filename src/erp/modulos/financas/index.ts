@@ -17,6 +17,7 @@ import {
 } from "../../core/flask";
 import { lerArquivo } from "../../core/arquivos";
 import { erroSeguro } from "../../core/diagnostico-assessoria";
+import { marcarEtapaDiagnostico } from "../../core/app";
 import * as portal from "../portal";
 import * as d from "./dados";
 import { cnpj_valido, consultar, consultar_local, cpf_valido, fmt_doc } from "./consulta_doc";
@@ -251,6 +252,7 @@ export function registrar() {
         }
       })(),
     ]);
+    marcarEtapaDiagnostico("painel.leituras.fim");
     const contas = contas0.filter((c: any) => d.TIPOS_SALDO.includes(c.tipo));
     const em7 = hoje.addDays(7).isoformat();
     const lim30 = hoje.addDays(30).isoformat();
@@ -298,6 +300,7 @@ export function registrar() {
     ind.liquido_30 = saldo_atual + ind.receber_30.valor - ind.pagar_30.valor
       + ind.receber_venc.valor - ind.pagar_venc.valor;
     const maior = Math.max(...contas.map((c) => Math.abs(c.saldo)), 1);
+    marcarEtapaDiagnostico("painel.calculos.fim");
     return render_template("financas/painel.html", {
       ...ctx, contas, cards, mes,
       saldo_atual, proj, proximos, ind, maior, produtos, produtos_indisponiveis,

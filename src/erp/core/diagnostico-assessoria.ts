@@ -7,6 +7,13 @@ export interface MedidaConsulta {
   codigo: string | null;
 }
 
+export type EtapaDiagnostico =
+  | "proxy.inicio" | "proxy.auth.inicio" | "proxy.auth.fim" | "proxy.auth.erro" | "proxy.fim" | "handler.inicio"
+  | "painel.leituras.fim" | "painel.calculos.fim"
+  | "template.contexto.inicio" | "template.contexto.fim"
+  | "template.ambiente.inicio" | "template.ambiente.fim"
+  | "template.render.inicio" | "template.render.fim";
+
 /** Never log PostgreSQL detail, query, parameters, error message or connection strings. */
 export function erroSeguro(error: unknown) {
   const e = error as { code?: unknown; name?: unknown; stack?: unknown } | null;
@@ -46,7 +53,7 @@ export function diagnosticoAssessoria(rota: string) {
   };
   return {
     id,
-    etapa: (fase: "proxy.inicio" | "proxy.auth.inicio" | "proxy.auth.fim" | "proxy.auth.erro" | "proxy.fim" | "handler.inicio") => {
+    etapa: (fase: EtapaDiagnostico) => {
       emit({ fase, ms: Math.round(performance.now() - start) });
     },
     consulta: (medida: MedidaConsulta) => emit({ fase: "consulta", ...medida }),
