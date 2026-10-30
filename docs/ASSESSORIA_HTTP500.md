@@ -56,6 +56,14 @@ Não há Server Component React nem layout React específico da Assessoria: o ha
 
 ## Desempenho: constatações, sem mudança de regras
 
+### Reteste autenticado após publicar o PR #11 (30/10/2026)
+
+Implantação Hostinger `01a18d60-4c3d-702c-9da6-acf70437c285`, fonte `main` em `56cbe40768ba8a1ca1b3c9fbb3821ed25d6eebda`. Início respondeu 200 em 2.801 ms. Nas tentativas da Assessoria às 12:19:42 e 12:20:03 (Brasília), a validação Auth terminou em 3 e 14 ms. Os handlers registraram respectivamente 30 e 33 consultas concluídas com sucesso, com a última em aproximadamente 3,7 e 4,1 segundos desde a entrada. Não apareceu evento `resposta` nem exceção segura desses handlers. A comparação dos hashes com o teste local encontrou as consultas financeiras esperadas concluídas em ambos os traces. Isso delimita a investigação, mas não prova a função que ficou bloqueada.
+
+O build de produção local, inclusive com Node 22.23.4 e compilador SWC WASM, respondeu 200 com leituras reais protegidas por transações READ ONLY. O teste usa uma identidade sintética somente no processo isolado, portanto não valida a sessão/permissão real nem reproduz o runtime Linux da Hostinger. A duração desse teste inclui inicialização do CLI por consulta e não é uma comparação de desempenho com produção.
+
+Marcadores adicionais distinguem conclusão das leituras, conclusão dos cálculos, criação do contexto, inicialização do ambiente e renderização do template. Usam o mesmo UUID do handler e o mesmo opt-in existente, sem registrar conteúdo, mudar consultas/cálculos ou capturar erros adicionais. A falta de um marcador final permite localizar a próxima etapa a investigar; não se apresenta esta instrumentação como correção definitiva do 500. Nenhum aumento de timeout ou alteração financeira foi feito.
+
 O painel carrega todos os lançamentos não cancelados antes de calcular saldo em aberto, embora mostre só 12 próximos vencimentos. `_ctx` faz leituras sequenciais; há leituras repetidas concorrentes antes do cache ser preenchido; o resumo de produtos faz agregações sequenciais por condomínio. O pool é limitado (padrão 5) e pode enfileirar chamadas. Não foi comprovado timeout dessas consultas na Hostinger.
 
 Não foi colocado LIMIT na entrada dos cálculos: truncar linhas alteraria totais financeiros. Qualquer otimização posterior deve comparar os mesmos indicadores e manter o conjunto completo de dados.

@@ -9,6 +9,7 @@ import { Sessao } from "./sessao";
 import { PyDate } from "./py";
 import { comCacheDeLeitura, medidasBanco } from "./db";
 import { diagnosticoAssessoria, erroSeguro, rotaDiagnosticoPortal } from "./diagnostico-assessoria";
+import type { EtapaDiagnostico } from "./diagnostico-assessoria";
 import { FONTES } from "../templates.gen";
 
 export type Handler = (...params: any[]) => Promise<any> | any;
@@ -81,7 +82,7 @@ export function templateGlobal(nome: string, v: any) { globais.push([nome, v]); 
 export function blueprintStatic(bp: string, caminhoPublico: string) { estaticos[bp + ".static"] = caminhoPublico; }
 
 // ── Contexto da requisição (equivalente a request/session/g do Flask) ──
-interface Ctx { req: Req; sessao: Sessao; resp?: Resposta; }
+interface Ctx { req: Req; sessao: Sessao; resp?: Resposta; diagnostico?: ReturnType<typeof diagnosticoAssessoria>; }
 const als = new AsyncLocalStorage<Ctx>();
 function ctx(): Ctx {
   const c = als.getStore();
@@ -91,6 +92,11 @@ function ctx(): Ctx {
 export function request(): Req { return ctx().req; }
 export function session(): Sessao { return ctx().sessao; }
 export function g(): Record<string, any> { return ctx().req.g; }
+
+/** Fixed stage names only; scoped to this request and disabled without the diagnostic flag. */
+export function marcarEtapaDiagnostico(fase: EtapaDiagnostico) {
+  als.getStore()?.diagnostico?.etapa(fase);
+}
 
 export function flash(msg: string, categoria = "message") {
   const s = session();
@@ -200,8 +206,17 @@ function contextoPadrao(): Record<string, any> {
 }
 
 export function renderTemplate(nome: string, contexto: Record<string, any> = {}): string {
+  const rastrear = nome === "financas/painel.html";
+  if (rastrear) marcarEtapaDiagnostico("template.contexto.inicio");
   const tudo = { ...contextoPadrao(), ...contexto };
-  return amb().render(nome, tudo);
+  if (rastrear) marcarEtapaDiagnostico("template.contexto.fim");
+  if (rastrear) marcarEtapaDiagnostico("template.ambiente.inicio");
+  const ambiente = amb();
+  if (rastrear) marcarEtapaDiagnostico("template.ambiente.fim");
+  if (rastrear) marcarEtapaDiagnostico("template.render.inicio");
+  const html = ambiente.render(nome, tudo);
+  if (rastrear) marcarEtapaDiagnostico("template.render.fim");
+  return html;
 }
 export const render_template = renderTemplate;
 export function renderTemplateString(src: string, contexto: Record<string, any> = {}): string {
@@ -279,7 +294,7 @@ export async function despachar(r: Request, preparar?: (req: Req) => Promise<voi
   if (mont) req.rota = mont[0] + req.path.slice(mont[1].length);
   const sessao = Sessao.ler(req.cookies.get(Sessao.nomeCookie));
   const diagnostico = diagnosticoAssessoria(req.rota);
-  return als.run({ req, sessao }, () => comCacheDeLeitura(async () => {
+  return als.run({ req, sessao, diagnostico }, () => comCacheDeLeitura(async () => {
     diagnostico?.etapa("handler.inicio");
     let resp: Resposta;
     try {
