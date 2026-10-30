@@ -8,6 +8,7 @@ import { HttpErro, MultiDict, PREFIXO, Req, Resposta, jsonify, multiDictTemplate
 import { Sessao } from "./sessao";
 import { PyDate } from "./py";
 import { comCacheDeLeitura, medidasBanco } from "./db";
+import { diagnosticoAssessoria, erroSeguro, rotaDiagnosticoPortal } from "./diagnostico-assessoria";
 import { FONTES } from "../templates.gen";
 
 export type Handler = (...params: any[]) => Promise<any> | any;
@@ -277,7 +278,9 @@ export async function despachar(r: Request, preparar?: (req: Req) => Promise<voi
   const mont = montagens.find(([, e]) => req.path === e || req.path.startsWith(e + "/"));
   if (mont) req.rota = mont[0] + req.path.slice(mont[1].length);
   const sessao = Sessao.ler(req.cookies.get(Sessao.nomeCookie));
+  const diagnostico = diagnosticoAssessoria(req.rota);
   return als.run({ req, sessao }, () => comCacheDeLeitura(async () => {
+    diagnostico?.etapa("handler.inicio");
     let resp: Resposta;
     try {
       if (preparar) await preparar(req);
@@ -301,13 +304,18 @@ export async function despachar(r: Request, preparar?: (req: Req) => Promise<voi
     } catch (e: any) {
       if (e instanceof HttpErro) resp = await tratarErro(e);
       else {
-        console.error("[erp]", req.method, req.path, e);
+        if (rotaDiagnosticoPortal(req.rota)) console.error("[erp] portal", { id: diagnostico?.id, ...erroSeguro(e) });
+        else console.error("[erp]", req.method, req.path, e);
         resp = paginaErro(500);
       }
     }
     // Medição de tempo (ver no navegador: Ctrl+U e procurar "erp:" no fim da página)
     const db = medidasBanco();
     const total = Math.round(performance.now() - t0);
+    if (diagnostico) {
+      diagnostico.finalizar(resp.status, total, db);
+      resp.headers.set("x-erp-diagnostic-id", diagnostico.id);
+    }
     resp.headers.set("server-timing", `erp;dur=${total}, db;desc="${db.n} consultas";dur=${db.ms}`);
     if (typeof resp.body === "string" && (resp.headers.get("content-type") ?? "").startsWith("text/html")) {
       resp.body = resp.body + `\n<!-- erp: ${total} ms no servidor; ${db.n} consultas ao banco em ${db.ms} ms -->\n`;
@@ -316,7 +324,7 @@ export async function despachar(r: Request, preparar?: (req: Req) => Promise<voi
     if (sessao.alterada) resp.headers.append("set-cookie", sessao.cookie());
     if (req.method === "HEAD") return new Response(null, { status: resp.status, headers: resp.headers });
     return new Response(resp.body, { status: resp.status, headers: resp.headers });
-  }));
+  }, diagnostico?.consulta));
 }
 
 export { MultiDict };

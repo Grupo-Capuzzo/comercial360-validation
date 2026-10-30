@@ -1,0 +1,80 @@
+# Assessoria Financeira: investigação de 30/10/2026
+
+## Situação comprovada
+
+- Base da branch: `acc73cf2` (ver SHA completo em `git rev-parse HEAD` na base). O `origin/main` foi atualizado antes da análise. Os outros checkouts, inclusive `release-qa`, foram preservados.
+- Implantação informada: `01a18d0b-abef-711f-bc6f-c171598f785d`. O log informa `Source: previous deployment source`; não contém o SHA. Portanto o SHA efetivamente publicado **não está confirmado** por esse log.
+- Build Hostinger: passou em Node 22 / Next 16.3.8, usando fallback SWC WASM. Os avisos GLIBC não impediram esse build; não provam a causa do 500.
+- Logs de execução fornecidos: somente inicializações `Ready`, sem exceção de `/erp/financas/assessoria`.
+- O trecho enviado do DevTools é da extensão Apollo (`chrome-extension@17.2.1`), não uma resposta HTTP do Portal.
+- Verificação pública sem sessão: `/login-grupo` = 200 (Server-Timing ERP 5 ms); `/erp/inicio` e `/erp/financas/assessoria` = 307 para `/login`. Isso confirma que a proteção está ativa, mas não testa a página autenticada na Hostinger.
+- Foram consultados apenas metadados e SELECTs no Supabase `umvldqzzliqmgkvoedyd`. Nenhuma migration, carga, alteração de dados, usuários, permissões ou RLS foi executada.
+
+## Nova evidência: timeout do LiteSpeed
+
+O usuário forneceu a resposta de `/erp/inicio` em **30/10/2026 14:30:23 UTC (11:30:23 Brasília)**: status 500, `server: LiteSpeed`, HTML de 384 bytes com título `500 Internal Server Error` e corpo `Request Timeout` / `This request takes too long to process`. Não há `server-timing` do ERP nessa resposta. Os cookies compartilhados não foram usados, copiados para arquivos ou incluídos em logs/PR.
+
+Isso comprova o timeout da resposta de Início no servidor intermediário, não a etapa interna que demorou nem que todas as falhas da Assessoria tenham a mesma origem. Não se deve aumentar o Connection Timeout como se fosse correção comprovada.
+
+No Supabase, a janela 14:25–14:35 UTC não apresentou erro PostgreSQL do ERP. A consulta atual a `pg_stat_activity` encontrou uma conexão `erp_app` ociosa e nenhum bloqueio; esse retrato não reconstrói o estado do momento da falha. Os eventos Auth globais de credenciais inválidas nessa janela não foram atribuídos ao usuário nem ao timeout sem correlação.
+
+A instrumentação foi ampliada estritamente para `/erp/inicio`, pois a falha dessa segunda rota agora está comprovada. O proxy registra início/validação Auth/fim antes de chegar ao handler; o handler registra entrada, consultas e resposta. Os UUIDs do proxy e do handler são independentes: não são compartilhados por cache/global nem por cookies, e não substituem uma correlação por horário/rota. A lógica de autenticação e os cookies SSR permanecem intactos.
+
+**O timeout do LiteSpeed está comprovado para Início; a origem interna da demora e a causa da falha intermitente da Assessoria ainda não. Este PR continua sendo de diagnóstico e tratamento explícito de indisponibilidade, não uma alegação de correção definitiva do 500.**
+
+## Caminho da requisição
+
+1. `src/lib/supabase/proxy.ts`: valida sessão Supabase; redireciona sem sessão.
+2. `src/app/erp/[[...rota]]/route.ts`: Route Handler Node, dinâmico, chama `atender`.
+3. `src/erp/registro.ts`: registra os módulos.
+4. `src/erp/core/app.ts`: resolve `/financas/<slug>/`, executa os ganchos de acesso e o handler `financas.painel`.
+5. `src/erp/modulos/financas/index.ts`: `_empresa`, `_ctx`, contas, lançamentos em aberto, resumo do mês, produtos.
+6. `src/erp/modulos/financas/dados.ts` e `capuzzo.ts` / `gt.ts`: acesso financeiro via driver Postgres e `core/db.ts`.
+7. `financas/painel.html` → `financas/_layout.html` → `portal/base.html`, incluindo `operacao/_barra_empresa.html` e diálogos. As fontes usadas em produção ficam em `templates.gen.ts`.
+
+Não há Server Component React nem layout React específico da Assessoria: o handler renderiza Nunjucks.
+
+## Banco e reprodução
+
+- O ERP usa o schema privado `erp` via conexão PostgreSQL, não as views da Data API de `financeiro`/`portal_consulta` para esse painel. Não é necessário expor `erp` nem mover tabelas para `public`.
+- As tabelas financeiras e de produtos consultadas existem, têm SELECT para `erp_app`, RLS ativada e policies para esse papel. `erp_app` tem `search_path=erp`. Não foram modificados.
+- Assessoria: 6.303 lançamentos e 36 contas. Nenhum lançamento com `valor`/`vencimento` nulo; nenhuma conta com `saldo_inicial` nulo.
+- Categorias padrão e marcador de preparação GT já existem. Os caminhos existentes de preparação podem escrever; por isso a reprodução bloqueou qualquer comando que não fosse SELECT e executou as leituras em `BEGIN READ ONLY ... ROLLBACK`.
+- Logs recentes PostgreSQL 42P01 encontrados estavam associados a `operacao_tarefa_etapas`, não às consultas financeiras. Não foram tratados como causa deste incidente nem corrigidos fora do escopo.
+- Código-fonte com registro completo e dados reais: HTTP 200 no processo isolado.
+- Route Handler do build de produção, com sessão sintética apenas no processo de teste e leituras reais: HTTP 200, 31 consultas. Nenhum usuário real foi autenticado; nenhuma credencial real foi criada/alterada.
+- Limite da reprodução: as consultas reais passaram pela CLI administrativa em transações somente leitura, não pela conexão `erp_app` da Hostinger. Tentativa de assumir esse papel via CLI foi recusada (42501), sem mudança de permissões. A conexão, limites e reinícios de processos da Hostinger ainda precisam de evidência do ambiente.
+- Os tempos dessa reprodução incluem inicialização/HTTP da CLI. Não são tempos de carregamento representativos da Hostinger e não demonstram ganho antes/depois.
+
+## Alterações preparadas
+
+- Instrumentação opcional só para as rotas exatas Assessoria e Início: `ERP_ASSESSORIA_DIAGNOSTICO=1`, exclusivamente servidor. Desligada por padrão.
+- Log por consulta: UUID da requisição, hash da estrutura SQL, duração, sucesso e código de erro seguro. Não grava SQL, parâmetros, dados financeiros, emails, cookies, tokens, senhas, mensagens/detail do PostgreSQL nem string de conexão.
+- Consulta que falha agora também entra no contador/tempo. O erro original continua sendo propagado, com HTTP 500 nas falhas críticas.
+- Cabeçalho `x-erp-diagnostic-id` correlaciona a resposta com o log quando o diagnóstico está ligado. `server-timing` existente é preservado.
+- Falha no bloco opcional de produtos deixa aviso explícito de dados indisponíveis em vez de ocultar silenciosamente o bloco ou inventar indicadores zero. Cálculos e consultas não foram modificados.
+
+## Desempenho: constatações, sem mudança de regras
+
+O painel carrega todos os lançamentos não cancelados antes de calcular saldo em aberto, embora mostre só 12 próximos vencimentos. `_ctx` faz leituras sequenciais; há leituras repetidas concorrentes antes do cache ser preenchido; o resumo de produtos faz agregações sequenciais por condomínio. O pool é limitado (padrão 5) e pode enfileirar chamadas. Não foi comprovado timeout dessas consultas na Hostinger.
+
+Não foi colocado LIMIT na entrada dos cálculos: truncar linhas alteraria totais financeiros. Qualquer otimização posterior deve comparar os mesmos indicadores e manter o conjunto completo de dados.
+
+## Validação e publicação manual
+
+```sh
+node --test tests/assessoria-diagnostics.test.mjs tests/password-recovery.test.mjs
+npm run typecheck
+npm run build
+```
+
+Após revisão e decisão de publicar:
+
+1. Integrar o PR em `main` manualmente; nenhum merge/deploy faz parte desta entrega.
+2. Na Hostinger, confirmar repositório e branch `main`. Publicar a fonte atual do GitHub; guardar o SHA mostrado, evitando confundir uma restauração de fonte anterior com atualização do GitHub.
+3. Manter as variáveis existentes e habilitar temporariamente `ERP_ASSESSORIA_DIAGNOSTICO=1` (sem `NEXT_PUBLIC_`). Aplicar a configuração conforme o painel.
+4. Acessar a Assessoria autenticado. Em DevTools → Rede/Network → requisição Document da página → Headers, guardar status, `server-timing` e `x-erp-diagnostic-id`, sem copiar Cookie/Authorization.
+5. Correlacionar o UUID nos Logs de execução com `[erp:assessoria]` e `[erp] portal`. Para Início, verificar também `pagina=inicio`. Entrada `proxy.auth.inicio` sem `proxy.auth.fim` delimita espera na validação Auth; `handler.inicio` sem resposta delimita espera no ERP, e consultas concluídas ajudam a afunilar. Os traces do proxy e do handler têm UUIDs independentes; usar horário e página para relacioná-los. Se o 500 vier sem cabeçalhos ou logs dessas etapas, investigar runtime/proxy, reinícios e limites na Hostinger. Ausência de cabeçalhos isoladamente não prova a origem: o handler pode nem ter sido alcançado ou os cabeçalhos podem ter sido removidos.
+6. Após identificar/tratar a causa e validar 200 autenticado, desabilitar a variável de diagnóstico. Não executar SQL, migrations ou cargas para esta instrumentação.
+
+Se o Portal continuar indisponível, a restauração de uma implantação anteriormente funcional é uma decisão operacional separada; não foi realizada automaticamente.
