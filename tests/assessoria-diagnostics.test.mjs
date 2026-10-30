@@ -12,16 +12,82 @@ require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule
 const { diagnosticoAssessoria, erroSeguro } = require('../src/erp/core/diagnostico-assessoria.ts');
 const db = require('../src/erp/core/db.ts');
 
-test('diagnóstico desligado por padrão e restrito ao painel exato da Assessoria', () => {
+function proxyFixture(getClaims) {
+  const source = readFileSync(new URL('../src/lib/supabase/proxy.ts', import.meta.url), 'utf8');
+  const js = ts.transpileModule(source, { compilerOptions: {
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true,
+  } }).outputText;
+  const compiledModule = { exports: {} };
+  let cookies;
+  const dependencies = name => {
+    if (name === '@supabase/ssr') return { createServerClient: (_url, _key, options) => {
+      cookies = options.cookies;
+      return { auth: { getClaims: () => getClaims(cookies) } };
+    } };
+    if (name === '@/lib/supabase/config') return { supabaseConfig: { url: 'https://fixture.example.invalid', publishableKey: 'fixture-only' } };
+    if (name === '@/erp/core/diagnostico-assessoria') return require('../src/erp/core/diagnostico-assessoria.ts');
+    return require(name);
+  };
+  new Function('require', 'module', 'exports', js)(dependencies, compiledModule, compiledModule.exports);
+  return compiledModule.exports;
+}
+
+test('proxy registra início antes de aguardar Auth e preserva cookies SSR, sem conteúdo sensível nos logs', async () => {
+  const before = process.env.ERP_ASSESSORIA_DIAGNOSTICO;
+  const original = console.info;
+  const logs = [];
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const { NextRequest } = require('next/server');
+  try {
+    process.env.ERP_ASSESSORIA_DIAGNOSTICO = '1';
+    console.info = (...args) => logs.push(args);
+    const { updateSession } = proxyFixture(async cookies => {
+      await pending;
+      cookies.setAll([{ name: 'fixture-session', value: 'PRIVATE-cookie', options: { httpOnly: true, path: '/' } }], { 'Cache-Control': 'private, no-store' });
+      return { data: { claims: { sub: 'fixture-user' } }, error: null };
+    });
+    const request = new NextRequest('http://localhost/erp/inicio');
+    const responsePromise = updateSession(request);
+    assert.deepEqual(logs.map(entry => JSON.parse(entry[1]).fase), ['proxy.inicio', 'proxy.auth.inicio']);
+    release();
+    const response = await responsePromise;
+    assert.equal(response.status, 200);
+    assert.equal(request.cookies.get('fixture-session').value, 'PRIVATE-cookie');
+    assert.match(response.headers.get('set-cookie'), /fixture-session=PRIVATE-cookie/);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.deepEqual(logs.map(entry => JSON.parse(entry[1]).fase), ['proxy.inicio', 'proxy.auth.inicio', 'proxy.auth.fim', 'proxy.fim']);
+    assert.doesNotMatch(JSON.stringify(logs), /PRIVATE|fixture-user|fixture-session/);
+  } finally {
+    release();
+    console.info = original;
+    if (before === undefined) delete process.env.ERP_ASSESSORIA_DIAGNOSTICO;
+    else process.env.ERP_ASSESSORIA_DIAGNOSTICO = before;
+  }
+});
+
+test('instrumentação não libera Início sem sessão nem engole rejeição da validação Auth', async () => {
+  const { NextRequest } = require('next/server');
+  const unauthorized = proxyFixture(async () => ({ data: { claims: null }, error: null }));
+  const response = await unauthorized.updateSession(new NextRequest('http://localhost/erp/inicio'));
+  assert.equal(response.status, 307);
+  assert.equal(new URL(response.headers.get('location')).pathname, '/login');
+  const failure = new Error('private network detail');
+  const networkFailure = proxyFixture(async () => { throw failure; });
+  await assert.rejects(networkFailure.updateSession(new NextRequest('http://localhost/erp/financas/assessoria')), error => error === failure);
+});
+
+test('diagnóstico desligado por padrão e restrito às duas rotas com falha reportada', () => {
   const before = process.env.ERP_ASSESSORIA_DIAGNOSTICO;
   try {
     delete process.env.ERP_ASSESSORIA_DIAGNOSTICO;
     assert.equal(diagnosticoAssessoria('/financas/assessoria'), null);
     process.env.ERP_ASSESSORIA_DIAGNOSTICO = '1';
-    for (const path of ['/inicio', '/financas/assessoria/receber', '/financas/cred/', '/financas/assessoria-extra']) {
+    for (const path of ['/inicio/agenda', '/financas/assessoria/receber', '/financas/cred/', '/financas/assessoria-extra']) {
       assert.equal(diagnosticoAssessoria(path), null);
     }
     assert.ok(diagnosticoAssessoria('/financas/assessoria/'));
+    assert.ok(diagnosticoAssessoria('/inicio'));
   } finally {
     if (before === undefined) delete process.env.ERP_ASSESSORIA_DIAGNOSTICO;
     else process.env.ERP_ASSESSORIA_DIAGNOSTICO = before;
@@ -86,7 +152,7 @@ test('logs de consulta e resposta contêm apenas identificação e medidas', () 
     diagnostic.finalizar(200, 5, { n: 1, ms: 3 });
     assert.equal(logs.length, 2);
     const query = JSON.parse(logs[0][1]);
-    assert.deepEqual(Object.keys(query).sort(), ['id', 'fase', 'consulta', 'ms', 'sucesso', 'codigo'].sort());
+    assert.deepEqual(Object.keys(query).sort(), ['id', 'pagina', 'fase', 'consulta', 'ms', 'sucesso', 'codigo'].sort());
     assert.equal(JSON.parse(logs[1][1]).id, query.id);
   } finally {
     console.info = original;

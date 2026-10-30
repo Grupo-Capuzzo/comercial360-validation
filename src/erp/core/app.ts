@@ -8,7 +8,7 @@ import { HttpErro, MultiDict, PREFIXO, Req, Resposta, jsonify, multiDictTemplate
 import { Sessao } from "./sessao";
 import { PyDate } from "./py";
 import { comCacheDeLeitura, medidasBanco } from "./db";
-import { diagnosticoAssessoria, erroSeguro, rotaAssessoria } from "./diagnostico-assessoria";
+import { diagnosticoAssessoria, erroSeguro, rotaDiagnosticoPortal } from "./diagnostico-assessoria";
 import { FONTES } from "../templates.gen";
 
 export type Handler = (...params: any[]) => Promise<any> | any;
@@ -280,6 +280,7 @@ export async function despachar(r: Request, preparar?: (req: Req) => Promise<voi
   const sessao = Sessao.ler(req.cookies.get(Sessao.nomeCookie));
   const diagnostico = diagnosticoAssessoria(req.rota);
   return als.run({ req, sessao }, () => comCacheDeLeitura(async () => {
+    diagnostico?.etapa("handler.inicio");
     let resp: Resposta;
     try {
       if (preparar) await preparar(req);
@@ -303,7 +304,7 @@ export async function despachar(r: Request, preparar?: (req: Req) => Promise<voi
     } catch (e: any) {
       if (e instanceof HttpErro) resp = await tratarErro(e);
       else {
-        if (rotaAssessoria(req.rota)) console.error("[erp] assessoria", { id: diagnostico?.id, ...erroSeguro(e) });
+        if (rotaDiagnosticoPortal(req.rota)) console.error("[erp] portal", { id: diagnostico?.id, ...erroSeguro(e) });
         else console.error("[erp]", req.method, req.path, e);
         resp = paginaErro(500);
       }

@@ -2,8 +2,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { supabaseConfig } from "@/lib/supabase/config";
+import { diagnosticoAssessoria } from "@/erp/core/diagnostico-assessoria";
 
 export async function updateSession(request: NextRequest) {
+  // Independent proxy trace: do not forward cookies/tokens or alter the SSR auth flow.
+  const path = request.nextUrl.pathname;
+  const diagnostico = diagnosticoAssessoria(path.startsWith("/erp/") ? path.slice(4) : "");
+  diagnostico?.etapa("proxy.inicio");
+  const concluir = (response: NextResponse) => {
+    diagnostico?.etapa("proxy.fim");
+    return response;
+  };
   if (["/forgot-password", "/reset-password"].includes(request.nextUrl.pathname)) {
     const response = NextResponse.next({ request });
     response.headers.set("Cache-Control", "private, no-store");
@@ -47,7 +56,13 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const { data } = await supabase.auth.getClaims();
+  diagnostico?.etapa("proxy.auth.inicio");
+  const result = await supabase.auth.getClaims().catch((error: unknown) => {
+    diagnostico?.etapa("proxy.auth.erro");
+    throw error;
+  });
+  diagnostico?.etapa("proxy.auth.fim");
+  const { data } = result;
   const claims = data?.claims;
 
   if (
@@ -56,12 +71,12 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/auth")
   ) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
-      return NextResponse.json({ code: "session_required" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
+      return concluir(NextResponse.json({ code: "session_required" }, { status: 401, headers: { "Cache-Control": "private, no-store" } }));
     }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return concluir(NextResponse.redirect(url));
   }
 
-  return supabaseResponse;
+  return concluir(supabaseResponse);
 }

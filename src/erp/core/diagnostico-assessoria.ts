@@ -30,16 +30,25 @@ export function rotaAssessoria(rota: string) {
   return /^\/financas\/assessoria\/?$/.test(rota);
 }
 
-/** Temporary opt-in diagnostics, scoped to this dashboard and this request only. */
+export function rotaDiagnosticoPortal(rota: string) {
+  return rotaAssessoria(rota) || /^\/inicio\/?$/.test(rota);
+}
+
+/** Temporary opt-in diagnostics for the two routes with reported production failures. */
 export function diagnosticoAssessoria(rota: string) {
-  if (process.env.ERP_ASSESSORIA_DIAGNOSTICO !== "1" || !rotaAssessoria(rota)) return null;
+  if (process.env.ERP_ASSESSORIA_DIAGNOSTICO !== "1" || !rotaDiagnosticoPortal(rota)) return null;
   const id = randomUUID();
+  const pagina = rotaAssessoria(rota) ? "assessoria" : "inicio";
+  const start = performance.now();
   const emit = (value: object) => {
-    try { console.info("[erp:assessoria]", JSON.stringify({ id, ...value })); }
+    try { console.info("[erp:assessoria]", JSON.stringify({ id, pagina, ...value })); }
     catch { /* Failure of the diagnostic output must not change the HTTP response. */ }
   };
   return {
     id,
+    etapa: (fase: "proxy.inicio" | "proxy.auth.inicio" | "proxy.auth.fim" | "proxy.auth.erro" | "proxy.fim" | "handler.inicio") => {
+      emit({ fase, ms: Math.round(performance.now() - start) });
+    },
     consulta: (medida: MedidaConsulta) => emit({ fase: "consulta", ...medida }),
     finalizar: (status: number, ms: number, banco: { n: number; ms: number }) => {
       emit({ fase: "resposta", status, ms, consultas: banco.n, banco_ms: banco.ms });

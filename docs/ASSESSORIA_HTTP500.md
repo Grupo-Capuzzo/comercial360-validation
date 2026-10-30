@@ -10,7 +10,17 @@
 - Verificação pública sem sessão: `/login-grupo` = 200 (Server-Timing ERP 5 ms); `/erp/inicio` e `/erp/financas/assessoria` = 307 para `/login`. Isso confirma que a proteção está ativa, mas não testa a página autenticada na Hostinger.
 - Foram consultados apenas metadados e SELECTs no Supabase `umvldqzzliqmgkvoedyd`. Nenhuma migration, carga, alteração de dados, usuários, permissões ou RLS foi executada.
 
-**A causa da falha intermitente de produção permanece não comprovada. Este PR é de diagnóstico e tratamento explícito de indisponibilidade, não uma alegação de correção definitiva do 500.**
+## Nova evidência: timeout do LiteSpeed
+
+O usuário forneceu a resposta de `/erp/inicio` em **30/10/2026 14:30:23 UTC (11:30:23 Brasília)**: status 500, `server: LiteSpeed`, HTML de 384 bytes com título `500 Internal Server Error` e corpo `Request Timeout` / `This request takes too long to process`. Não há `server-timing` do ERP nessa resposta. Os cookies compartilhados não foram usados, copiados para arquivos ou incluídos em logs/PR.
+
+Isso comprova o timeout da resposta de Início no servidor intermediário, não a etapa interna que demorou nem que todas as falhas da Assessoria tenham a mesma origem. Não se deve aumentar o Connection Timeout como se fosse correção comprovada.
+
+No Supabase, a janela 14:25–14:35 UTC não apresentou erro PostgreSQL do ERP. A consulta atual a `pg_stat_activity` encontrou uma conexão `erp_app` ociosa e nenhum bloqueio; esse retrato não reconstrói o estado do momento da falha. Os eventos Auth globais de credenciais inválidas nessa janela não foram atribuídos ao usuário nem ao timeout sem correlação.
+
+A instrumentação foi ampliada estritamente para `/erp/inicio`, pois a falha dessa segunda rota agora está comprovada. O proxy registra início/validação Auth/fim antes de chegar ao handler; o handler registra entrada, consultas e resposta. Os UUIDs do proxy e do handler são independentes: não são compartilhados por cache/global nem por cookies, e não substituem uma correlação por horário/rota. A lógica de autenticação e os cookies SSR permanecem intactos.
+
+**O timeout do LiteSpeed está comprovado para Início; a origem interna da demora e a causa da falha intermitente da Assessoria ainda não. Este PR continua sendo de diagnóstico e tratamento explícito de indisponibilidade, não uma alegação de correção definitiva do 500.**
 
 ## Caminho da requisição
 
@@ -38,7 +48,7 @@ Não há Server Component React nem layout React específico da Assessoria: o ha
 
 ## Alterações preparadas
 
-- Instrumentação opcional só para a rota exata da Assessoria: `ERP_ASSESSORIA_DIAGNOSTICO=1`, exclusivamente servidor. Desligada por padrão.
+- Instrumentação opcional só para as rotas exatas Assessoria e Início: `ERP_ASSESSORIA_DIAGNOSTICO=1`, exclusivamente servidor. Desligada por padrão.
 - Log por consulta: UUID da requisição, hash da estrutura SQL, duração, sucesso e código de erro seguro. Não grava SQL, parâmetros, dados financeiros, emails, cookies, tokens, senhas, mensagens/detail do PostgreSQL nem string de conexão.
 - Consulta que falha agora também entra no contador/tempo. O erro original continua sendo propagado, com HTTP 500 nas falhas críticas.
 - Cabeçalho `x-erp-diagnostic-id` correlaciona a resposta com o log quando o diagnóstico está ligado. `server-timing` existente é preservado.
@@ -64,7 +74,7 @@ Após revisão e decisão de publicar:
 2. Na Hostinger, confirmar repositório e branch `main`. Publicar a fonte atual do GitHub; guardar o SHA mostrado, evitando confundir uma restauração de fonte anterior com atualização do GitHub.
 3. Manter as variáveis existentes e habilitar temporariamente `ERP_ASSESSORIA_DIAGNOSTICO=1` (sem `NEXT_PUBLIC_`). Aplicar a configuração conforme o painel.
 4. Acessar a Assessoria autenticado. Em DevTools → Rede/Network → requisição Document da página → Headers, guardar status, `server-timing` e `x-erp-diagnostic-id`, sem copiar Cookie/Authorization.
-5. Correlacionar o UUID nos Logs de execução com `[erp:assessoria]` e `[erp] assessoria`. Se o 500 vier sem ambos os cabeçalhos e sem log do handler, investigar proxy/runtime da Hostinger, reinícios e limites com o suporte. Ausência de cabeçalhos isoladamente não prova falha de infraestrutura: o handler pode nem ter sido alcançado ou os cabeçalhos podem ter sido removidos.
+5. Correlacionar o UUID nos Logs de execução com `[erp:assessoria]` e `[erp] portal`. Para Início, verificar também `pagina=inicio`. Entrada `proxy.auth.inicio` sem `proxy.auth.fim` delimita espera na validação Auth; `handler.inicio` sem resposta delimita espera no ERP, e consultas concluídas ajudam a afunilar. Os traces do proxy e do handler têm UUIDs independentes; usar horário e página para relacioná-los. Se o 500 vier sem cabeçalhos ou logs dessas etapas, investigar runtime/proxy, reinícios e limites na Hostinger. Ausência de cabeçalhos isoladamente não prova a origem: o handler pode nem ter sido alcançado ou os cabeçalhos podem ter sido removidos.
 6. Após identificar/tratar a causa e validar 200 autenticado, desabilitar a variável de diagnóstico. Não executar SQL, migrations ou cargas para esta instrumentação.
 
 Se o Portal continuar indisponível, a restauração de uma implantação anteriormente funcional é uma decisão operacional separada; não foi realizada automaticamente.
