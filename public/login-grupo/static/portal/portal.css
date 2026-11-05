@@ -72,10 +72,16 @@ button, input, select { font-family: inherit; font-size: inherit; }
 .tb-brand img.brand { height: 40px; display: block; }
 .tb-name b { font-family: var(--font-head); display: block; font-size: 1.02rem; line-height: 1.15; }
 .tb-name small { color: var(--accent); font-size: .66rem; letter-spacing: .2em; text-transform: uppercase; }
-.tb-nav { display: flex; align-items: center; gap: .6rem; }
-.tb-btn { display: inline-flex; align-items: center; gap: .45rem; color: var(--on-primary); font-size: .9rem;
-  padding: .45rem .95rem; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--on-primary) 25%, transparent); }
-.tb-btn .ms { color: var(--accent); width: 1.15rem; height: 1.15rem; }
+.tb-nav { display: flex; align-items: center; gap: .4rem; }
+.tb-btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; color: var(--on-primary);
+  min-height: 40px; min-width: 40px; font-size: .82rem; font-weight: 600; line-height: 1.15;
+  padding: .55rem .75rem; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--on-primary) 25%, transparent);
+  transition: border-color .15s, color .15s, background-color .15s; }
+.tb-btn .ms { color: var(--accent); width: 1rem; height: 1rem; flex: none; }
+.tb-btn .lbl { margin: 0; font: inherit; line-height: inherit; }
+.tb-nav .tb-tema { font-size: .82rem; padding: .55rem .75rem; }
+.tb-nav .tb-tema .ms { width: 1rem; height: 1rem; }
+.tb-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .tb-btn:hover { border-color: var(--accent); color: var(--accent); }
 .tb-user { position: relative; margin-left: .4rem; }
 .tb-user summary { list-style: none; display: flex; align-items: center; gap: .6rem; cursor: pointer; color: var(--on-primary); }
@@ -304,10 +310,13 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent-dark); widt
 }
 @media (max-width: 640px) {
   .wrap { padding: 0 1rem 2.5rem; }
-  .topbar-in { padding: .65rem 1rem; }
+  .topbar-in { padding: .65rem 1rem; flex-wrap: wrap; gap: .55rem; }
+  .tb-nav { width: 100%; flex-wrap: wrap; gap: .3rem; }
   .tb-brand img.brand { height: 26px; }
   .tb-btn .lbl, .tb-user .who, .tb-name small { display: none; }
-  .tb-btn { padding: .45rem; }
+  .tb-btn { padding: .45rem; min-width: 32px; min-height: 36px; border-radius: 10px; }
+  .tb-user { margin-left: auto; }
+  .tb-user summary > .ms { display: none; }
   .grid, .mods, .checks { grid-template-columns: 1fr; }
   .hero h1, .emp-head h1 { font-size: 1.8rem; }
   .emp-head { gap: 1rem; } .logo-square { width: 72px; height: 72px; border-radius: 18px; }

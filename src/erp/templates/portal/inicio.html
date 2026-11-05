@@ -8,10 +8,10 @@
     <p>Este é o resumo das empresas que você acompanha.</p>
   </div>
   <div class="ini-atalhos">
-    {% if acesso_juridico %}<a class="ini-atalho" href="{{ url_for('juridico.geral') }}">{{ ic('account_balance') }}<span><b>Jurídico Geral</b><small>Casos e demandas jurídicas do Grupo</small></span>{{ ic('chevron_right') }}</a>{% endif %}
     <a class="ini-atalho" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span><b>Empresas</b><small>Módulos de cada empresa</small></span>{{ ic('chevron_right') }}</a>
     <a class="ini-atalho" href="{{ url_for('portal_treinamentos') }}">{{ ic('school') }}<span><b>Treinamentos</b><small>{{ n_trein }} conteúdo{{ 's' if n_trein != 1 }} disponíve{{ 'is' if n_trein != 1 else 'l' }}</small></span>{{ ic('chevron_right') }}</a>
     {% if portal_user.crm %}<a class="ini-atalho" href="{{ url_for('portal_crm') }}">{{ ic('handshake') }}<span><b>CRM Geral</b><small>Comercial do Grupo</small></span>{{ ic('chevron_right') }}</a>{% endif %}
+    {% if acesso_juridico %}<a class="ini-atalho" href="{{ url_for('juridico.geral') }}">{{ ic('account_balance') }}<span><b>Jurídico Geral</b><small>Casos e demandas jurídicas do Grupo</small></span>{{ ic('chevron_right') }}</a>{% endif %}
   </div>
 </section>
 
