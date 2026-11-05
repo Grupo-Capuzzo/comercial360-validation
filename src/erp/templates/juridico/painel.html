@@ -1,0 +1,43 @@
+{% extends "portal/base.html" %}
+{% block title %}Jurídico {{ '· ' ~ empresa.nome if empresa else 'Geral' }} · Portal Grupo Capuzzo{% endblock %}
+{% block content %}
+<section class="hero">
+  <div><div class="eyebrow-line">Jurídico</div>
+    <h1>{{ empresa.nome if empresa else 'Jurídico Geral' }}</h1>
+    <p>{{ 'Área jurídica desta empresa.' if empresa else 'Área jurídica das empresas do Grupo Capuzzo.' }}</p>
+  </div>
+  {% if empresa %}<a class="btn-pill outline" href="{{ url_for('juridico.geral') }}">Jurídico Geral</a>{% endif %}
+</section>
+<a class="btn-pill" href="{{ url_for('juridico.novo', empresa=empresa.slug) if empresa else url_for('juridico.novo') }}">Novo caso</a>
+<a class="btn-pill outline" href="{{ url_for('juridico.pedidos') }}">Pedidos ao Jurídico</a>
+<form class="box" method="get">
+<div class="grid">
+<div><label class="lbl" for="busca">Cliente ou título</label><input class="inp" id="busca" name="busca" value="{{ filtros.busca }}" maxlength="200"></div>
+<div><label class="lbl" for="area">Área</label><select class="inp" id="area" name="area"><option value="">Todas</option>{% for area in areas %}<option value="{{ area }}" {{ 'selected' if filtros.area == area }}>{{ area }}</option>{% endfor %}</select></div>
+<div><label class="lbl" for="situacao">Situação</label><select class="inp" id="situacao" name="situacao">{% for situacao in situacoes %}<option value="{{ situacao }}" {{ 'selected' if filtros.situacao == situacao }}>{{ situacao }}</option>{% endfor %}</select></div>
+</div><div class="row-btns"><button class="btn-pill" type="submit">Filtrar casos</button></div>
+</form>
+<section class="box"><div class="box-title">Casos · página {{ filtros.pagina }}</div>
+<p class="hint">Até 50 casos por página. Alertas em dias civis, referência São Paulo; não calculam prazo processual.</p>
+{% for caso in casos %}<article><h2><a class="lnk" href="{{ url_for('juridico.ficha', id=caso.id) }}">{{ caso.titulo }}</a></h2>
+<p>{{ caso.cliente_nome }} · {{ nomes_empresas[caso.empresa] }} · {{ caso.area }}</p>
+<p>{{ caso.fase }} · {{ caso.instancia }} · {{ caso.situacao }}</p>
+{% if caso.situacao == 'ativo' %}<span class="tag {{ 'tag-off' if caso.alerta.dias != none and caso.alerta.dias <= 7 }}">{{ caso.alerta.rotulo }}</span><p>{{ caso.prazo or '' }} {{ caso.prazo_descricao }}</p>{% endif %}
+</article>{% else %}<p>Nenhum caso encontrado para estes filtros.</p>{% endfor %}
+<div class="row-btns">{% if filtros.pagina > 1 %}<a class="btn-pill outline" href="?busca={{ filtros.busca|urlencode }}&amp;area={{ filtros.area|urlencode }}&amp;situacao={{ filtros.situacao }}&amp;pagina={{ filtros.pagina-1 }}">Anterior</a>{% endif %}
+{% if proxima %}<a class="btn-pill outline" href="?busca={{ filtros.busca|urlencode }}&amp;area={{ filtros.area|urlencode }}&amp;situacao={{ filtros.situacao }}&amp;pagina={{ filtros.pagina+1 }}">Próxima</a>{% endif %}</div>
+</section>
+{% if not empresa %}
+<div class="mods">
+{% for e in empresas %}
+  <article class="mod mod-on"><div class="mod-ic">{{ ic('account_balance') }}</div>
+    <h3>{{ e.nome }}</h3><p>Área jurídica da empresa</p>
+    <div class="mod-foot"><span class="tag">Casos e prazos</span>
+      <a class="btn-pill" href="{{ url_for('juridico.empresa', slug=e.slug) }}">Acessar</a></div>
+  </article>
+{% else %}<p class="vazio">Nenhuma empresa liberada para o seu acesso.</p>{% endfor %}
+</div>
+{% else %}
+<a class="btn-pill outline" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">Voltar aos módulos da empresa</a>
+{% endif %}
+{% endblock %}

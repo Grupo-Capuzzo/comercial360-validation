@@ -5,7 +5,8 @@
   <span class="tb-name"><b>{{ empresa.nome }}</b><small>Treinamentos</small></span>
 {% endblock %}
 {% block tb_links %}
-  <a class="tb-btn" href="{{ url_for('portal_inicio') }}">{{ ic('home') }}<span class="lbl">Início</span></a>
+  {% if visao_juridica %}<a class="tb-btn" href="{{ url_for('juridico.geral') }}">{{ ic('account_balance') }}<span class="lbl">Jurídico</span></a>
+  {% else %}<a class="tb-btn" href="{{ url_for('portal_inicio') }}">{{ ic('home') }}<span class="lbl">Início</span></a>{% endif %}
   <a class="tb-btn tb-on" href="{{ url_for('portal_treinamentos') }}">{{ ic('school') }}<span class="lbl">Treinamentos</span></a>
   <a class="tb-btn" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">{{ ic('apps') }}<span class="lbl">Módulos</span></a>
 {% endblock %}

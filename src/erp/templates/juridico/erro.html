@@ -1,0 +1,6 @@
+{% extends "portal/base.html" %}
+{% block title %}Operação não concluída · Jurídico{% endblock %}
+{% block content %}
+<section class="box" role="alert"><h1>Operação não concluída</h1><p>{{ mensagem }}</p><p>Os dados não foram substituídos por informações fictícias.</p>
+<a class="btn-pill outline" href="{{ url_for('juridico.geral') }}">Voltar ao Jurídico</a></section>
+{% endblock %}

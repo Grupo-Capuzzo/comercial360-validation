@@ -1,0 +1,15 @@
+{% extends "portal/base.html" %}
+{% block title %}Pedidos ao Jurídico{% endblock %}
+{% block content %}
+<section class="page-title"><h1>{{ 'Pedidos ao Jurídico' if legal else 'Meus pedidos ao Jurídico' }}</h1></section>
+<section class="box"><div class="box-title">Pedidos · página {{ pagina }}</div>
+{% for p in pedidos %}<article><h2><a class="lnk" href="{{ url_for('juridico.pedido',id=p.id) }}">{{ p.area }} · {{ p.situacao }}</a></h2><p>{{ p.descricao|truncate(180) }}</p><p>Prazo: {{ p.prazo or 'A definir pelo Jurídico' }}</p></article>
+{% else %}<p>Nenhum pedido disponível para o seu acesso.</p>{% endfor %}
+<div class="row-btns">{% if pagina>1 %}<a class="btn-pill outline" href="?pagina={{ pagina-1 }}">Anterior</a>{% endif %}{% if proxima %}<a class="btn-pill outline" href="?pagina={{ pagina+1 }}">Próxima</a>{% endif %}</div></section>
+<form class="box" method="post" action="{{ url_for('juridico.pedido_criar') }}"><div class="box-title">Abrir pedido</div>
+<input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ id_novo }}">
+<label class="lbl" for="empresa">Empresa</label><select class="inp" id="empresa" name="empresa" required>{% for e in empresas %}<option value="{{ e.slug }}">{{ e.nome }}</option>{% endfor %}</select>
+<label class="lbl" for="area">Área</label><select class="inp" id="area" name="area" required>{% for a in areas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}</select>
+<label class="lbl" for="descricao">Descrição do pedido</label><textarea class="inp" id="descricao" name="descricao" maxlength="10000" rows="5" required></textarea>
+<p class="hint">O prazo será definido pelo Jurídico. Depois de abrir, você poderá anexar documentos.</p><div class="row-btns"><button class="btn-pill" type="submit">Abrir pedido</button></div></form>
+{% endblock %}

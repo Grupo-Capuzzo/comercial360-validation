@@ -1,0 +1,32 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ caso.titulo }} · Jurídico{% endblock %}
+{% block content %}
+<section class="hero"><div><div class="eyebrow-line">{{ empresa_nome }} · {{ caso.area }}</div><h1>{{ caso.titulo }}</h1><p>{{ caso.cliente_nome }}</p></div>
+<a class="btn-pill" href="{{ url_for('juridico.editar', id=caso.id) }}">Editar caso e prazo</a></section>
+<section class="box"><div class="box-title">Ficha do caso</div>
+<dl class="grid">
+{% for nome, rotulo in [['cliente_tipo','Tipo de pessoa'],['cliente_documento','CPF / CNPJ'],['cliente_telefone','Telefone'],['cliente_email','E-mail'],['condicao','Condição'],['responsavel','Responsável'],['fase','Fase'],['situacao','Situação'],['instancia','Instância'],['numero_processo','Processo'],['vara','Vara / tribunal'],['comarca','Comarca'],['parte_contraria','Parte contrária']] %}
+<div><dt>{{ rotulo }}</dt><dd>{{ caso[nome] or 'Não informado' }}</dd></div>{% endfor %}
+</dl><p>{{ caso.descricao }}</p>
+<h2>Próximo prazo</h2><p>{{ caso.prazo or 'Sem prazo definido' }} · {{ caso.prazo_descricao }}</p>
+{% if caso.situacao == 'ativo' %}<span class="tag {{ 'tag-off' if alerta.dias != none and alerta.dias <= 7 }}">{{ alerta.rotulo }}</span>{% else %}<span class="tag">Caso {{ caso.situacao }} — {{ caso.encerrado_em }}</span>{% endif %}
+<p class="hint">Dias civis, referência São Paulo. Não substitui conferência de prazo processual.</p>
+</section>
+<form class="box" method="post" action="{{ url_for('juridico.anotar', id=caso.id) }}">
+<div class="box-title">Registrar movimentação</div><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+<label class="lbl" for="tipo">Tipo</label><select class="inp" id="tipo" name="tipo"><option value="andamento">Andamento</option><option value="contato">Contato</option><option value="anotacao">Anotação</option></select>
+<label class="lbl" for="descricao">Descrição *</label><textarea class="inp" id="descricao" name="descricao" required maxlength="10000" rows="4"></textarea>
+<div class="row-btns"><button class="btn-pill" type="submit">Registrar movimentação</button></div>
+</form>
+<section class="box"><div class="box-title">Linha do tempo · registros mais recentes primeiro</div>
+{% for evento in eventos %}<article><h3>{{ evento.tipo }} · {{ evento.criado_em }}</h3><p style="white-space:pre-wrap;overflow-wrap:anywhere">{{ evento.descricao }}</p><p class="hint">Autor (registro do Portal): {{ evento.autor }}</p>
+{% if evento.novo %}<details><summary>{{ 'Campos alterados' if evento.anterior else 'Dados cadastrados' }}</summary><dl>
+{% for chave, valor in evento.novo %}{% if chave not in ['id','empresa','criado_em','atualizado_em','versao'] and (not evento.anterior or evento.anterior[chave] != valor) %}
+<dt>{{ chave|replace('_', ' ') }}</dt><dd>{% if evento.anterior %}{{ evento.anterior[chave] or 'Não informado' }} → {% endif %}{{ valor or 'Não informado' }}</dd>{% endif %}{% endfor %}
+</dl></details>{% endif %}</article>{% else %}<p>Nenhuma movimentação nesta página.</p>{% endfor %}
+<div class="row-btns">{% if pagina > 1 %}<a class="btn-pill outline" href="{{ url_for('juridico.ficha', id=caso.id, pagina=pagina-1) }}">Mais recentes</a>{% endif %}
+{% if proxima %}<a class="btn-pill outline" href="{{ url_for('juridico.ficha', id=caso.id, pagina=pagina+1) }}">Mais antigas</a>{% endif %}</div>
+</section>
+<a class="btn-pill outline" href="{{ url_for('juridico.empresa', slug=caso.empresa) }}">Voltar ao Jurídico da empresa</a>
+<a class="btn-pill" href="{{ url_for('juridico.documentos',id=caso.id) }}">Documentos do caso</a>
+{% endblock %}

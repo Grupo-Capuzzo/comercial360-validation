@@ -1,0 +1,16 @@
+{% extends "portal/base.html" %}
+{% block title %}Pedido ao Jurídico{% endblock %}
+{% block content %}
+<section class="page-title"><h1>Pedido · {{ pedido.area }}</h1></section>
+<section class="box"><p>{{ pedido.descricao }}</p><p>Situação: {{ pedido.situacao }}</p><p>Prazo: {{ pedido.prazo or 'A definir pelo Jurídico' }}</p>
+<h2>Resposta final</h2><p>{{ pedido.resposta_final or 'Ainda não registrada' }}</p></section>
+{% if legal %}<form class="box" method="post" action="{{ url_for('juridico.pedido_responder',id=pedido.id) }}">
+<div class="box-title">Atender pedido</div><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="versao" value="{{ pedido.versao }}">
+<label class="lbl" for="situacao">Situação</label><select class="inp" id="situacao" name="situacao">{% for s in ['aberto','em_atendimento','concluido','cancelado'] %}<option value="{{ s }}" {{ 'selected' if s==pedido.situacao }}>{{ s }}</option>{% endfor %}</select>
+<label class="lbl" for="prazo">Prazo definido pelo Jurídico</label><input class="inp" id="prazo" name="prazo" type="date" value="{{ pedido.prazo or '' }}">
+<label class="lbl" for="resposta_final">Resposta final (visível ao solicitante)</label><textarea class="inp" id="resposta_final" name="resposta_final" rows="5" maxlength="10000">{{ pedido.resposta_final }}</textarea>
+<div class="row-btns"><button class="btn-pill" type="submit">Salvar atendimento</button></div></form>{% endif %}
+<section class="box"><div class="box-title">Documentos</div>{% include "juridico/_documentos.html" %}</section>
+<form class="box" method="post" enctype="multipart/form-data" action="{{ url_for('juridico.documento_pedido',id=pedido.id) }}">{% include "juridico/_upload.html" %}</form>
+<a class="btn-pill outline" href="{{ url_for('juridico.pedidos') }}">Voltar aos pedidos</a>
+{% endblock %}

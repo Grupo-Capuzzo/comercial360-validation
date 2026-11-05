@@ -8,6 +8,7 @@ import {
 import { definirUsuarioAuth, emailLogado, entrar, sair, senhaConfere } from "../core/auth";
 import { ICONES_PORTAL } from "../dados/icones";
 import { limparMemo, memo } from "../core/memo";
+import { temAcessoJuridico, emVisaoJuridica, rotaDaVisaoJuridica } from "./juridico/acesso";
 
 export const TEMA_GRUPO: Record<string, string> = {
   primary: "#0B0B0B", secondary: "#1C1A16", accent: "#C9A45C",
@@ -127,7 +128,9 @@ export async function pode_ver_modulo(user: any, slug: string, modulo: string) {
 }
 async function modulos_visiveis(user: any, e: any) {
   const lib = await modulos_liberados(user, e.slug);
-  return modulos_da_empresa(e).filter((m: any) => lib === null || lib.has(m.id));
+  const modulos = emVisaoJuridica(user) ? [] : modulos_da_empresa(e).filter((m: any) => lib === null || lib.has(m.id));
+  if (temAcessoJuridico(user)) modulos.push({ id: "juridico", nome: "Jurídico", icone: "account_balance", desc: "Casos, movimentações e prazos jurídicos da empresa.", status: "ativo", destino: `/juridico/empresa/${e.slug}` });
+  return modulos;
 }
 
 export async function empresas_visiveis(user: any) {
@@ -164,7 +167,7 @@ export function exige_admin() {
 export function registrar() {
   montarPublico("/login", "/login-grupo");
 
-  contextProcessor(() => ({ portal_user: g().portal_user ?? null, STATUS, tema_grupo: TEMA_GRUPO, ic }));
+  contextProcessor(() => ({ portal_user: g().portal_user ?? null, acesso_juridico: temAcessoJuridico(g().portal_user), visao_juridica: emVisaoJuridica(g().portal_user), STATUS, tema_grupo: TEMA_GRUPO, ic }));
 
   // ── Porteiro: nenhuma página abre sem login ──
   beforeRequest(async () => {
@@ -177,7 +180,8 @@ export function registrar() {
       if (u && u.ativo) {
         const visao = session().get("portal_visao") ?? (u.perfil === "admin" ? "admin" : "usuario");
         u.admin = u.perfil === "admin" && visao === "admin";
-        u.crm = await tem_crm(u);
+        u.modo_juridico = visao === "juridico" && u.perfil === "admin";
+        u.crm = emVisaoJuridica(u) ? false : await tem_crm(u);
         G.portal_user = u;
       }
     }
@@ -190,7 +194,13 @@ export function registrar() {
       }
       return redirect(url_for("portal_login", { next: caminho !== "/" ? request().path : null }));
     }
+    if (emVisaoJuridica(G.portal_user)) {
+      if (caminho === "/inicio" || caminho === "/central") return redirect(url_for("juridico.geral"));
+      if (!rotaDaVisaoJuridica(caminho)) abort(403);
+    }
     if (caminho === "/central") return redirect(url_for("portal_grupo"));
+    if (caminho === "/juridico/pedidos" || caminho.startsWith("/juridico/pedidos/") || caminho.startsWith("/juridico/documento/") || caminho === "/juridico/encaminhar") return null; // handlers conferem autor/empresa/perfil
+    if (caminho === "/juridico" || caminho.startsWith("/juridico/")) return temAcessoJuridico(G.portal_user) ? null : abort(403);
     if (caminho.startsWith("/grupo") || caminho.startsWith("/logout") || caminho.startsWith("/inicio") || caminho.startsWith("/treinamentos") || caminho === "/crm-geral") return null;
     if (caminho.startsWith("/central/")) return G.portal_user.admin ? null : abort(403);
     for (const [prefixo, slug] of Object.entries(PREFIXOS_MODULOS)) {
@@ -201,6 +211,15 @@ export function registrar() {
     if (caminho.startsWith("/operacao/")) return null; // cada rota confere a empresa
     if (!(await pode_ver_modulo(G.portal_user, EMPRESA_CONDOMINIOS, "condominios"))) abort(403);
     return null;
+  });
+
+  post("portal_visao_juridico", "/grupo/visao-juridico", async () => {
+    if (g().portal_user?.perfil !== "admin") abort(403);
+    if (!request().form.get("_csrf") || !session().get("_csrf")) abort(400,"Recarregue a página antes de trocar a visão.");
+    checar_csrf();
+    const ativar = request().form.get("ativar") === "1";
+    session().set("portal_visao", ativar ? "juridico" : "admin");
+    return redirect(url_for(ativar ? "juridico.geral" : "portal_inicio"), 303);
   });
 
   // ── Login ──

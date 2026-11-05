@@ -1,0 +1,4 @@
+<p class="hint">PDF, DOCX, PNG ou JPEG, até 5 MB por arquivo. Limite de 20 documentos ou 50 MB por ficha. Arquivos privados; download exige autorização. Nenhum arquivo é publicado por link aberto.</p>
+<input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="anexo_id" value="{{ anexo_id }}">
+<label class="lbl" for="arquivo">Documento</label><input class="inp" id="arquivo" name="arquivo" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" required>
+<div class="row-btns"><button class="btn-pill" type="submit">Anexar documento</button></div>

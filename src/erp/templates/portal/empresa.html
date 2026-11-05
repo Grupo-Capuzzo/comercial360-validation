@@ -5,8 +5,10 @@
   <span class="tb-name"><b>{{ empresa.nome }}</b><small>Grupo Capuzzo</small></span>
 {% endblock %}
 {% block tb_links %}
+  {% if acesso_juridico %}<a class="tb-btn" href="{{ url_for('juridico.geral') }}">{{ ic('account_balance') }}<span class="lbl">Jurídico</span></a>{% endif %}
   <a class="tb-btn" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span class="lbl">Empresas</span></a>
-  {% include "operacao/_barra_empresa.html" ignore missing %}
+  {% if visao_juridica %}<a class="tb-btn" href="{{ url_for('portal_treinamentos') }}">{{ ic('school') }}<span class="lbl">Treinamentos</span></a>
+  {% else %}{% include "operacao/_barra_empresa.html" ignore missing %}{% endif %}
 {% endblock %}
 {% block content %}
 <section class="emp-head">
@@ -31,6 +33,7 @@
     <div class="mod-ic">{{ ic(m.icone) }}</div>
     <h3>{{ m.nome }}</h3>
     <p>{{ m.desc }}</p>
+    {% if m.id == 'financas' %}<p><a class="lnk" href="{{ url_for('juridico.encaminhar',empresa=empresa.slug) }}">Encaminhar cobrança ao Jurídico</a></p>{% endif %}
     <div class="mod-foot">
       {% if m.status == 'ativo' %}<span class="tag tag-on">Disponível</span>{% else %}<span class="tag">Em construção</span>{% endif %}
       <a class="btn-pill" href="{{ url_for('portal_modulo', slug=empresa.slug, modulo_id=m.id) }}">Acessar</a>
