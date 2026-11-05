@@ -1,0 +1,20 @@
+{% extends "portal/base.html" %}
+{% block title %}Encaminhar cobrança ao Jurídico{% endblock %}
+{% block content %}
+<section class="page-title"><h1>Encaminhar cobrança ao Jurídico</h1></section>
+<form class="box" method="post" action="{{ url_for('juridico.encaminhar_salvar') }}">
+<input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="cadastro_id" value="{{ cadastro_id }}">
+<p>O encaminhamento cria um caso em triagem. Não ajuíza ação, envia mensagem ou altera valores financeiros.</p>
+<label class="lbl" for="empresa">Empresa</label><select class="inp" id="empresa" name="empresa" required>{% for e in empresas %}<option value="{{ e.slug }}" {{ 'selected' if empresa_selecionada==e.slug }}>{{ e.nome }}</option>{% endfor %}</select>
+<div class="grid">
+{% for n,r,m in [['referencia','Referência única da cobrança / contrato',200],['cliente_nome','Nome ou razão social',200],['cliente_documento','CPF / CNPJ',20],['cliente_telefone','Telefone',40]] %}
+<div><label class="lbl" for="{{ n }}">{{ r }} *</label><input class="inp" id="{{ n }}" name="{{ n }}" maxlength="{{ m }}" required></div>{% endfor %}
+<div><label class="lbl" for="cliente_tipo">Tipo de pessoa</label><select class="inp" id="cliente_tipo" name="cliente_tipo"><option value="PF">PF</option><option value="PJ">PJ</option></select></div>
+<div><label class="lbl" for="cliente_email">E-mail</label><input class="inp" id="cliente_email" name="cliente_email" type="email" maxlength="254"></div>
+<div><label class="lbl" for="area">Área</label><select class="inp" id="area" name="area">{% for a in areas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}</select></div></div>
+<label class="lbl" for="resumo">Resumo das negociações *</label><textarea class="inp" id="resumo" name="resumo" rows="4" maxlength="4000" required></textarea>
+<label class="lbl" for="historico">Linha do tempo das tentativas *</label><textarea class="inp" id="historico" name="historico" rows="7" maxlength="9500" required placeholder="Data — canal — responsável — tentativa — resultado"></textarea>
+<p class="hint">Transcreva o histórico conferido. Estes registros não são importados automaticamente dos e-mails. A mesma referência na mesma empresa não cria dois casos.</p>
+<label class="check-line"><input type="checkbox" name="confirmado" value="1" required> Conferi o resumo e a linha do tempo e confirmo o encaminhamento manual.</label>
+<div class="row-btns"><button class="btn-pill" type="submit">Confirmar encaminhamento</button></div>
+</form>{% endblock %}

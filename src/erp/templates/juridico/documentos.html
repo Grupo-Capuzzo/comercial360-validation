@@ -1,0 +1,8 @@
+{% extends "portal/base.html" %}
+{% block title %}Documentos do caso · Jurídico{% endblock %}
+{% block content %}
+<section class="page-title"><h1>Documentos do caso</h1></section>
+<section class="box">{% include "juridico/_documentos.html" %}</section>
+<form class="box" method="post" enctype="multipart/form-data" action="{{ url_for('juridico.documento_caso',id=id) }}">{% include "juridico/_upload.html" %}</form>
+<a class="btn-pill outline" href="{{ url_for('juridico.ficha',id=id) }}">Voltar à ficha</a>
+{% endblock %}

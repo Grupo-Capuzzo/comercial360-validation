@@ -1,0 +1,2 @@
+{% for doc in documentos %}<article><p><a class="lnk" href="{{ url_for('juridico.documento_baixar',id=doc.id) }}">{{ doc.nome }}</a> · {{ doc.tamanho }} bytes</p><details><summary>Verificação do arquivo</summary><p>SHA-256: {{ doc.sha256 }}</p></details></article>
+{% else %}<p>Nenhum documento anexado.</p>{% endfor %}

@@ -1,0 +1,39 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ 'Editar caso' if caso else 'Novo caso' }} · Jurídico{% endblock %}
+{% block content %}
+<section class="page-title"><div class="eyebrow-line">Jurídico</div><h1>{{ 'Editar caso' if caso else 'Novo caso' }}</h1></section>
+{% if erro %}<div class="box" role="alert">{{ erro }}</div>{% endif %}
+<form class="box" method="post" action="{{ url_for('juridico.salvar', id=caso.id) if caso else url_for('juridico.criar') }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  {% if not caso %}<input type="hidden" name="cadastro_id" value="{{ valores.cadastro_id }}">{% endif %}
+  {% if caso %}<input type="hidden" name="versao" value="{{ valores.versao }}">{% endif %}
+  <label class="lbl" for="empresa">Empresa do grupo *</label>
+  {% if caso %}<input type="hidden" name="empresa" value="{{ empresa_selecionada }}"><p>{% for e in empresas if e.slug == empresa_selecionada %}{{ e.nome }}{% endfor %}</p>
+  {% else %}<select class="inp" name="empresa" id="empresa" required><option value="">Selecione</option>{% for e in empresas %}<option value="{{ e.slug }}" {{ 'selected' if e.slug == empresa_selecionada }}>{{ e.nome }}</option>{% endfor %}</select>{% endif %}
+  <div class="grid">
+  {% for nome, rotulo, maximo, obrigatorio in [
+    ['titulo','Título do caso',200,true], ['cliente_nome','Nome ou razão social do cliente',200,true],
+    ['cliente_documento','CPF / CNPJ',20,true], ['cliente_telefone','Telefone do cliente',40,true],
+    ['cliente_email','E-mail do cliente',254,false], ['responsavel','Responsável pelo caso',200,true],
+    ['numero_processo','Número do processo',100,false], ['vara','Vara / tribunal',200,false],
+    ['comarca','Comarca',200,false], ['parte_contraria','Parte contrária',200,false]
+  ] %}
+  <div><label class="lbl" for="{{ nome }}">{{ rotulo }}{{ ' *' if obrigatorio }}</label>
+    <input class="inp" id="{{ nome }}" name="{{ nome }}" value="{{ valores[nome] or '' }}" maxlength="{{ maximo }}" {{ 'required' if obrigatorio }} {{ 'type=email' if nome == 'cliente_email' }}></div>
+  {% endfor %}
+  {% for nome, rotulo, opcoes in [['cliente_tipo','Tipo de pessoa',['PF','PJ']], ['condicao','Condição',['devedor','credor']], ['area','Área',areas], ['fase','Fase',fases], ['instancia','Instância',instancias], ['situacao','Situação',situacoes if caso else ['ativo']]] %}
+    <div><label class="lbl" for="{{ nome }}">{{ rotulo }} *</label><select class="inp" id="{{ nome }}" name="{{ nome }}" required>
+      {% for opcao in opcoes %}<option value="{{ opcao }}" {{ 'selected' if valores[nome] == opcao }}>{{ opcao }}</option>{% endfor %}
+    </select></div>
+  {% endfor %}
+    <div><label class="lbl" for="prazo">Próximo prazo</label><input class="inp" type="date" id="prazo" name="prazo" value="{{ valores.prazo or '' }}"></div>
+  </div>
+  <label class="lbl" for="prazo_descricao">Descrição do prazo (obrigatória quando há uma data)</label>
+  <input class="inp" id="prazo_descricao" name="prazo_descricao" maxlength="500" value="{{ valores.prazo_descricao or '' }}">
+  <p class="hint">Um prazo ativo por caso. Para concluir ou substituir, ajuste a data e a descrição e registre o motivo. O prazo anterior fica no histórico. A régua mostra dias civis; não calcula prazo processual.</p>
+  <label class="lbl" for="descricao">Descrição do caso *</label><textarea class="inp" name="descricao" id="descricao" required maxlength="10000" rows="6">{{ valores.descricao or '' }}</textarea>
+  {% if caso %}<label class="lbl" for="motivo">Motivo da alteração / conclusão do prazo *</label><textarea class="inp" id="motivo" name="motivo" required maxlength="2000" rows="3">{{ valores.motivo or '' }}</textarea>
+  <p class="hint">Encerrar ou cancelar preserva a ficha e todo o histórico. Nenhum caso é excluído.</p>{% endif %}
+  <div class="row-btns"><a class="btn-pill outline" href="{{ url_for('juridico.ficha', id=caso.id) if caso else url_for('juridico.geral') }}">Voltar</a><button class="btn-pill" type="submit">Salvar caso</button></div>
+</form>
+{% endblock %}

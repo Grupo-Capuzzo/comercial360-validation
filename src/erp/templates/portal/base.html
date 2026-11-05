@@ -31,7 +31,8 @@
     {% endblock %}</a>
     <nav class="tb-nav">
       {% block tb_links %}
-        <a class="tb-btn {{ 'tb-on' if request.endpoint == 'portal_inicio' }}" href="{{ url_for('portal_inicio') }}">{{ ic('home') }}<span class="lbl">Início</span></a>
+        {% if acesso_juridico %}<a class="tb-btn" href="{{ url_for('juridico.geral') }}">{{ ic('account_balance') }}<span class="lbl">Jurídico</span></a>{% endif %}
+        {% if not visao_juridica %}<a class="tb-btn {{ 'tb-on' if request.endpoint == 'portal_inicio' }}" href="{{ url_for('portal_inicio') }}">{{ ic('home') }}<span class="lbl">Início</span></a>{% endif %}
         <a class="tb-btn {{ 'tb-on' if request.endpoint == 'portal_grupo' }}" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span class="lbl">Empresas</span></a>
         <a class="tb-btn {{ 'tb-on' if request.endpoint == 'portal_treinamentos' }}" href="{{ url_for('portal_treinamentos') }}">{{ ic('school') }}<span class="lbl">Treinamentos</span></a>
         {% if portal_user.crm %}<a class="tb-btn" href="{{ url_for('portal_crm') }}">{{ ic('handshake') }}<span class="lbl">CRM Geral</span></a>{% endif %}
@@ -46,12 +47,17 @@
         <span class="lbl">Tema</span></button>
       <details class="tb-user">
         <summary>
-          <span class="who"><b>{{ portal_user.nome }}</b><small>{{ 'Administrador' if portal_user.admin else 'Usuário' }}</small></span>
+          <span class="who"><b>{{ portal_user.nome }}</b><small>{{ 'Jurídico' if visao_juridica else ('Administrador' if portal_user.admin else 'Usuário') }}</small></span>
           <span class="avatar">{{ portal_user.nome[:1]|upper }}</span>
           {{ ic('expand_more') }}
         </summary>
         <div class="menu">
           <div class="menu-mail">{{ portal_user.email }}</div>
+          <a href="{{ url_for('juridico.pedidos') }}">Pedidos ao Jurídico</a>
+          {% if portal_user.perfil == 'admin' %}<form method="post" action="{{ url_for('portal_visao_juridico') }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="ativar" value="{{ '0' if visao_juridica else '1' }}">
+            <button class="btn-pill outline" type="submit">{{ 'Voltar à visão Administrador' if visao_juridica else 'Ver como Jurídico' }}</button>
+          </form>{% endif %}
           <a href="{{ url_for('portal_minha_senha') }}">{{ ic('key') }} Alterar senha</a>
           <a href="{{ url_for('portal_logout') }}">{{ ic('logout') }} Sair</a>
         </div>

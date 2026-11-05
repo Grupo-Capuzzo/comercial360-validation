@@ -7,6 +7,7 @@ import * as central from "./base/central_grupo";
 import * as financas from "./modulos/financas/index";
 import * as contratos from "./modulos/contratos/index";
 import * as operacao from "./modulos/operacao/index";
+import * as juridico from "./modulos/juridico/index";
 
 const g = globalThis as unknown as { __erpRegistrado?: boolean };
 
@@ -20,6 +21,7 @@ export function registrarTudo() {
   contratos.registrar();  // modulos/contratos
   financas.registrar();   // modulos/financas
   operacao.registrar();   // modulos/operacao
+  juridico.registrar();
 }
 
 export async function atender(req: Request): Promise<Response> {

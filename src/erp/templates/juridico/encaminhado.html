@@ -1,0 +1,5 @@
+{% extends "portal/base.html" %}
+{% block title %}Encaminhamento registrado{% endblock %}
+{% block content %}<section class="box"><h1>Encaminhamento registrado</h1><p>O Jurídico recebeu o resumo e a linha do tempo informados para triagem.</p><p>Protocolo: {{ id }}</p>
+{% if legal %}<a class="btn-pill" href="{{ url_for('juridico.ficha',id=id) }}">Abrir caso</a>{% endif %}
+<a class="btn-pill outline" href="{{ url_for('portal_grupo') }}">Voltar às empresas</a></section>{% endblock %}
