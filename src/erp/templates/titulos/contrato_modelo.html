@@ -1,0 +1,20 @@
+{# MODELO PROVISÓRIO do contrato de Título Privado — será trocado pelo modelo oficial da Capuzzo. #}
+<div class="termo">
+  <p style="text-align:center;font-weight:700;font-size:15px;margin:0 0 4mm">INSTRUMENTO PARTICULAR DE MÚTUO — TÍTULO PRIVADO Nº {{ d.numero }}</p>
+  <p style="text-align:center;font-size:11px;color:#a33;margin:0 0 6mm">Modelo provisório — aguardando o texto oficial da Capuzzo.</p>
+
+  <p><b>MUTUANTE:</b> {{ d.empresa.empresa_nome }}, inscrita no CNPJ sob o nº {{ d.empresa.empresa_cnpj }}, com sede em {{ d.empresa.empresa_endereco }}.</p>
+  <p><b>MUTUÁRIO(A):</b> {{ d.investidor.nome }}, {{ d.investidor.documento_tipo }} nº {{ d.investidor.documento }}{% if d.investidor.rg %}, RG {{ d.investidor.rg }}{% endif %}{% if d.investidor.nacionalidade %}, {{ d.investidor.nacionalidade }}{% endif %}{% if d.investidor.estado_civil %}, {{ d.investidor.estado_civil }}{% endif %}{% if d.investidor.profissao %}, {{ d.investidor.profissao }}{% endif %}{% if d.investidor.endereco %}, residente em {{ d.investidor.endereco }}{% if d.investidor.cidade %}, {{ d.investidor.cidade }}{% if d.investidor.uf %}/{{ d.investidor.uf }}{% endif %}{% endif %}{% if d.investidor.cep %}, CEP {{ d.investidor.cep }}{% endif %}{% endif %}, e-mail {{ d.investidor.email }}.</p>
+
+  <p><b>1. DO VALOR.</b> A MUTUANTE empresta ao(à) MUTUÁRIO(A) a quantia de <b>{{ moeda(d.valor_total) }}</b> ({{ extenso(d.valor_total) }}), a ser creditada após a assinatura deste instrumento{% if d.investidor.pix %}, na chave PIX {{ d.investidor.pix }}{% endif %}.</p>
+  <p><b>2. DOS JUROS E DA FORMA DE PAGAMENTO.</b> Sobre o valor emprestado incidem juros de <b>{{ d.taxa_txt }}</b>, calculados pela Tabela Price. O(A) MUTUÁRIO(A) pagará <b>{{ d.qtd }} parcela(s) mensal(is) de {{ moeda(d.parcela) }}</b>, de {{ data_br(d.primeiro_venc) }} a {{ data_br(d.ultimo_venc) }}, totalizando {{ moeda(d.total_parcelas) }}, conforme a tabela abaixo.</p>
+  <table style="width:100%;border-collapse:collapse;font-size:11px;margin:2mm 0 4mm">
+    <thead><tr style="background:#f3efe4"><th style="border:1px solid #ccc;padding:3px">Parcela</th><th style="border:1px solid #ccc;padding:3px">Vencimento</th><th style="border:1px solid #ccc;padding:3px;text-align:right">Valor</th><th style="border:1px solid #ccc;padding:3px;text-align:right">Amortização</th><th style="border:1px solid #ccc;padding:3px;text-align:right">Juros</th></tr></thead>
+    <tbody>{% for p in d.parcelas %}<tr><td style="border:1px solid #ccc;padding:3px;text-align:center">{{ p.n }}</td><td style="border:1px solid #ccc;padding:3px;text-align:center">{{ data_br(p.venc) }}</td><td style="border:1px solid #ccc;padding:3px;text-align:right">{{ moeda(p.valor) }}</td><td style="border:1px solid #ccc;padding:3px;text-align:right">{{ moeda(p.amort) }}</td><td style="border:1px solid #ccc;padding:3px;text-align:right">{{ moeda(p.juros) }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <p><b>3. DO ATRASO.</b> Parcela paga após o vencimento será atualizada diariamente, desde o vencimento até o efetivo pagamento, pela mesma taxa de {{ d.taxa_txt }}, de forma proporcional aos dias de atraso. Pagamentos parciais abatem primeiro os encargos do atraso, depois os juros e por último o principal.</p>
+  <p><b>4. DA QUITAÇÃO ANTECIPADA.</b> O(A) MUTUÁRIO(A) poderá quitar antecipadamente, total ou parcialmente, com a redução proporcional dos juros das parcelas ainda não vencidas.</p>
+  <p><b>5. DO FORO.</b> Fica eleito o foro de {{ d.cidade_assinatura }} para dirimir quaisquer dúvidas oriundas deste instrumento.</p>
+  <p>E, por estarem justas e contratadas, as partes assinam eletronicamente este instrumento.</p>
+  <p style="text-align:right">{{ d.cidade_assinatura }}, {{ data_br(d.data_emissao) }}.</p>
+</div>

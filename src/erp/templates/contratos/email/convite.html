@@ -6,7 +6,7 @@
   <tr><td style="padding:12px 16px;">
     📄 <b>{{ TIPOS[c.tipo] }}</b><br>
     {% if d.anexo_nome %}📎 {{ d.anexo_nome }}<br>{% endif %}
-    <span style="color:#666;font-size:13px;">{{ d.produto.nome }} · {{ d.qtd }} cota(s) nº {{ d.cotas | map(attribute='numero') | join(', ') }} · {{ moeda((d.retirada or {}).valor or d.valor_total) }}</span>
+    <span style="color:#666;font-size:13px;">{% if c.tipo == 'titulo' %}{{ d.produto.nome }} · {{ moeda(d.valor_total) }} em {{ d.qtd }} parcela(s) de {{ moeda(d.parcela) }}{% else %}{{ d.produto.nome }} · {{ d.qtd }} cota(s) nº {{ d.cotas | map(attribute='numero') | join(', ') }} · {{ moeda((d.retirada or {}).valor or d.valor_total) }}{% endif %}</span>
   </td></tr>
 </table>
 <p style="text-align:center;margin:0 0 20px;">

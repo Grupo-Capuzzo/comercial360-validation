@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Novo cliente' if novo else cli.name }} — Títulos Privados{% endblock %}
+{% block content %}
+{% include "titulos/_estilo.html" %}
+<a class="back-link" href="{{ voltar }}">← Voltar</a>
+<div class="page-header">
+  <div class="page-header-icon">👤</div>
+  <div class="page-header-title">{{ 'Novo cliente' if novo else cli.name }}</div>
+  <div class="page-header-sub">Nome, CPF/CNPJ e e-mail são obrigatórios para gerar o contrato. O endereço e os demais dados entram no contrato.</div>
+</div>
+<form method="post" class="card-gold" style="margin-bottom:22px;">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="voltar" value="{{ voltar }}">
+  <div class="form-row" style="flex-wrap:wrap">
+    {% for k, rot, tipo in CAMPOS_CLIENTE %}
+      <div class="form-group" style="min-width:{{ '100%' if k == 'notes' else '220px' }};flex:1"><label>{{ rot }}{{ ' *' if k in ['name', 'document', 'email'] }}</label>
+        <input class="form-control" name="{{ k }}" type="{{ tipo }}" value="{{ cli[k] or '' }}" {{ 'required' if k == 'name' }}></div>
+    {% endfor %}
+  </div>
+  <div class="page-actions" style="justify-content:flex-start;"><button class="btn btn-primary" type="submit">💾 Salvar</button></div>
+</form>
+{% if meus %}
+<div class="section-label">💰 &nbsp;Títulos do cliente</div>
+<div class="table-wrap"><table>
+  <thead><tr><th>Título</th><th class="tp-right">Emprestado</th><th class="tp-right">Parcelas</th><th class="tp-right">A receber</th><th>Situação</th></tr></thead>
+  <tbody>{% for t in meus %}<tr><td><a class="text-gold" href="{{ url_for('titulos.titulo', tid=t.id) }}">{{ t.loan_number or ('#' ~ t.id) }}</a></td>
+    <td class="tp-right">{{ moeda(t.original_amount) }}</td><td class="tp-right">{{ t.pagas }}/{{ t.parcelas|length }}</td><td class="tp-right">{{ moeda(t.saldo) }}</td>
+    <td><span class="badge {{ t.status_cls }}">{{ t.status_nome }}</span></td></tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+{% endblock %}

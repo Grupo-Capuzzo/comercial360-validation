@@ -42,7 +42,8 @@
            'titulos_privados_dashboard','titulos_privados_clientes',
            'titulos_privados_emprestimos','titulos_privados_parcelas',
            'titulos_privados_prorrogacoes','titulos_privados_amortizacoes',
-           'titulos_privados_calculadora_price'
+           'titulos_privados_calculadora_price',
+           'titulos_painel','titulos_lista','titulos_calculadora','titulos_quitacao','titulos_clientes'
          ] %}
 
       <!-- ── VISÃO GERAL ──────────────────────── -->
@@ -131,33 +132,25 @@
       <div class="sidebar-subitems {% if titulos_active %}open{% endif %}"
            id="group-titulos-items">
 
-        <a href="{{ url_for('titulos_privados') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_privados_dashboard' %}active{% endif %}">
-          <span class="sidebar-link-icon">📊</span> Dashboard
+        <a href="{{ url_for('titulos.painel') }}"
+           class="sidebar-sublink {% if active_page == 'titulos_painel' %}active{% endif %}">
+          <span class="sidebar-link-icon">📊</span> Painel
         </a>
-        <a href="{{ url_for('titulos_privados_clientes') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_privados_clientes' %}active{% endif %}">
-          <span class="sidebar-link-icon">👤</span> Clientes de Títulos
+        <a href="{{ url_for('titulos.calculadora') }}"
+           class="sidebar-sublink {% if active_page == 'titulos_calculadora' %}active{% endif %}">
+          <span class="sidebar-link-icon">🧮</span> Calculadora / Novo título
         </a>
-        <a href="{{ url_for('titulos_privados_emprestimos') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_privados_emprestimos' %}active{% endif %}">
-          <span class="sidebar-link-icon">💰</span> Empréstimos
+        <a href="{{ url_for('titulos.lista') }}"
+           class="sidebar-sublink {% if active_page == 'titulos_lista' %}active{% endif %}">
+          <span class="sidebar-link-icon">💰</span> Títulos
         </a>
-        <a href="{{ url_for('titulos_privados_parcelas') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_privados_parcelas' %}active{% endif %}">
-          <span class="sidebar-link-icon">🧾</span> Parcelas / Recebimentos
+        <a href="{{ url_for('titulos.quitacao') }}"
+           class="sidebar-sublink {% if active_page == 'titulos_quitacao' %}active{% endif %}">
+          <span class="sidebar-link-icon">📉</span> Quitação / Amortização
         </a>
-        <a href="{{ url_for('titulos_privados_prorrogacoes') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_privados_prorrogacoes' %}active{% endif %}">
-          <span class="sidebar-link-icon">⏳</span> Prorrogações
-        </a>
-        <a href="{{ url_for('titulos_privados_amortizacoes') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_privados_amortizacoes' %}active{% endif %}">
-          <span class="sidebar-link-icon">📉</span> Amortizações
-        </a>
-        <a href="{{ url_for('titulos_privados_calculadora_price') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_privados_calculadora_price' %}active{% endif %}">
-          <span class="sidebar-link-icon">🧮</span> Calculadora Price
+        <a href="{{ url_for('titulos.clientes') }}"
+           class="sidebar-sublink {% if active_page == 'titulos_clientes' %}active{% endif %}">
+          <span class="sidebar-link-icon">👤</span> Clientes
         </a>
 
       </div>

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Clientes — Títulos Privados{% endblock %}
+{% block content %}
+{% include "titulos/_estilo.html" %}
+<div class="page-header">
+  <div class="page-header-icon">👤</div>
+  <div class="page-header-title">Clientes de títulos</div>
+  <div class="page-header-sub">Cadastro usado nos contratos (nome, documento, e-mail e endereço).</div>
+</div>
+<div class="page-actions" style="justify-content:flex-start;margin-bottom:16px;"><a class="btn btn-primary" href="{{ url_for('titulos.cliente', pcid=0) }}">➕ Novo cliente</a></div>
+{% if lista %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Cliente</th><th>CPF/CNPJ</th><th>E-mail</th><th>Telefone</th><th class="tp-right">Títulos</th><th class="tp-right">A receber</th><th class="tp-right">Em atraso</th></tr></thead>
+  <tbody>{% for c in lista %}
+    <tr><td><a class="text-gold" href="{{ url_for('titulos.cliente', pcid=c.id) }}">{{ c.name }}</a>{% if c.status != 'ativo' %} <span class="badge badge-inactive">{{ c.status }}</span>{% endif %}</td>
+      <td class="text-mono">{{ c.document or '—' }}</td><td>{{ c.email or '—' }}</td><td>{{ c.phone or '—' }}</td><td class="tp-right">{{ c.n_titulos }}</td>
+      <td class="tp-right tp-nowrap">{{ moeda(c.saldo) if c.saldo else '—' }}</td><td class="tp-right tp-nowrap {{ 'tp-neg' if c.atraso }}">{{ moeda(c.atraso) if c.atraso else '—' }}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% else %}
+<div class="empty-state"><div class="empty-state-icon">👤</div><div class="empty-state-title">Nenhum cliente cadastrado</div></div>
+{% endif %}
+{% endblock %}

@@ -74,7 +74,7 @@
 <main>
   <section class="card">
     <h1>{{ TIPOS[c.tipo] }}</h1>
-    <div class="sub">{{ d.produto.nome }} · {{ d.qtd }} cota(s) nº {{ d.cotas | map(attribute='numero') | join(', ') }} · {{ moeda((d.retirada or {}).valor or d.valor_total) }}</div>
+    <div class="sub">{% if c.tipo == 'titulo' %}{{ d.produto.nome }} · {{ moeda(d.valor_total) }} em {{ d.qtd }} parcela(s) de {{ moeda(d.parcela) }}{% else %}{{ d.produto.nome }} · {{ d.qtd }} cota(s) nº {{ d.cotas | map(attribute='numero') | join(', ') }} · {{ moeda((d.retirada or {}).valor or d.valor_total) }}{% endif %}</div>
     <div class="docs">
       <div class="doc">📄<div>{{ TIPOS[c.tipo] }}<small>Documento principal · preenchido com seus dados</small></div></div>
       {% if d.anexo_nome %}<div class="doc">📎<div>{{ d.anexo_nome }}<small>Anexo · parte integrante do termo</small></div></div>{% endif %}
