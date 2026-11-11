@@ -4,7 +4,7 @@
 <div class="op-head">
   <div>
     <div class="eyebrow-line">Demandas e rotinas</div>
-    <h1>{{ 'Minhas demandas' if de == 'eu' else ('Demandas de ' ~ alvo_nome if de != 'equipe' else 'Demandas da equipe') }}</h1>
+    <h1>{{ 'Minhas demandas' if de == 'eu' else ('Demandas da minha equipe' if de == 'equipe' else ('Demandas da empresa' if de == 'todos' else 'Demandas de ' ~ alvo_nome)) }}</h1>
     <p>Arraste os cartões entre as colunas para mudar a situação. Clique no cartão para ver etapas, observações e tempo.</p>
   </div>
   <button class="btn-pill" type="button" onclick="document.getElementById('dlg-nova').showModal()">{{ oic('add') }} Nova demanda</button>
@@ -29,8 +29,10 @@
     {% if portal_user.admin %}
     <select class="inp" name="de" onchange="this.form.submit()" aria-label="De quem">
       <option value="eu" {{ 'selected' if de == 'eu' }}>Minhas demandas</option>
-      <option value="equipe" {{ 'selected' if de == 'equipe' }}>Toda a equipe</option>
-      {% for x in usuarios if x.id != portal_user.id %}<option value="{{ x.id }}" {{ 'selected' if resp == x.id }}>{{ x.nome }}</option>{% endfor %}
+      <option value="equipe" {{ 'selected' if de == 'equipe' }}>Minha equipe (eu + equipe)</option>
+      {% if equipe_lista %}<optgroup label="Minha equipe">{% for x in equipe_lista %}<option value="{{ x.id }}" {{ 'selected' if resp == x.id }}>{{ x.nome }}</option>{% endfor %}</optgroup>{% endif %}
+      <option value="todos" {{ 'selected' if de == 'todos' }}>Toda a empresa</option>
+      {% if outros_lista %}<optgroup label="Outras pessoas">{% for x in outros_lista %}<option value="{{ x.id }}" {{ 'selected' if resp == x.id }}>{{ x.nome }}</option>{% endfor %}</optgroup>{% endif %}
     </select>
     {% endif %}
     <label class="search">{{ ic('search') }}<input type="search" name="q" value="{{ busca }}" placeholder="Buscar demanda…"></label>

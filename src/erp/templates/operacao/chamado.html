@@ -49,6 +49,10 @@
           </select>
         </div>
       </div>
+      <label class="lbl" for="m-setor">Setor <small>(troque para transferir o chamado)</small></label>
+      <select class="inp" id="m-setor" name="setor">
+        {% for st in SETORES %}<option value="{{ st }}" {{ 'selected' if c.setor == st }}>{{ st }}{{ ' (atual)' if c.setor == st }}</option>{% endfor %}
+      </select>
       <button class="btn-pill op-btn" type="submit">Registrar movimentação</button>
     </form>
   </section>

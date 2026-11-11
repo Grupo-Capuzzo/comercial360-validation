@@ -19,9 +19,9 @@
   <div class="ini-kpi k-cham"><span class="ini-kpi-ic">{{ ic('support_agent') }}</span>
     <div><b>{{ tot.chamados }}</b><span>Chamados em aberto</span>{% if tot.atendimento %}<small>{{ tot.atendimento }} em atendimento</small>{% endif %}</div></div>
   <div class="ini-kpi k-atr {{ 'tem' if tot.atrasadas }}"><span class="ini-kpi-ic">{{ ic('warning') }}</span>
-    <div><b>{{ tot.atrasadas }}</b><span>Demandas em atraso</span>{% if not portal_user.admin %}<small>sob sua responsabilidade</small>{% endif %}</div></div>
+    <div><b>{{ tot.atrasadas }}</b><span>Demandas em atraso</span><small>{{ 'suas e da sua equipe' if equipe_n else 'sob sua responsabilidade' }}</small></div></div>
   <div class="ini-kpi k-hoje"><span class="ini-kpi-ic">{{ ic('today') }}</span>
-    <div><b>{{ tot.hoje }}</b><span>Demandas do dia</span>{% if not portal_user.admin %}<small>sob sua responsabilidade</small>{% endif %}</div></div>
+    <div><b>{{ tot.hoje }}</b><span>Demandas do dia</span><small>{{ 'suas e da sua equipe' if equipe_n else 'sob sua responsabilidade' }}</small></div></div>
   <div class="ini-kpi k-emp"><span class="ini-kpi-ic">{{ ic('account_balance') }}</span>
     <div><b>{{ empresas|length }}</b><span>Empresas com acesso</span></div></div>
 </div>
@@ -96,6 +96,44 @@
     {% if not demandas and agenda.conectada and not agenda.erro and not agenda.itens %}{% endif %}
   </aside>
 </div>
+
+{% if portal_user.admin %}
+<section class="box ini-equipe" id="equipe">
+  <div class="ini-box-head"><div class="box-title">Demandas da equipe</div>
+    <small class="ini-eq-sub">{% if equipe_n %}{{ equipe_n }} pessoa{{ 's' if equipe_n != 1 }} sob sua gestão · atrasadas, de hoje e em andamento{% endif %}</small></div>
+  {% if not equipe_n %}
+    <div class="vazio">Ninguém está sob a sua gestão ainda. Em <a class="lnk" href="{{ url_for('portal_admin') }}">Administração</a>, edite o usuário e escolha você em <b>Gestor responsável</b>.</div>
+  {% elif not equipe_grupos %}
+    <p class="ini-nada">Nenhuma demanda da equipe atrasada, para hoje ou em andamento.</p>
+  {% else %}
+  <div class="ini-eq-grid">
+    {% for gr in equipe_grupos %}
+    <div class="ini-eq-emp">
+      <div class="ini-eq-head">
+        <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ gr.empresa.logo) }}" alt=""></span>
+        <b>{{ gr.empresa.nome }}</b>
+        <a class="lnk" href="{{ url_for('operacao.demandas', slug=gr.empresa.slug, de='equipe') }}">Quadro da equipe</a>
+      </div>
+      <div class="ini-eq-pessoas">
+        {% for p in gr.pessoas %}<span class="ini-eq-p"><b>{{ p.nome.split()[0] }}</b>{% if p.atrasadas %}<i class="n-atr">{{ p.atrasadas }} atrasada{{ 's' if p.atrasadas != 1 }}</i>{% endif %}{% if p.hoje %}<i class="n-hoje">{{ p.hoje }} hoje</i>{% endif %}{% if p.andamento %}<i>{{ p.andamento }} em andamento</i>{% endif %}</span>{% endfor %}
+      </div>
+      <ul class="ini-tl">
+        {% for d in gr.itens[:8] %}
+        <li class="{{ 'atrasada' if d.situacao == 'atrasada' else 'hoje' }}">
+          <a href="{{ url_for('operacao.demanda', slug=d.empresa_slug, tid=d.id) }}">
+            <span class="ini-tl-hora">{{ 'Atrasada' if d.situacao == 'atrasada' else ('Hoje' if d.situacao == 'hoje' else 'Andamento') }}{% if d.situacao == 'atrasada' %}<small>{{ d.venc_br }}</small>{% endif %}</span>
+            <span class="ini-tl-txt"><b>{{ d.titulo }}</b><small>{{ d.primeiro_nome }}{% if d.prioridade == 'alta' %} · prioridade alta{% endif %}</small></span>
+          </a>
+        </li>
+        {% endfor %}
+        {% if gr.itens|length > 8 %}<li class="mais"><a class="lnk" href="{{ url_for('operacao.demandas', slug=gr.empresa.slug, de='equipe') }}">+ {{ gr.itens|length - 8 }} demanda(s)</a></li>{% endif %}
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}
 
 <dialog id="dlg-agenda" class="dlg dlg-largo">
   <form method="post" action="{{ url_for('portal_agenda') }}">

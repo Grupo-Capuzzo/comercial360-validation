@@ -1,0 +1,87 @@
+{% extends "portal/base.html" %}
+{% block title %}Gerencial do Grupo · Portal Grupo Capuzzo{% endblock %}
+{% block content %}
+<section class="hero ger-hero">
+  <div>
+    <div class="eyebrow-line">Visão gerencial</div>
+    <h1>Resumo geral do <b>Grupo</b></h1>
+    <p>Comparativo consolidado de receitas, despesas e resultado — {{ anoA }} × {{ anoB }}. Valores realizados (pagos e recebidos) no módulo Finanças.</p>
+  </div>
+  <form class="ger-filtro" method="get">
+    <label class="lbl">Ano</label>
+    <select class="inp" name="ano" onchange="this.form.submit()">
+      {% for a in anos %}<option value="{{ a }}" {{ 'selected' if a == anoB }}>{{ a - 1 }} × {{ a }}</option>{% endfor %}
+    </select>
+  </form>
+</section>
+
+{% set var_res = tot.resB - tot.resA %}
+{% set var_p = variacao(tot.resA, tot.resB) %}
+<div class="ger-kpis">
+  <div class="ger-kpi"><span>Receita {{ anoA }}</span><b class="pos">{{ brl(tot.recA) }}</b></div>
+  <div class="ger-kpi"><span>Receita {{ anoB }}</span><b class="pos">{{ brl(tot.recB) }}</b></div>
+  <div class="ger-kpi"><span>Despesa {{ anoA }}</span><b class="neg">{{ brl(tot.despA) }}</b></div>
+  <div class="ger-kpi"><span>Despesa {{ anoB }}</span><b class="neg">{{ brl(tot.despB) }}</b></div>
+  <div class="ger-kpi"><span>Resultado {{ anoA }}</span><b class="{{ 'pos' if tot.resA >= 0 else 'neg' }}">{{ brl(tot.resA) }}</b></div>
+  <div class="ger-kpi"><span>Resultado {{ anoB }}</span><b class="{{ 'pos' if tot.resB >= 0 else 'neg' }}">{{ brl(tot.resB) }}</b></div>
+  <div class="ger-kpi"><span>Variação do resultado (R$)</span><b class="{{ 'pos' if var_res >= 0 else 'neg' }}">{{ brl(var_res) }}</b></div>
+  <div class="ger-kpi"><span>Variação do resultado (%)</span><b class="{{ 'pos' if (var_p or 0) >= 0 else 'neg' }}">{{ pct(var_p) }}</b></div>
+  <div class="ger-kpi"><span>Total de receitas ({{ anoA }}+{{ anoB }})</span><b class="pos">{{ brl(tot.recA + tot.recB) }}</b></div>
+  <div class="ger-kpi"><span>Total de despesas ({{ anoA }}+{{ anoB }})</span><b class="neg">{{ brl(tot.despA + tot.despB) }}</b></div>
+  <div class="ger-kpi"><span>Melhor empresa em {{ anoB }}</span>{% if melhor %}<b class="dest">{{ melhor.empresa.nome }}</b><small>{{ brl(melhor.totB) }}</small>{% else %}<b>—</b>{% endif %}</div>
+  <div class="ger-kpi"><span>Maior crescimento ({{ anoB }} × {{ anoA }})</span>{% if cresc %}<b class="dest">{{ cresc.empresa.nome }}</b><small>{{ pct(cresc.var_pct) }}</small>{% else %}<b>—</b>{% endif %}</div>
+</div>
+
+{% if sem %}
+<p class="ger-aviso">{{ ic('warning') }}<span>Ainda sem lançamentos no Finanças: {% for x in sem %}<b>{{ x.empresa.nome }}</b>{{ ', ' if not loop.last }}{% endfor %}. Elas entram no consolidado assim que começarem a usar o módulo.</span></p>
+{% endif %}
+
+<div class="ger-cols">
+  <section class="box"><div class="box-title">Resultado mensal — {{ anoA }} × {{ anoB }}</div>{{ graficos.mensal }}</section>
+  <section class="box"><div class="box-title">Resultado por empresa — {{ anoA }} × {{ anoB }}</div>
+    {% if graficos.empresas %}{{ graficos.empresas }}{% else %}<p class="ini-nada">Sem dados no período.</p>{% endif %}</section>
+  <section class="box"><div class="box-title">Receita × Despesa por empresa ({{ anoB }})</div>
+    {% if graficos.rec_desp %}{{ graficos.rec_desp }}{% else %}<p class="ini-nada">Sem dados no período.</p>{% endif %}</section>
+  <section class="box"><div class="box-title">Despesas por grupo ({{ anoB }})</div>
+    <p class="ger-sub">Maior impacto no resultado, somando as empresas (top 8)</p>
+    {% for x in desp_grupos %}
+      <div class="ger-hbar"><span class="ger-hbar-rot"><span>{{ x.nome }}</span><b>{{ brl(-x.v) }}</b></span>
+        <span class="ger-hbar-trilha"><i style="width: {{ (x.v * 100 / maior_grupo)|round|int }}%"></i></span></div>
+    {% else %}<p class="ini-nada">Sem despesas no período.</p>{% endfor %}
+  </section>
+</div>
+
+<section class="box ger-tab-box">
+  <div class="box-title">Tabela geral — Empresas × {{ anoA }} × {{ anoB }} <small>(resultado: receitas − despesas)</small></div>
+  <div class="ger-tab-wrap">
+  <table class="ger-tab">
+    <thead>
+      <tr><th rowspan="2" class="fixa">Empresa</th>{% for m in MESES %}<th colspan="2">{{ m }}</th>{% endfor %}
+        <th rowspan="2">Total {{ anoA }}</th><th rowspan="2">Total {{ anoB }}</th><th rowspan="2">Var R$</th><th rowspan="2">Var %</th></tr>
+      <tr>{% for m in MESES %}<th class="sub">{{ anoA % 100 }}</th><th class="sub">{{ anoB % 100 }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for x in linhas %}
+      <tr class="{{ 'sem' if not x.tem }}">
+        <th class="fixa"><a href="{{ url_for('portal_empresa', slug=x.empresa.slug) }}">{{ x.empresa.nome }}</a></th>
+        {% for i in range(12) %}
+          <td class="{{ 'neg' if x.resA[i] < 0 }}">{{ brl(x.resA[i]) if x.tem else '—' }}</td>
+          <td class="b {{ 'neg' if x.resB[i] < 0 }}">{{ brl(x.resB[i]) if x.tem else '—' }}</td>
+        {% endfor %}
+        <td class="t {{ 'neg' if x.totA < 0 }}">{{ brl(x.totA) if x.tem else '—' }}</td>
+        <td class="t {{ 'neg' if x.totB < 0 }}">{{ brl(x.totB) if x.tem else '—' }}</td>
+        <td class="t {{ 'neg' if x.var_rs < 0 }}">{{ brl(x.var_rs) if x.tem else '—' }}</td>
+        <td class="t {{ 'neg' if (x.var_pct or 0) < 0 }}">{{ pct(x.var_pct) if x.tem else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><th class="fixa">Total do Grupo</th>
+        {% for i in range(12) %}<td class="{{ 'neg' if tot.mensalA[i] < 0 }}">{{ brl(tot.mensalA[i]) }}</td><td class="b {{ 'neg' if tot.mensalB[i] < 0 }}">{{ brl(tot.mensalB[i]) }}</td>{% endfor %}
+        <td class="t {{ 'neg' if tot.resA < 0 }}">{{ brl(tot.resA) }}</td><td class="t {{ 'neg' if tot.resB < 0 }}">{{ brl(tot.resB) }}</td>
+        <td class="t {{ 'neg' if var_res < 0 }}">{{ brl(var_res) }}</td><td class="t {{ 'neg' if (var_p or 0) < 0 }}">{{ pct(var_p) }}</td></tr>
+    </tfoot>
+  </table>
+  </div>
+</section>
+{% endblock %}

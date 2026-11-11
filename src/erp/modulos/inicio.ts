@@ -6,7 +6,8 @@ import {
 } from "../core/flask";
 import { apagarArquivo, lerArquivo, salvarArquivo } from "../core/arquivos";
 import { baixarIcs, compromissosDoDia, limparCacheIcs, urlIcsValida } from "../core/ics";
-import { TEMA_GRUPO, checar_csrf, empresas_visiveis, exige_admin } from "./portal";
+import * as gerencial from "./gerencial";
+import { TEMA_GRUPO, checar_csrf, empresas_visiveis, escopo_demandas, exige_admin, filtro_chamados } from "./portal";
 
 /** As 3 etapas de treinamento de cada empresa (coluna "categoria" da tabela). */
 export const ETAPAS: [string, string, string][] = [
@@ -34,22 +35,23 @@ function data_br(iso: string) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ||
 function tamanho(n: number) { return n >= 1048576 ? `${(n / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(n / 1024))} KB`; }
 
 /** Empresas que o usuário vê, com os contadores de chamados e demandas. */
-async function resumo_empresas(user: any) {
+async function resumo_empresas(user: any, escopo: number[]) {
   const empresas = (await empresas_visiveis(user)).filter((e) => e.status !== "inativo" || user.admin);
   const slugs = empresas.map((e) => e.slug);
   if (!slugs.length) return { empresas: [], tot: { chamados: 0, atendimento: 0, atrasadas: 0, hoje: 0 } };
   const hoje = PyDate.today().isoformat();
   const marc = slugs.map(() => "?").join(",");
-  const filtroResp = user.admin ? "" : " AND responsavel_id = ?";
+  const filtroResp = ` AND responsavel_id IN (${escopo.map(() => "?").join(",")})`;
+  const [fc, fp] = await filtro_chamados(user);
   const [tarefas, chamados] = await Promise.all([q(
     `SELECT empresa_slug, SUM(CASE WHEN vencimento <> '' AND vencimento < ? THEN 1 ELSE 0 END) AS atrasadas, ` +
     `SUM(CASE WHEN vencimento = ? THEN 1 ELSE 0 END) AS hoje FROM operacao_tarefas ` +
     `WHERE status <> 'concluida' AND empresa_slug IN (${marc})${filtroResp} GROUP BY empresa_slug`,
-    [hoje, hoje, ...slugs, ...(user.admin ? [] : [user.id])]),
+    [hoje, hoje, ...slugs, ...escopo]),
   q(
     `SELECT empresa_slug, SUM(CASE WHEN status = 'aberto' THEN 1 ELSE 0 END) AS abertos, ` +
     `SUM(CASE WHEN status = 'atendimento' THEN 1 ELSE 0 END) AS atendimento FROM operacao_chamados ` +
-    `WHERE status <> 'concluido' AND empresa_slug IN (${marc}) GROUP BY empresa_slug`, slugs)]);
+    `WHERE status <> 'concluido' AND empresa_slug IN (${marc})${fc} GROUP BY empresa_slug`, [...slugs, ...fp])]);
   const t = Object.fromEntries(tarefas.map((r) => [r.empresa_slug, r]));
   const c = Object.fromEntries(chamados.map((r) => [r.empresa_slug, r]));
   const tot = { chamados: 0, atendimento: 0, atrasadas: 0, hoje: 0 };
@@ -81,6 +83,38 @@ async function minhas_demandas(user: any, slugs: string[]) {
   return linhas.map((r) => ({ ...r, atrasada: r.vencimento < hoje, venc_br: data_br(r.vencimento) }));
 }
 
+/** Para o gestor: demandas abertas da equipe (atrasadas, de hoje ou em andamento), por empresa e pessoa. */
+async function demandas_da_equipe(equipe: number[], empresas: any[]) {
+  const slugs = empresas.map((e) => e.slug);
+  if (!equipe.length || !slugs.length) return [];
+  const hoje = PyDate.today().isoformat();
+  const linhas = await q(
+    `SELECT t.id, t.empresa_slug, t.titulo, t.prioridade, t.vencimento, t.status, t.responsavel_id, u.nome AS resp_nome ` +
+    `FROM operacao_tarefas t JOIN portal_usuarios u ON u.id = t.responsavel_id ` +
+    `WHERE t.status <> 'concluida' AND t.responsavel_id IN (${equipe.map(() => "?").join(",")}) ` +
+    `AND t.empresa_slug IN (${slugs.map(() => "?").join(",")}) ` +
+    `AND ((t.vencimento <> '' AND t.vencimento <= ?) OR t.status = 'andamento') ` +
+    `ORDER BY t.vencimento, CASE t.prioridade WHEN 'alta' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END, t.id`,
+    [...equipe, ...slugs, hoje]);
+  const grupos: any[] = [];
+  for (const e of empresas) {
+    const itens: any[] = linhas.filter((r) => r.empresa_slug === e.slug).map((r) => ({
+      ...r, venc_br: data_br(r.vencimento),
+      situacao: r.vencimento && r.vencimento < hoje ? "atrasada" : r.vencimento === hoje ? "hoje" : "andamento",
+      primeiro_nome: String(r.resp_nome || "").split(/\s+/)[0],
+    }));
+    if (!itens.length) continue;
+    const pessoas = new Map<string, any>();
+    for (const i of itens) {
+      const p = pessoas.get(i.resp_nome) ?? pessoas.set(i.resp_nome, { nome: i.resp_nome, atrasadas: 0, hoje: 0, andamento: 0 }).get(i.resp_nome);
+      p[i.situacao === "atrasada" ? "atrasadas" : i.situacao === "hoje" ? "hoje" : "andamento"]++;
+    }
+    grupos.push({ empresa: e, itens, pessoas: [...pessoas.values()], atrasadas: itens.filter((i) => i.situacao === "atrasada").length });
+  }
+  grupos.sort((a, b) => b.atrasadas - a.atrasadas || b.itens.length - a.itens.length);
+  return grupos;
+}
+
 async function agenda_do_usuario(uid: number) {
   const r = await q1("SELECT ics_url FROM portal_agendas WHERE usuario_id = ?", [uid]);
   if (!r) return { conectada: false, itens: [], erro: null as string | null, amanha: [] as any[] };
@@ -99,15 +133,20 @@ async function treinamentos_visiveis(user: any, slugs: string[]) {
 }
 
 export function registrar() {
+  gerencial.registrar();
   // ── Início ──
   get("portal_inicio", "/inicio", async () => {
     const user = g().portal_user;
-    const { empresas, tot } = await resumo_empresas(user);
+    const escopo = await escopo_demandas(user);
+    const equipe = escopo.filter((id) => id !== user.id);
+    const { empresas, tot } = await resumo_empresas(user, escopo);
     const slugs = empresas.map((e: any) => e.slug);
-    const [demandas, agenda, trein] = await Promise.all([minhas_demandas(user, slugs), agenda_do_usuario(user.id), treinamentos_visiveis(user, slugs)]);
+    const [demandas, agenda, trein, equipe_grupos] = await Promise.all([
+      minhas_demandas(user, slugs), agenda_do_usuario(user.id), treinamentos_visiveis(user, slugs),
+      user.admin ? demandas_da_equipe(equipe, empresas) : Promise.resolve([])]);
     const n_trein = trein.length;
     return render_template("portal/inicio.html", {
-      t: TEMA_GRUPO, empresas, tot, demandas, agenda, n_trein,
+      t: TEMA_GRUPO, empresas, tot, demandas, agenda, n_trein, equipe_n: equipe.length, equipe_grupos,
       hoje_extenso: data_extenso(PyDate.today()),
       saudacao: PyDate.now().hour < 12 ? "Bom dia" : PyDate.now().hour < 18 ? "Boa tarde" : "Boa noite",
     });

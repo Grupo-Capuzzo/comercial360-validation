@@ -101,8 +101,46 @@ export async function empresas_liberadas(usuario_id: number): Promise<Set<string
   const l = await memo(`portal:emp:${usuario_id}`, TTL, async () => (await q("SELECT empresa_slug FROM portal_usuario_empresas WHERE usuario_id = ?", [usuario_id])).map((r) => r.empresa_slug as string));
   return new Set(l);
 }
+/** Admin (gestor) com empresas marcadas trabalha só nelas; sem nenhuma marcada, vê todas. */
 export async function pode_ver(user: any, slug: string) {
-  return user.perfil === "admin" || (await empresas_liberadas(user.id)).has(slug);
+  const lib = await empresas_liberadas(user.id);
+  if (user.perfil === "admin") return lib.size === 0 || lib.has(slug);
+  return lib.has(slug);
+}
+
+/** Setores dos chamados. Cada usuário recebe os chamados dos setores marcados em Administração. */
+export const SETORES = ["Financeiro", "Comercial", "Processos", "Contábil", "Jurídico"];
+export async function setores_do_usuario(uid: number): Promise<string[]> {
+  return memo(`portal:set:${uid}`, TTL, async () => (await q("SELECT setor FROM portal_usuario_setores WHERE usuario_id = ?", [uid])).map((r) => r.setor as string));
+}
+/** Filtro SQL dos chamados que o usuário vê: administrador vê todos; usuário sem setor marcado também
+ *  (como era antes); com setores, vê os desses setores e os que ele abriu ou dos quais é responsável. */
+export async function filtro_chamados(user: any, alias = ""): Promise<[string, any[]]> {
+  if (user.admin) return ["", []];
+  const set = await setores_do_usuario(user.id);
+  if (!set.length) return ["", []];
+  return [` AND (${alias}setor IN (${set.map(() => "?").join(",")}) OR ${alias}aberto_por = ? OR ${alias}responsavel_id = ?)`, [...set, user.id, user.id]];
+}
+
+/** Hierarquia gestor → equipe (portal_usuarios.gestor_id), em cache de 30 s. */
+async function hierarquia(): Promise<Map<number, number[]>> {
+  const linhas = await memo("portal:hier", TTL, async () => await q("SELECT id, gestor_id FROM portal_usuarios WHERE ativo = 1"));
+  const filhos = new Map<number, number[]>();
+  for (const r of linhas) if (r.gestor_id) (filhos.get(r.gestor_id) ?? filhos.set(r.gestor_id, []).get(r.gestor_id)!).push(r.id);
+  return filhos;
+}
+/** Todos abaixo do gestor (equipe direta e a equipe dos gestores dela), sem ele próprio. */
+export async function equipe_ids(gestor_id: number): Promise<number[]> {
+  const filhos = await hierarquia();
+  const vistos = new Set<number>([gestor_id]);
+  const fila = [gestor_id];
+  while (fila.length) for (const f of filhos.get(fila.shift()!) ?? []) if (!vistos.has(f)) { vistos.add(f); fila.push(f); }
+  vistos.delete(gestor_id);
+  return [...vistos];
+}
+/** De quem são as demandas que o usuário acompanha: ele próprio + a equipe (se for gestor). */
+export async function escopo_demandas(user: any): Promise<number[]> {
+  return user.admin ? [user.id, ...(await equipe_ids(user.id))] : [user.id];
 }
 /** Módulos liberados para o usuário numa empresa (null = todos). Admin vê todos; sem nenhuma
  *  linha em portal_usuario_modulos para a empresa, também vê todos (como era antes). */
@@ -135,8 +173,8 @@ async function modulos_visiveis(user: any, e: any) {
 
 export async function empresas_visiveis(user: any) {
   const todas = await empresas_com_status();
-  if (user.perfil === "admin") return todas;
   const lib = await empresas_liberadas(user.id);
+  if (user.perfil === "admin") return lib.size ? todas.filter((e) => lib.has(e.slug)) : todas;
   return todas.filter((e) => lib.has(e.slug) && e.status !== "inativo");
 }
 export function validar_senha(senha: string) {
@@ -342,9 +380,17 @@ export function registrar() {
       for (const r of await q("SELECT empresa_slug, modulo_id FROM portal_usuario_modulos WHERE usuario_id = ?", [u.id])) (u.modulos[r.empresa_slug] ??= []).push(r.modulo_id);
       u.crm = u.perfil === "admin" || (u.modulos["_grupo"] ?? []).includes("crm");
     }
+    const nomes = new Map(usuarios.map((u) => [u.id, u.nome]));
+    for (const u of usuarios) {
+      u.gestor_nome = u.gestor_id ? (nomes.get(u.gestor_id) ?? "") : "";
+      u.equipe_n = usuarios.filter((x) => x.gestor_id === u.id).length;
+      u.emp_lista = EMPRESAS.filter((e) => u.empresas.has(e.slug));
+      u.setores = await setores_do_usuario(u.id);
+    }
+    const gestores = usuarios.filter((u) => u.perfil === "admin" && u.ativo);
     const sel = request().args.get("u", null, "int");
     const editar = usuarios.find((u) => u.id === sel) ?? null;
-    return render_template("portal/admin.html", { t: TEMA_GRUPO, usuarios, editar, empresas: await empresas_com_status(), aba: request().args.get("aba", "usuarios") });
+    return render_template("portal/admin.html", { t: TEMA_GRUPO, usuarios, editar, gestores, SETORES, empresas: await empresas_com_status(), aba: request().args.get("aba", "usuarios") });
   });
 
   post("portal_admin_usuario", "/grupo/admin/usuario", async () => {
@@ -358,12 +404,21 @@ export function registrar() {
     let ativo = f.get("ativo") ? 1 : 0;
     const senha = f.get("senha") ?? "";
     const empresas = f.getlist("empresas").filter((s: string) => EMPRESAS_POR_SLUG[s]);
+    let gestor_id: number | null = f.get("gestor_id", null, "int") || null;
     const voltar = uid ? url_for("portal_admin", { u: uid }) : url_for("portal_admin");
     let msg: string | null;
     if (senha && (msg = validar_senha(senha))) { flash(msg, "erro"); return redirect(voltar); }
+    if (gestor_id) {
+      const gt = await q1("SELECT id FROM portal_usuarios WHERE id = ? AND perfil = 'admin' AND ativo = 1", [gestor_id]);
+      if (!gt) gestor_id = null;
+      else if (uid && (gestor_id === uid || (await equipe_ids(uid)).includes(gestor_id))) {
+        flash("Esse gestor faz parte da equipe deste usuário. Escolha outro gestor.", "erro");
+        return redirect(voltar);
+      }
+    }
     if (uid) {
       if (uid === g().portal_user.id) { perfil = "admin"; ativo = 1; }
-      await run("UPDATE portal_usuarios SET nome = ?, perfil = ?, ativo = ? WHERE id = ?", [nome || "Sem nome", perfil, ativo, uid]);
+      await run("UPDATE portal_usuarios SET nome = ?, perfil = ?, ativo = ?, gestor_id = ? WHERE id = ?", [nome || "Sem nome", perfil, ativo, gestor_id, uid]);
       if (senha) {
         const u = await q1("SELECT email FROM portal_usuarios WHERE id = ?", [uid]);
         try { await definirUsuarioAuth(u!.email, senha); } catch (e: any) { flash(`Não foi possível definir a senha: ${e.message}`, "erro"); return redirect(voltar); }
@@ -374,10 +429,12 @@ export function registrar() {
       if (!senha) { flash("Informe uma senha provisória.", "erro"); return redirect(voltar); }
       if ((await q("SELECT 1 FROM portal_usuarios WHERE lower(email) = ?", [email])).length) { flash("Já existe um usuário com esse e-mail.", "erro"); return redirect(voltar); }
       try { await definirUsuarioAuth(email, senha); } catch (e: any) { flash(`Não foi possível criar o login: ${e.message}`, "erro"); return redirect(voltar); }
-      uid = (await run("INSERT INTO portal_usuarios (nome, email, senha_hash, perfil, criado_em) VALUES (?, ?, ?, ?, ?)", [nome, email, "", perfil, agora()])).lastrowid;
+      uid = (await run("INSERT INTO portal_usuarios (nome, email, senha_hash, perfil, criado_em, gestor_id) VALUES (?, ?, ?, ?, ?, ?)", [nome, email, "", perfil, agora(), gestor_id])).lastrowid;
       flash(`Usuário ${nome} criado.`, "ok");
     }
     limparMemo("portal:");
+    await run("DELETE FROM portal_usuario_setores WHERE usuario_id = ?", [uid]);
+    for (const st of f.getlist("setores").filter((x: string) => SETORES.includes(x))) await run("INSERT INTO portal_usuario_setores (usuario_id, setor) VALUES (?, ?)", [uid, st]);
     await run("DELETE FROM portal_usuario_empresas WHERE usuario_id = ?", [uid]);
     for (const s of empresas) await run("INSERT INTO portal_usuario_empresas VALUES (?, ?)", [uid, s]);
     // módulos por empresa (nenhum marcado = todos os módulos da empresa) + CRM Geral

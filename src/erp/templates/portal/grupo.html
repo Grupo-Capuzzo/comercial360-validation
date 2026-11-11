@@ -29,6 +29,18 @@
 </div>
 
 <div class="grid" id="grid">
+  {% if portal_user.admin %}
+  <article class="card card-ger" id="emp-gerencial" data-nome="gerencial relatórios grupo" data-status="ativo" data-fav="1">
+    <header class="card-head">
+      <div class="status"><span class="bar"></span><div><b>Gestão</b></div></div>
+    </header>
+    <div class="card-body">
+      <span class="logo-circle ger-ic">{{ ic('show_chart') }}</span>
+      <div><h3>Gerencial do Grupo</h3><p>Receitas, despesas e resultado de todas as empresas, lado a lado.</p></div>
+    </div>
+    <footer class="card-foot"><a class="btn-pill" href="{{ url_for('portal_gerencial') }}">Abrir</a></footer>
+  </article>
+  {% endif %}
   {% for e in empresas %}
     {% if loop.index0 == 1 %}
     <article class="promo" id="promo">
