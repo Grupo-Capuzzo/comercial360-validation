@@ -1,38 +1,31 @@
-{% extends "base.html" %}
-{% block title %}Títulos — Títulos Privados{% endblock %}
-{% block content %}
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Títulos{% endblock %}
+{% block fin_conteudo %}
 {% include "titulos/_estilo.html" %}
-<div class="page-header">
-  <div class="page-header-icon">💰</div>
-  <div class="page-header-title">Títulos</div>
-  <div class="page-header-sub">Todos os títulos privados, com o valor a receber atualizado até hoje.</div>
+{% call m.cabecalho('Títulos', 'Todos os títulos privados, com o valor a receber atualizado até hoje.', 'Produto · Títulos Privados') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('titulos.calculadora', slug=empresa.slug) }}">{{ fic('add') }} Novo título</a>
+{% endcall %}
+<div class="pr-abas">
+  {% for k, rot in [('', 'Todos'), ('active', 'Ativos'), ('atraso', 'Em atraso'), ('rascunho', 'Aguardando assinatura'), ('paid', 'Quitados'), ('cancelled', 'Cancelados')] %}
+    <a class="{{ 'on' if st == k }}" href="{{ url_for('titulos.lista', slug=empresa.slug, status=k or None, q=busca or None) }}">{{ rot }}</a>
+  {% endfor %}
 </div>
-<form class="toolbar" method="get" style="margin-bottom:16px;">
-  <div class="toolbar-left tp-acoes">
-    {% for k, rot in [('', 'Todos'), ('active', 'Ativos'), ('atraso', 'Em atraso'), ('rascunho', 'Aguardando assinatura'), ('paid', 'Quitados'), ('cancelled', 'Cancelados')] %}
-      <a class="btn btn-sm {{ 'btn-primary' if st == k else 'btn-secondary' }}" href="{{ url_for('titulos.lista', status=k or None, q=busca or None) }}">{{ rot }}</a>
-    {% endfor %}
-  </div>
-  <div class="toolbar-right tp-acoes">
+<section class="vg-box">
+  <form method="get" class="tp-acoes" style="margin-bottom:.8rem">
     {% if st %}<input type="hidden" name="status" value="{{ st }}">{% endif %}
-    <input class="form-control" name="q" value="{{ busca }}" placeholder="Buscar cliente ou nº…" style="min-width:220px">
-    <a class="btn btn-primary btn-sm" href="{{ url_for('titulos.calculadora') }}">➕ Novo título</a>
-  </div>
-</form>
-{% if lista %}
-<div class="table-wrap"><table>
-  <thead><tr><th>Título</th><th>Cliente</th><th class="tp-right">Emprestado</th><th class="tp-right">Parcelas</th><th class="tp-right">Taxa</th>
-    <th class="tp-right">A receber hoje</th><th class="tp-right">Em atraso</th><th>Situação</th></tr></thead>
-  <tbody>{% for t in lista %}
-    <tr><td><a class="text-gold" href="{{ url_for('titulos.titulo', tid=t.id) }}">{{ t.loan_number or ('#' ~ t.id) }}</a></td><td>{{ t.cliente_nome }}</td>
-      <td class="tp-right tp-nowrap">{{ moeda(t.original_amount) }}</td><td class="tp-right">{{ t.pagas }}/{{ t.parcelas|length }}</td><td class="tp-right tp-nowrap">{{ pct(t.taxa) }}</td>
-      <td class="tp-right tp-nowrap">{{ moeda(t.saldo) if t.status in ['active', 'overdue'] else '—' }}</td>
-      <td class="tp-right tp-nowrap {{ 'tp-neg' if t.saldo_atraso }}">{{ moeda(t.saldo_atraso) if t.saldo_atraso else '—' }}</td>
-      <td><span class="badge {{ t.status_cls }}">{{ t.status_nome }}</span>{% if t.dias_atraso %} <span class="tp-tag">{{ t.dias_atraso }}d</span>{% endif %}</td></tr>
-  {% endfor %}</tbody>
-</table></div>
-{% else %}
-<div class="empty-state"><div class="empty-state-icon">📜</div><div class="empty-state-title">Nenhum título encontrado</div>
-  <div class="empty-state-sub">Use a calculadora para gerar o primeiro.</div></div>
-{% endif %}
+    <input class="inp" name="q" value="{{ busca }}" placeholder="Buscar cliente ou nº…" style="max-width:320px">
+  </form>
+  <div class="tp-wrap"><table class="pr-tabela">
+    <thead><tr><th>Título</th><th>Cliente</th><th class="num">Emprestado</th><th class="num">Parcelas</th><th class="num">Taxa</th>
+      <th class="num">A receber hoje</th><th class="num">Em atraso</th><th>Situação</th></tr></thead>
+    <tbody>{% for t in lista %}
+      <tr class="clic" onclick="location.href='{{ url_for('titulos.titulo', slug=empresa.slug, tid=t.id) }}'"><td class="mono">{{ t.loan_number or ('#' ~ t.id) }}</td><td><b>{{ t.cliente_nome }}</b></td>
+        <td class="num">{{ moeda(t.original_amount) }}</td><td class="num">{{ t.pagas }}/{{ t.parcelas|length }}</td><td class="num">{{ pct(t.taxa) }}</td>
+        <td class="num">{{ moeda(t.saldo) if t.status in ['active', 'overdue'] else '—' }}</td>
+        <td class="num {{ 'tp-neg' if t.saldo_atraso }}">{{ moeda(t.saldo_atraso) if t.saldo_atraso else '—' }}</td>
+        <td><span class="pr-st {{ t.st_cls }}">{{ t.status_nome }}</span>{% if t.dias_atraso %} <span class="pr-st risco">{{ t.dias_atraso }}d</span>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="8" class="fin-vazio">Nenhum título encontrado. Use a calculadora para gerar o primeiro.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
 {% endblock %}

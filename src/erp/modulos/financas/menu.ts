@@ -67,8 +67,11 @@ function _capuzzo(slug: string, b: Record<string, any>): any[] {
   };
   const titulos = {
     id: "titulos", rotulo: "Títulos Privados", curto: "Títulos", icone: "titulo", produto: true, itens: [
-      _i("tit_painel", "Carteira", u("financas.titulos_painel"), "painel"),
-      _i("tit_parcelas", "Parcelas a receber", u("financas.titulos_painel", { aba: "parcelas" }), "calendario"),
+      _i("titulos_painel", "Painel", u("titulos.painel"), "painel"),
+      _i("titulos_calculadora", "Calculadora / Novo título", u("titulos.calculadora"), "calculo"),
+      _i("titulos_lista", "Títulos", u("titulos.lista"), "titulo"),
+      _i("titulos_quitacao", "Quitação / Amortização", u("titulos.quitacao"), "fluxo"),
+      _i("titulos_clientes", "Clientes", u("titulos.clientes"), "pessoas"),
     ],
   };
   return [b.inicio, b.receber, b.pagar, b.bancos, "-", condominios, tatica, titulos, "-", b.relatorios, b.cadastros];

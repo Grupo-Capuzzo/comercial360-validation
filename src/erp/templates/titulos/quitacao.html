@@ -1,66 +1,71 @@
-{% extends "base.html" %}
-{% block title %}Quitação / Amortização — Títulos Privados{% endblock %}
-{% block content %}
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Quitação / Amortização{% endblock %}
+{% block fin_conteudo %}
 {% include "titulos/_estilo.html" %}
-<div class="page-header">
-  <div class="page-header-icon">📉</div>
-  <div class="page-header-title">Quitação / Amortização</div>
-  <div class="page-header-sub">Valor para quitar numa data: parcelas vencidas entram atualizadas pela taxa do título; parcelas que ainda vão vencer entram pelo valor presente (sem os juros que ainda não correram).</div>
-</div>
+{% call m.cabecalho('Quitação / Amortização', 'Valor para quitar numa data: parcelas vencidas entram atualizadas pela taxa do título; parcelas que ainda vão vencer entram pelo valor presente (sem os juros que ainda não correram).', 'Produto · Títulos Privados') %}
+  {% if linhas %}<button class="btn-pill outline fin-btn tp-noprint" type="button" onclick="window.print()">{{ fic('abrir') }} Imprimir / PDF</button>{% endif %}
+{% endcall %}
 
-<form method="get" class="card-gold tp-noprint" style="margin-bottom:20px;">
-  <div class="form-row">
-    <div class="form-group" style="flex:2"><label>Cliente</label>
-      <select class="form-control" name="cliente" onchange="this.form.submit()">
+<section class="vg-box tp-noprint">
+  <form method="get" class="tp-form-linha l2">
+    <div><label class="lbl">Cliente</label>
+      <select class="inp" name="cliente" onchange="this.form.submit()">
         <option value="">Escolha o cliente…</option>
         {% for c in lista_cli %}<option value="{{ c.id }}" {{ 'selected' if pcid == c.id }}>{{ c.name }}</option>{% endfor %}
       </select></div>
-    <div class="form-group"><label>Calcular para a data</label><input class="form-control" type="date" name="data" value="{{ dia }}" onchange="this.form.submit()"></div>
-  </div>
-</form>
+    <div><label class="lbl">Calcular para a data</label><input class="inp" type="date" name="data" value="{{ dia }}" onchange="this.form.submit()"></div>
+    <div></div>
+  </form>
+</section>
 
 {% if pcid %}
 {% if not linhas %}
-  <div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-title">Este cliente não tem parcelas em aberto</div></div>
+  <section class="vg-box"><p class="fin-vazio">Este cliente não tem parcelas em aberto.</p></section>
 {% else %}
-<form method="get" id="f-sel">
-  <input type="hidden" name="cliente" value="{{ pcid }}"><input type="hidden" name="data" value="{{ dia }}">
-  <div class="section-label">🧾 &nbsp;{{ cliente_nome }} — parcelas em aberto em {{ data_br(dia) }}</div>
-  <div class="table-wrap" style="margin-bottom:16px;"><table>
-    <thead><tr><th class="tp-noprint"><input type="checkbox" id="todas" checked onclick="document.querySelectorAll('.chk-p').forEach(function(c){c.checked=document.getElementById('todas').checked})"></th>
-      <th>Título</th><th>Parcela</th><th>Vencimento</th><th class="tp-right">Em aberto</th><th class="tp-right">Encargos do atraso</th><th class="tp-right">Desconto (juros futuros)</th><th class="tp-right">Valor para quitar</th><th>Situação</th></tr></thead>
-    <tbody>{% for l in linhas %}
-      <tr class="{{ '' if l.marcada else 'text-dim' }}"><td class="tp-noprint"><input class="chk-p" type="checkbox" name="p" value="{{ l.p.id }}" {{ 'checked' if l.marcada }}></td>
-        <td>{{ l.t.loan_number }}</td><td>{{ l.p.installment_number }}/{{ l.t.parcelas|length }}</td><td class="tp-nowrap">{{ data_br(l.p.vencimento) }}</td>
-        <td class="tp-right">{{ moeda(l.qv.principal + l.qv.juros) }}</td>
-        <td class="tp-right {{ 'tp-neg' if l.qv.encargos }}">{{ moeda(l.qv.encargos) if l.qv.encargos else '—' }}</td>
-        <td class="tp-right {{ 'tp-pos' if l.qv.desconto }}">{{ ('-' ~ moeda(l.qv.desconto)) if l.qv.desconto else '—' }}</td>
-        <td class="tp-right" style="font-weight:600">{{ moeda(l.qv.quitacao) }}</td>
-        <td>{% if l.qv.dias_atraso %}<span class="tp-tag">{{ l.qv.dias_atraso }} dia(s) de atraso</span>{% elif l.qv.futura %}<span class="tp-tag neutro">A vencer</span>{% else %}<span class="tp-tag hoje">Vence hoje</span>{% endif %}</td></tr>
-    {% endfor %}</tbody>
-  </table></div>
-  <div class="page-actions tp-noprint" style="justify-content:flex-start;margin-bottom:18px;"><button class="btn btn-secondary" type="submit">🔄 Recalcular com as parcelas marcadas</button>
-    <button class="btn btn-secondary" type="button" onclick="window.print()">🖨 Imprimir / PDF</button></div>
-</form>
-
-<div class="tp-grid4">
-  <div class="metric-card"><div class="metric-value tp-gold">{{ moeda(tot.quitacao) }}</div><div class="metric-label">Valor para quitar em {{ data_br(dia) }}</div><div class="metric-sub">{{ tot.n }} parcela(s) marcada(s)</div></div>
-  <div class="metric-card"><div class="metric-value">{{ moeda(tot.nominal) }}</div><div class="metric-label">Em aberto sem desconto</div></div>
-  <div class="metric-card"><div class="metric-value tp-neg">{{ moeda(tot.encargos) }}</div><div class="metric-label">Encargos do atraso</div></div>
-  <div class="metric-card"><div class="metric-value tp-pos">{{ moeda(tot.desconto) }}</div><div class="metric-label">Desconto dos juros futuros</div></div>
+<div class="vg-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:1rem">
+  <div class="vg-kpi escuro"><small>Valor para quitar em {{ data_br(dia) }}</small><b>{{ moeda(tot.quitacao) }}</b><em>{{ tot.n }} parcela(s) marcada(s) · {{ cliente_nome }}</em></div>
+  <div class="vg-kpi"><small>Em aberto sem desconto</small><b>{{ moeda(tot.nominal) }}</b></div>
+  <div class="vg-kpi"><small>Encargos do atraso</small><b class="{{ 'neg' if tot.encargos }}">{{ moeda(tot.encargos) }}</b></div>
+  <div class="vg-kpi"><small>Desconto dos juros futuros</small><b class="pos">{{ moeda(tot.desconto) }}</b></div>
 </div>
 
+<section class="vg-box">
+  <form method="get">
+    <input type="hidden" name="cliente" value="{{ pcid }}"><input type="hidden" name="data" value="{{ dia }}">
+    <header><h3>{{ fic('calendario') }} {{ cliente_nome }} — parcelas em aberto</h3><span>em {{ data_br(dia) }}</span></header>
+    <div class="tp-wrap"><table class="pr-tabela">
+      <thead><tr><th class="tp-noprint"><input type="checkbox" id="todas" checked onclick="document.querySelectorAll('.chk-p').forEach(function(c){c.checked=document.getElementById('todas').checked})"></th>
+        <th>Título</th><th>Parcela</th><th>Vencimento</th><th class="num">Em aberto</th><th class="num">Encargos do atraso</th><th class="num">Desconto (juros futuros)</th><th class="num">Valor para quitar</th><th>Situação</th></tr></thead>
+      <tbody>{% for l in linhas %}
+        <tr style="{{ '' if l.marcada else 'opacity:.45' }}"><td class="tp-noprint"><input class="chk-p" type="checkbox" name="p" value="{{ l.p.id }}" {{ 'checked' if l.marcada }}></td>
+          <td class="mono">{{ l.t.loan_number or ('#' ~ l.t.id) }}</td><td>{{ l.p.installment_number }}/{{ l.t.parcelas|length }}</td><td>{{ data_br(l.p.vencimento) }}</td>
+          <td class="num">{{ moeda(l.qv.principal + l.qv.juros) }}</td>
+          <td class="num {{ 'tp-neg' if l.qv.encargos }}">{{ moeda(l.qv.encargos) if l.qv.encargos else '—' }}</td>
+          <td class="num {{ 'tp-pos' if l.qv.desconto }}">{{ ('-' ~ moeda(l.qv.desconto)) if l.qv.desconto else '—' }}</td>
+          <td class="num"><b>{{ moeda(l.qv.quitacao) }}</b></td>
+          <td>{% if l.qv.dias_atraso %}<span class="pr-st risco">{{ l.qv.dias_atraso }} dia(s) de atraso</span>{% elif l.qv.futura %}<span class="pr-st neutro">A vencer</span>{% else %}<span class="pr-st aviso">Vence hoje</span>{% endif %}</td></tr>
+      {% endfor %}
+      <tr class="tp-total"><td class="tp-noprint"></td><td colspan="3">Total marcado</td><td class="num">{{ moeda(tot.nominal - tot.encargos) }}</td><td class="num">{{ moeda(tot.encargos) }}</td><td class="num">{{ ('-' ~ moeda(tot.desconto)) if tot.desconto else '—' }}</td><td class="num">{{ moeda(tot.quitacao) }}</td><td></td></tr>
+      </tbody>
+    </table></div>
+    <div class="tp-acoes tp-noprint" style="margin-top:.8rem"><button class="btn-pill outline fin-btn" type="submit">Recalcular com as parcelas marcadas</button></div>
+  </form>
+</section>
+
 {% if dia == hoje_iso and tot.n %}
-<form method="post" class="tp-box tp-noprint" onsubmit="return confirm('Registrar o recebimento de {{ moeda(tot.quitacao) }} e quitar {{ tot.n }} parcela(s)?')">
-  <h3>Cliente pagou? Registrar a quitação</h3>
-  <p class="tp-sub">Dá baixa nas parcelas marcadas com o valor acima (as futuras com o desconto dos juros que ainda não correram).</p>
-  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="cliente" value="{{ pcid }}">
-  {% for l in linhas if l.marcada %}<input type="hidden" name="p" value="{{ l.p.id }}">{% endfor %}
-  <div class="tp-form-inline">
-    <div class="form-group"><label>Conta do recebimento</label><select class="form-control" name="conta_id" required>{% for k in contas %}<option value="{{ k.id }}">{{ k.nome }}</option>{% endfor %}</select></div>
-    <button class="btn btn-primary" type="submit">💾 Registrar quitação de {{ moeda(tot.quitacao) }}</button>
-  </div>
-</form>
+<section class="vg-box tp-noprint">
+  <header><h3>{{ fic('receber') }} Cliente pagou? Registrar a quitação</h3></header>
+  <p class="fin-sub" style="margin-top:0">Dá baixa nas parcelas marcadas com o valor acima (as futuras com o desconto dos juros que ainda não correram).</p>
+  <form method="post" onsubmit="return confirm('Registrar o recebimento de {{ moeda(tot.quitacao) }} e quitar {{ tot.n }} parcela(s)?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="cliente" value="{{ pcid }}">
+    {% for l in linhas if l.marcada %}<input type="hidden" name="p" value="{{ l.p.id }}">{% endfor %}
+    <div class="tp-form-linha l2">
+      <div><label class="lbl">Conta do recebimento</label><select class="inp" name="conta_id" required>{% for k in contas %}<option value="{{ k.id }}">{{ k.nome }}</option>{% endfor %}</select></div>
+      <div><button class="btn-pill fin-btn" type="submit">{{ fic('check') }} Registrar quitação de {{ moeda(tot.quitacao) }}</button></div><div></div>
+    </div>
+  </form>
+</section>
 {% endif %}
 {% endif %}
 {% endif %}

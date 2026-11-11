@@ -99,7 +99,7 @@ export function registrar() {
 
   get("contratos.detalhe", "/contratos/<int:cid>", async (cid: number) => {
     const c = await _contrato(cid);
-    if (c.tipo === "titulo" && c.dados?.titulo_id) return redirect(url_for("titulos.titulo", { tid: c.dados.titulo_id }));
+    if (c.tipo === "titulo" && c.dados?.titulo_id) return redirect(url_for("titulos.titulo", { slug: "assessoria", tid: c.dados.titulo_id }));
     const cfg = await d.config();
     const hoje = PyDate.today().isoformat();
     const [aq, venc] = d.datas_sugeridas(c, hoje);

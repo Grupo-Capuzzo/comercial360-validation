@@ -1,95 +1,93 @@
-{% extends "base.html" %}
-{% block title %}Título {{ t.loan_number }} — Títulos Privados{% endblock %}
-{% block content %}
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Título {{ tit.loan_number }}{% endblock %}
+{% block fin_conteudo %}
 {% include "titulos/_estilo.html" %}
-<a class="back-link" href="{{ url_for('titulos.lista') }}">← Títulos</a>
-<div class="page-header">
-  <div class="page-header-icon">💰</div>
-  <div class="page-header-title">Título {{ t.loan_number or ('#' ~ t.id) }} <span class="badge {{ t.status_cls }}">{{ t.status_nome }}</span>{% if t.atrasadas %} <span class="tp-tag">{{ t.atrasadas|length }} em atraso</span>{% endif %}</div>
-  <div class="page-header-sub"><a class="text-gold" href="{{ url_for('titulos.cliente', pcid=cli.id) }}">{{ cli.name }}</a>{% if cli.document %} · {{ cli.document }}{% endif %} · {{ moeda(t.original_amount) }} em {{ t.parcelas|length }}x de {{ moeda(t.installment_amount) }} · {{ pct(t.taxa) }}{% if t.assinado_em %} · assinado em {{ data_br(t.assinado_em) }}{% endif %}</div>
-</div>
+{% call m.cabecalho('Título ' ~ (tit.loan_number or ('#' ~ tit.id)), cli.name ~ ((' · ' ~ cli.document) if cli.document else '') ~ ' · ' ~ moeda(tit.original_amount) ~ ' em ' ~ (tit.parcelas|length) ~ 'x de ' ~ moeda(tit.installment_amount) ~ ' · ' ~ pct(tit.taxa) ~ ((' · assinado em ' ~ data_br(tit.assinado_em)) if tit.assinado_em else ''), 'Produto · Títulos Privados') %}
+  <span class="pr-st {{ tit.st_cls }}">{{ tit.status_nome }}</span>{% if tit.atrasadas %}<span class="pr-st risco">{{ tit.atrasadas|length }} em atraso</span>{% endif %}
+  <a class="btn-pill outline fin-btn" href="{{ url_for('titulos.lista', slug=empresa.slug) }}">{{ fic('chevron_left') }} Títulos</a>
+{% endcall %}
 
-<div class="tp-grid4">
-  <div class="metric-card"><div class="metric-value tp-gold">{{ moeda(t.saldo) }}</div><div class="metric-label">A receber hoje (atualizado)</div><div class="metric-sub">{{ t.pagas }} de {{ t.parcelas|length }} parcela(s) quitada(s)</div></div>
-  <div class="metric-card"><div class="metric-value">{{ moeda(t.principal_aberto) }}</div><div class="metric-label">Emprestado que ainda não voltou</div></div>
-  <div class="metric-card"><div class="metric-value">{{ moeda(t.juros_aberto) }}</div><div class="metric-label">Juros a receber</div></div>
-  <div class="metric-card"><div class="metric-value {{ 'tp-neg' if t.saldo_atraso }}">{{ moeda(t.saldo_atraso) }}</div><div class="metric-label">Em atraso</div><div class="metric-sub">{{ moeda(t.encargos) }} de encargos{% if t.dias_atraso %} · {{ t.dias_atraso }} dia(s){% endif %}</div></div>
+<div class="vg-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="vg-kpi escuro"><small>A receber hoje (atualizado)</small><b>{{ moeda(tit.saldo) }}</b><em>{{ tit.pagas }} de {{ tit.parcelas|length }} parcela(s) quitada(s)</em></div>
+  <div class="vg-kpi"><small>Emprestado que não voltou</small><b>{{ moeda(tit.principal_aberto) }}</b></div>
+  <div class="vg-kpi"><small>Juros a receber</small><b>{{ moeda(tit.juros_aberto) }}</b></div>
+  <div class="vg-kpi {{ 'alerta' if tit.saldo_atraso }}"><small>Em atraso</small><b class="{{ 'neg' if tit.saldo_atraso }}">{{ moeda(tit.saldo_atraso) }}</b><em>{{ moeda(tit.encargos) }} de encargos{% if tit.dias_atraso %} · {{ tit.dias_atraso }} dia(s){% endif %}</em></div>
 </div>
 
 {% if c %}
-<div class="tp-box" style="margin-bottom:22px;">
-  <h3>Contrato · <span style="color:{{ STATUS_CONTRATO[c.status].cor }}">{{ 'Assinado · título ativo' if c.status == 'concluido' else STATUS_CONTRATO[c.status].nome }}</span></h3>
-  <p class="tp-sub">{% if t.status == 'rascunho' %}Quando o cliente assinar, o título fica ativo e o sistema cria as contas a receber (uma por parcela) e a conta a pagar do repasse de {{ moeda(t.original_amount) }} no dia da assinatura.{% else %}Contas a receber e repasse já lançados no Finanças da Assessoria.{% endif %}</p>
+<section class="vg-box">
+  <header><h3>{{ fic('contrato') }} Contrato</h3><span class="pr-st {{ 'ok' if c.status == 'concluido' else ('neutro' if c.status == 'cancelado' else 'aviso') }}">{{ 'Assinado · título ativo' if c.status == 'concluido' else STATUS_CONTRATO[c.status].nome }}</span></header>
+  <p class="fin-sub" style="margin-top:0">{% if tit.status == 'rascunho' %}Quando o cliente assinar, o título fica ativo e o sistema cria as contas a receber (uma por parcela) e a conta a pagar do repasse de {{ moeda(tit.original_amount) }} no dia da assinatura.{% else %}Contas a receber e repasse já lançados no Finanças.{% endif %}</p>
   <div class="tp-acoes">
-    <a class="btn btn-secondary btn-sm" href="{{ url_for('contratos.documento', cid=c.id) }}" target="_blank">📄 Ver contrato</a>
+    <a class="btn-pill outline fin-btn" href="{{ url_for('contratos.documento', cid=c.id) }}" target="_blank">{{ fic('abrir') }} Ver contrato</a>
     {% if c.status in ['rascunho', 'aguardando'] %}
-      <form method="post" action="{{ url_for('titulos.contrato_acao', tid=t.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <button class="btn btn-primary btn-sm" name="acao" value="email">✉️ {{ 'Reenviar' if c.status == 'aguardando' else 'Enviar' }} por e-mail ({{ cli.email }})</button></form>
-      <button class="btn btn-secondary btn-sm" type="button" onclick="navigator.clipboard.writeText('{{ link }}').then(function(){alert('Link copiado.')})">🔗 Copiar link de assinatura</button>
-      {% if cli.phone %}<a class="btn btn-secondary btn-sm" target="_blank" href="https://wa.me/55{{ cli.phone|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') }}?text={{ msg_wpp|urlencode }}">💬 WhatsApp</a>{% endif %}
+      <form method="post" action="{{ url_for('titulos.contrato_acao', slug=empresa.slug, tid=tit.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn-pill fin-btn" name="acao" value="email">{{ 'Reenviar' if c.status == 'aguardando' else 'Enviar' }} por e-mail ({{ cli.email }})</button></form>
+      <button class="btn-pill outline fin-btn" type="button" onclick="navigator.clipboard.writeText('{{ link }}').then(function(){alert('Link copiado.')})">Copiar link de assinatura</button>
+      {% if cli.phone %}<a class="btn-pill outline fin-btn" target="_blank" href="https://wa.me/55{{ cli.phone|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') }}?text={{ msg_wpp|urlencode }}">WhatsApp</a>{% endif %}
       {% if c.status == 'rascunho' %}
-      <form method="post" action="{{ url_for('titulos.contrato_acao', tid=t.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <button class="btn btn-secondary btn-sm" name="acao" value="manual" title="Use depois de mandar o link por WhatsApp ou outro canal">✔ Marcar como enviado</button></form>
+      <form method="post" action="{{ url_for('titulos.contrato_acao', slug=empresa.slug, tid=tit.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn-pill outline fin-btn" name="acao" value="manual" title="Use depois de mandar o link por WhatsApp ou outro canal">Marcar como enviado</button></form>
       {% endif %}
-      {% if t.status == 'rascunho' %}
-      <form method="post" action="{{ url_for('titulos.contrato_acao', tid=t.id) }}" onsubmit="return confirm('Cancelar este título e o contrato?')"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <input type="hidden" name="motivo" value="Cancelado antes da assinatura"><button class="btn btn-danger btn-sm" name="acao" value="cancelar">✖ Cancelar título</button></form>
+      {% if tit.status == 'rascunho' %}
+      <form method="post" action="{{ url_for('titulos.contrato_acao', slug=empresa.slug, tid=tit.id) }}" onsubmit="return confirm('Cancelar este título e o contrato?')"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="motivo" value="Cancelado antes da assinatura"><button class="btn-pill outline fin-btn" name="acao" value="cancelar" style="color:var(--fin-neg)">Cancelar título</button></form>
       {% endif %}
     {% endif %}
-    {% if repasse %}<span class="text-dim" style="font-size:.8rem">Repasse no contas a pagar: {{ moeda(repasse.valor / 100) }} em {{ data_br(repasse.vencimento) }}</span>{% endif %}
+    {% if repasse %}<span class="fin-sub" style="margin:0">Repasse no contas a pagar: {{ moeda(repasse.valor / 100) }} em {{ data_br(repasse.vencimento) }}</span>{% endif %}
   </div>
-</div>
+</section>
 {% endif %}
 
-<div class="section-label">🧾 &nbsp;Parcelas — situação em {{ data_br(hoje_iso) }}</div>
-<div class="table-wrap" style="margin-bottom:22px;">
-  <table>
-    <thead><tr><th>Parcela</th><th>Vencimento</th><th class="tp-right">Valor da parcela</th><th class="tp-right">Pago</th>
-      <th class="tp-right">Encargos do atraso</th><th class="tp-right">Juros em aberto</th><th class="tp-right">Principal em aberto</th><th class="tp-right">A receber hoje</th><th>Situação</th></tr></thead>
+<section class="vg-box">
+  <header><h3>{{ fic('calendario') }} Parcelas</h3><span>situação em {{ data_br(hoje_iso) }}</span></header>
+  <div class="tp-wrap"><table class="pr-tabela">
+    <thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor da parcela</th><th class="num">Pago</th>
+      <th class="num">Encargos do atraso</th><th class="num">Juros em aberto</th><th class="num">Principal em aberto</th><th class="num">A receber hoje</th><th>Situação</th></tr></thead>
     <tbody>
-    {% for p in t.parcelas %}
-      <tr><td>{{ p.installment_number }}/{{ t.parcelas|length }}</td><td class="tp-nowrap">{{ data_br(p.vencimento) }}</td>
-        <td class="tp-right tp-nowrap">{{ moeda(p.valor) }}</td><td class="tp-right tp-nowrap">{{ moeda(p.sit.pago) if p.sit.pago else '—' }}</td>
-        <td class="tp-right {{ 'tp-neg' if p.sit.encargos }}">{{ moeda(p.sit.encargos) if p.sit.encargos else '—' }}</td>
-        <td class="tp-right">{{ moeda(p.sit.juros) }}</td><td class="tp-right">{{ moeda(p.sit.principal) }}</td>
-        <td class="tp-right" style="font-weight:600">{{ moeda(p.sit.saldo) }}</td>
-        <td class="tp-nowrap">{% if p.sit.quitada %}<span class="tp-tag ok">Quitada</span>{% elif p.sit.dias_atraso %}<span class="tp-tag">{{ p.sit.dias_atraso }} dia(s) de atraso</span>{% elif p.vencimento == hoje_iso %}<span class="tp-tag hoje">Vence hoje</span>{% elif p.sit.pago %}<span class="tp-tag neutro">Pago parcial</span>{% else %}<span class="tp-tag neutro">A vencer</span>{% endif %}</td></tr>
+    {% for p in tit.parcelas %}
+      <tr><td>{{ p.installment_number }}/{{ tit.parcelas|length }}</td><td>{{ data_br(p.vencimento) }}</td>
+        <td class="num">{{ moeda(p.valor) }}</td><td class="num">{{ moeda(p.sit.pago) if p.sit.pago else '—' }}</td>
+        <td class="num {{ 'tp-neg' if p.sit.encargos }}">{{ moeda(p.sit.encargos) if p.sit.encargos else '—' }}</td>
+        <td class="num">{{ moeda(p.sit.juros) }}</td><td class="num">{{ moeda(p.sit.principal) }}</td>
+        <td class="num"><b>{{ moeda(p.sit.saldo) }}</b></td>
+        <td>{% if p.sit.quitada %}<span class="pr-st ok">Quitada</span>{% elif p.sit.dias_atraso %}<span class="pr-st risco">{{ p.sit.dias_atraso }} dia(s) de atraso</span>{% elif p.vencimento == hoje_iso %}<span class="pr-st aviso">Vence hoje</span>{% elif p.sit.pago %}<span class="pr-st neutro">Pago parcial</span>{% else %}<span class="pr-st neutro">A vencer</span>{% endif %}</td></tr>
     {% endfor %}
-    <tr class="tp-total"><td colspan="3">Total em aberto</td><td></td><td class="tp-right">{{ moeda(t.encargos) }}</td><td class="tp-right">{{ moeda(t.juros_aberto) }}</td><td class="tp-right">{{ moeda(t.principal_aberto) }}</td><td class="tp-right">{{ moeda(t.saldo) }}</td><td></td></tr>
+    <tr class="tp-total"><td colspan="4">Total em aberto</td><td class="num">{{ moeda(tit.encargos) }}</td><td class="num">{{ moeda(tit.juros_aberto) }}</td><td class="num">{{ moeda(tit.principal_aberto) }}</td><td class="num">{{ moeda(tit.saldo) }}</td><td></td></tr>
     </tbody>
-  </table>
-</div>
+  </table></div>
+</section>
 
-<div class="tp-cols">
-  {% if t.status in ['active', 'overdue'] %}
-  <section class="tp-box">
-    <h3>Registrar recebimento</h3>
-    <p class="tp-sub">Vale para pagamento parcial: abate primeiro os encargos do atraso, depois os juros e por último o valor devolvido. A baixa vai para o contas a receber.</p>
-    <form method="post" action="{{ url_for('titulos.pagamento', tid=t.id) }}">
+<div class="vg-cols" style="margin-top:1rem">
+  {% if tit.status in ['active', 'overdue'] %}
+  <section class="vg-box">
+    <header><h3>{{ fic('receber') }} Registrar recebimento</h3></header>
+    <p class="fin-sub" style="margin-top:0">Vale para pagamento parcial: abate primeiro os encargos do atraso, depois os juros e por último o valor devolvido. A baixa vai para o contas a receber.</p>
+    <form method="post" action="{{ url_for('titulos.pagamento', slug=empresa.slug, tid=tit.id) }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-      <div class="form-row">
-        <div class="form-group"><label>Parcela</label><select class="form-control" name="parcela_id" required>
-          {% for p in t.parcelas if not p.sit.quitada %}<option value="{{ p.id }}">{{ p.installment_number }}/{{ t.parcelas|length }} · {{ data_br(p.vencimento) }} · {{ moeda(p.sit.saldo) }}</option>{% endfor %}</select></div>
-        <div class="form-group"><label>Data</label><input class="form-control" type="date" name="data" value="{{ hoje_iso }}" required></div>
+      <div class="fin-2col">
+        <div><label class="lbl">Parcela</label><select class="inp" name="parcela_id" required>
+          {% for p in tit.parcelas if not p.sit.quitada %}<option value="{{ p.id }}">{{ p.installment_number }}/{{ tit.parcelas|length }} · {{ data_br(p.vencimento) }} · {{ moeda(p.sit.saldo) }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Data</label><input class="inp" type="date" name="data" value="{{ hoje_iso }}" required></div>
+        <div><label class="lbl">Valor recebido (R$)</label><input class="inp" name="valor" required placeholder="0,00" inputmode="decimal"></div>
+        <div><label class="lbl">Conta</label><select class="inp" name="conta_id" required>{% for k in contas %}<option value="{{ k.id }}">{{ k.nome }}</option>{% endfor %}</select></div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label>Valor recebido (R$)</label><input class="form-control" name="valor" required data-mask="currency" placeholder="0,00"></div>
-        <div class="form-group"><label>Conta</label><select class="form-control" name="conta_id" required>{% for k in contas %}<option value="{{ k.id }}">{{ k.nome }}</option>{% endfor %}</select></div>
+      <div class="tp-acoes" style="margin-top:1rem">
+        <button class="btn-pill fin-btn" type="submit">{{ fic('check') }} Registrar</button>
+        <a class="btn-pill outline fin-btn" href="{{ url_for('titulos.quitacao', slug=empresa.slug, cliente=cli.id) }}">{{ fic('fluxo') }} Calcular quitação</a>
       </div>
-      <button class="btn btn-primary" type="submit">💾 Registrar</button>
-      <a class="btn btn-secondary" href="{{ url_for('titulos.quitacao', cliente=cli.id) }}">📉 Calcular quitação</a>
     </form>
   </section>
   {% endif %}
-  <section class="tp-box">
-    <h3>Recebimentos</h3>
-    {% if pagamentos %}
-    <div class="table-wrap"><table>
-      <thead><tr><th>Data</th><th>Parcela</th><th class="tp-right">Valor abatido</th></tr></thead>
-      <tbody>{% for x in pagamentos %}<tr><td>{{ data_br(x.data) }}</td><td>{{ x.parcela }}</td><td class="tp-right">{{ moeda(x.valor) }}</td></tr>{% endfor %}</tbody>
-    </table></div>
-    {% else %}<p class="text-dim">Nenhum recebimento ainda.</p>{% endif %}
-    {% if t.notes %}<p class="text-dim" style="margin-top:12px">Obs.: {{ t.notes }}</p>{% endif %}
+  <section class="vg-box">
+    <header><h3>{{ fic('extrato') }} Recebimentos</h3></header>
+    <table class="pr-tabela">
+      <thead><tr><th>Data</th><th>Parcela</th><th class="num">Valor abatido</th></tr></thead>
+      <tbody>{% for x in pagamentos %}<tr><td>{{ data_br(x.data) }}</td><td>{{ x.parcela }}</td><td class="num">{{ moeda(x.valor) }}</td></tr>
+      {% else %}<tr><td colspan="3" class="fin-vazio">Nenhum recebimento ainda.</td></tr>{% endfor %}</tbody>
+    </table>
+    {% if tit.notes %}<p class="fin-sub">Obs.: {{ tit.notes }}</p>{% endif %}
   </section>
 </div>
 {% endblock %}
