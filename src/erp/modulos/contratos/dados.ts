@@ -30,7 +30,11 @@ export const TIPOS: Record<string, string> = {
   aquisicao: "Termo de Aquisição de Cotas",
   retirada: "Termo de Retirada de Investimento",
   renovacao: "Termo de Renovação de Cotas",
+  titulo: "Contrato de Título Privado",
 };
+
+/** Ações depois que o cliente assina, por tipo de contrato (ex.: títulos privados ativam o título). */
+export const POS_ASSINATURA: Record<string, (contrato_id: number) => Promise<void>> = {};
 
 // Textos de cada produto usados nos termos (conforme os termos assinados no D4Sign em 2026).
 // O Saúde ainda não tinha termos de renovação/retirada: segue o padrão do Agronegócio.
@@ -98,7 +102,7 @@ export const NOMES_PRODUTO: Record<string, string> = { civil: "Construção Civi
 // (a renovação/retirada da cota é registrada quando o termo é gerado).
 export const STATUS_CONCLUIDO: Record<string, string> = {
   aquisicao: "Concluído · cotas ativas", renovacao: "Concluído · renovação assinada",
-  retirada: "Concluído · retirada assinada",
+  retirada: "Concluído · retirada assinada", titulo: "Concluído · título ativo",
 };
 
 export const STATUS: Record<string, { nome: string; cor: string }> = {
@@ -396,9 +400,10 @@ export async function obter(cid: number): Promise<any> {
     const c: any = _row((await conn.execute(`SELECT ct.*, cl.full_name AS cliente_nome, cl.email AS cliente_email,
                                         cl.phone AS cliente_fone, cl.cpf AS cliente_cpf,
                                         cd.name AS produto_nome, cd.code AS produto_code
-                                 FROM contratos ct JOIN clients cl ON cl.id = ct.client_id
-                                 JOIN condominiums cd ON cd.id = ct.condominium_id WHERE ct.id = ?`, [cid])).fetchone());
+                                 FROM contratos ct LEFT JOIN clients cl ON cl.id = ct.client_id
+                                 LEFT JOIN condominiums cd ON cd.id = ct.condominium_id WHERE ct.id = ?`, [cid])).fetchone());
     if (!c) return null;
+    if (!c.produto_code) { c.produto_code = c.tipo; c.produto_nome = (c.dados?.produto?.nome) ?? TIPOS[c.tipo] ?? ""; c.cliente_nome = c.dados?.investidor?.nome ?? ""; c.cliente_email = c.dados?.investidor?.email ?? ""; }
     c.produto_nome = NOMES_PRODUTO[c.produto_code] ?? c.produto_nome;
     c.signatarios = (await conn.execute("SELECT * FROM contratos_signatarios WHERE contrato_id=? ORDER BY ordem", [cid])).fetchall();
     c.eventos = (await conn.execute("SELECT * FROM contratos_eventos WHERE contrato_id=? ORDER BY id", [cid])).fetchall();
@@ -430,18 +435,21 @@ export async function listar(status: string | null = null, q = "") {
   const conn = await getConnection();
   try {
     let sql = `SELECT ct.id, ct.codigo, ct.tipo, ct.status, ct.share_ids, ct.dados, ct.criado_em, ct.enviado_em,
-                        ct.assinado_em, ct.concluido_em, cl.full_name AS cliente_nome, cl.cpf AS cliente_cpf,
-                        cl.email AS cliente_email, cd.name AS produto_nome, cd.code AS produto_code,
+                        ct.assinado_em, ct.concluido_em,
+                        COALESCE(cl.full_name, (SELECT s.nome FROM contratos_signatarios s WHERE s.contrato_id=ct.id AND s.papel='cliente' LIMIT 1)) AS cliente_nome,
+                        COALESCE(cl.cpf, (SELECT s.cpf FROM contratos_signatarios s WHERE s.contrato_id=ct.id AND s.papel='cliente' LIMIT 1)) AS cliente_cpf,
+                        COALESCE(cl.email, (SELECT s.email FROM contratos_signatarios s WHERE s.contrato_id=ct.id AND s.papel='cliente' LIMIT 1)) AS cliente_email,
+                        COALESCE(cd.name, 'Título privado') AS produto_nome, COALESCE(cd.code, ct.tipo) AS produto_code,
                         (SELECT COUNT(*) FROM contratos_signatarios s WHERE s.contrato_id=ct.id AND s.status='assinado') AS assinaturas,
                         (SELECT COUNT(*) FROM contratos_signatarios s WHERE s.contrato_id=ct.id) AS signatarios,
                         (SELECT MAX(criado_em) FROM contratos_eventos e WHERE e.contrato_id=ct.id AND e.tipo='visualizado') AS visto_em
-                 FROM contratos ct JOIN clients cl ON cl.id = ct.client_id
-                 JOIN condominiums cd ON cd.id = ct.condominium_id WHERE 1=1`;
+                 FROM contratos ct LEFT JOIN clients cl ON cl.id = ct.client_id
+                 LEFT JOIN condominiums cd ON cd.id = ct.condominium_id WHERE 1=1`;
     const par: any[] = [];
     if (status) { sql += " AND ct.status = ?"; par.push(status); }
     if (q) {
-      sql += " AND (cl.full_name LIKE ? OR cl.cpf LIKE ? OR ct.codigo LIKE ?)";
-      par.push(`%${q}%`, `%${so_digitos(q) || q}%`, `%${q}%`);
+      sql += " AND (cl.full_name LIKE ? OR cl.cpf LIKE ? OR ct.codigo LIKE ? OR ct.dados LIKE ?)";
+      par.push(`%${q}%`, `%${so_digitos(q) || q}%`, `%${q}%`, `%${q}%`);
     }
     sql += " ORDER BY ct.id DESC";
     const out = (await conn.execute(sql, par)).fetchall().map(_row) as any[];
@@ -712,7 +720,16 @@ export function valor_doc(d: any) {
  *  (o proxy do site deixa /auth/... abrir sem login); no app local era /contratos/assinar/<token>. */
 export async function link_assinatura(c: any, cfg: any = null) {
   cfg = cfg || await config();
-  return `${String(cfg.url_publica).replace(/\/+$/, "")}/auth/contrato/${c.token}`;
+  let base = String(cfg.url_publica || "").replace(/\/+$/, "");
+  // Sem o endereço do site configurado (ainda o padrão do app local), usa o endereço de quem está acessando.
+  if (!base || /127\.0\.0\.1|localhost/.test(base)) {
+    try {
+      const h = request().headers;
+      const host = h.get("x-forwarded-host") || h.get("host");
+      if (host && !/127\.0\.0\.1|localhost/.test(host)) base = `${h.get("x-forwarded-proto") || "https"}://${host}`;
+    } catch { /* fora de uma requisição */ }
+  }
+  return `${base}/auth/contrato/${c.token}`;
 }
 
 function _email(modelo: string, ctx: Record<string, any>) {
@@ -839,13 +856,21 @@ export async function assinar_cliente(c: any, cpf: string, codigo: string, tipo:
         `Código enviado para ${mascarar_email(cli.email)} + confirmação de ${fmt_doc(cli.cpf)}`, momento, cli.id]);
     if (c.tipo === "aquisicao") { // aquisição: aguarda o depósito para ativar as cotas
       await conn.execute("UPDATE contratos SET status='assinado', assinado_em=?, hash_final=? WHERE id=?", [momento, hash_final, c.id]);
-    } else { // renovação/retirada: a cota já foi tratada ao gerar o termo
+    } else { // renovação/retirada: a cota já foi tratada ao gerar o termo; título: ativado logo abaixo
       await conn.execute("UPDATE contratos SET status='concluido', assinado_em=?, concluido_em=?, hash_final=? WHERE id=?",
         [momento, momento, hash_final, c.id]);
     }
     await evento(c.id, "assinado_cliente", `${cli.nome} (${cli.email}) — ${fmt_doc(cli.cpf)}`, conn);
     await conn.commit();
   } finally { await conn.close(); }
+
+  const pos = POS_ASSINATURA[c.tipo];
+  if (pos) {
+    try { await pos(c.id); } catch (exc: any) {
+      logger.warning("Falha na ação depois da assinatura: %s", exc?.message ?? exc);
+      await evento(c.id, "erro", `Depois da assinatura: ${exc?.message ?? exc}`.slice(0, 300));
+    }
+  }
 
   // Comprovante por e-mail (falha no envio não desfaz a assinatura)
   try {

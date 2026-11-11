@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Calculadora / Novo título — Títulos Privados{% endblock %}
+{% block content %}
+{% include "titulos/_estilo.html" %}
+<div class="page-header">
+  <div class="page-header-icon">🧮</div>
+  <div class="page-header-title">Calculadora — Tabela Price</div>
+  <div class="page-header-sub">Preencha o valor emprestado, a taxa, o número de parcelas e a data da primeira parcela. Depois é só gerar o título e o contrato.</div>
+</div>
+
+<div class="card-gold" style="margin-bottom:22px;">
+  <form method="get" id="f-calc">
+    {% if cliente_sel %}<input type="hidden" name="cliente" value="{{ cliente_sel }}">{% endif %}
+    <div class="form-row">
+      <div class="form-group"><label>Valor emprestado (R$) *</label>
+        <input class="form-control" name="valor" value="{{ entrada.valor }}" required placeholder="30.000,00" data-mask="currency"></div>
+      <div class="form-group"><label>Taxa de juros (% ao mês) *</label>
+        <input class="form-control" name="taxa" value="{{ entrada.taxa }}" required placeholder="3,5"></div>
+      <div class="form-group"><label>Número de parcelas *</label>
+        <input class="form-control" name="parcelas" type="number" min="1" max="360" value="{{ entrada.parcelas }}" required placeholder="12"></div>
+      <div class="form-group"><label>Data da 1ª parcela *</label>
+        <input class="form-control" name="primeira" type="date" value="{{ entrada.primeira }}" required></div>
+    </div>
+    <div class="page-actions" style="justify-content:flex-start;"><button class="btn btn-primary" type="submit">🧮 Calcular</button></div>
+  </form>
+</div>
+
+{% if erro %}<div class="alert alert-error">{{ erro }}</div>{% endif %}
+
+{% if resultado %}
+<div class="tp-grid4">
+  <div class="metric-card"><div class="metric-value tp-gold">{{ moeda(resultado.parcela) }}</div><div class="metric-label">Valor da parcela</div><div class="metric-sub">{{ resultado.n }}x · {{ pct(resultado.taxa) }}</div></div>
+  <div class="metric-card"><div class="metric-value">{{ moeda(resultado.valor) }}</div><div class="metric-label">Valor emprestado</div><div class="metric-sub">repasse ao cliente</div></div>
+  <div class="metric-card"><div class="metric-value">{{ moeda(resultado.total_juros) }}</div><div class="metric-label">Total de juros</div></div>
+  <div class="metric-card"><div class="metric-value tp-gold">{{ moeda(resultado.total_pago) }}</div><div class="metric-label">Total a receber</div><div class="metric-sub">de {{ data_br(resultado.linhas[0].vencimento) }} a {{ data_br(resultado.linhas[-1].vencimento) }}</div></div>
+</div>
+
+<div class="tp-box" style="margin-bottom:22px;">
+  <h3>Gerar título e contrato</h3>
+  <p class="tp-sub">Cria o título com estas parcelas e o contrato para o cliente assinar. As contas a receber e a conta a pagar do repasse são criadas quando o cliente assinar.</p>
+  <form method="post" action="{{ url_for('titulos.gerar') }}" class="tp-form-inline">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% for k in ['valor', 'taxa', 'parcelas', 'primeira'] %}<input type="hidden" name="{{ k }}" value="{{ entrada[k] }}">{% endfor %}
+    <div class="form-group" style="flex:2;min-width:240px"><label>Cliente *</label>
+      <select class="form-control" name="cliente_id" required>
+        <option value="">Escolha o cliente…</option>
+        {% for c in clientes %}<option value="{{ c.id }}" {{ 'selected' if cliente_sel == c.id }}>{{ c.name }}{% if c.document %} · {{ c.document }}{% endif %}</option>{% endfor %}
+      </select></div>
+    <div class="form-group" style="flex:2;min-width:220px"><label>Observação (opcional)</label><input class="form-control" name="obs" maxlength="300"></div>
+    <div class="tp-acoes">
+      <a class="btn btn-secondary" href="{{ url_for('titulos.cliente', pcid=0, voltar=request.full_path) }}">➕ Cadastrar cliente</a>
+      <button class="btn btn-primary" type="submit">📄 Gerar título</button>
+    </div>
+  </form>
+</div>
+
+<div class="section-label">📋 &nbsp;Parcelas</div>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Parcela</th><th>Vencimento</th><th class="tp-right">Saldo devedor antes</th><th class="tp-right">Valor da parcela</th>
+      <th class="tp-right">Valor devolvido (amortização)</th><th class="tp-right">Juros</th><th class="tp-right">Saldo devedor depois</th></tr></thead>
+    <tbody>
+      {% for l in resultado.linhas %}
+      <tr><td>{{ l.numero }}/{{ resultado.n }}</td><td class="text-dim">{{ data_br(l.vencimento) }}</td>
+        <td class="tp-right">{{ moeda(l.saldo_inicial) }}</td><td class="tp-right" style="font-weight:600">{{ moeda(l.parcela) }}</td>
+        <td class="tp-right">{{ moeda(l.amortizacao) }}</td><td class="tp-right tp-gold">{{ moeda(l.juros) }}</td><td class="tp-right">{{ moeda(l.saldo_final) }}</td></tr>
+      {% endfor %}
+      <tr class="tp-total"><td colspan="3">Total</td><td class="tp-right">{{ moeda(resultado.total_pago) }}</td><td class="tp-right">{{ moeda(resultado.valor) }}</td><td class="tp-right tp-gold">{{ moeda(resultado.total_juros) }}</td><td></td></tr>
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

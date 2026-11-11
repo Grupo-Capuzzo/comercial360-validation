@@ -2,9 +2,10 @@
 {% block corpo %}
 <p style="margin:0 0 14px;">Olá, <b>{{ d.investidor.nome }}</b>.</p>
 <p style="margin:0 0 14px;">✅ Seu <b>{{ TIPOS[c.tipo] }}</b>{% if d.anexo_nome %} e o Regulamento foram assinados{% else %} foi assinado{% endif %} por todas as partes.</p>
-<p style="margin:0 0 14px;">{{ d.produto.nome }} · {{ d.qtd }} cota(s) · {{ moeda((d.retirada or {}).valor or d.valor_total) }}.
+<p style="margin:0 0 14px;">{% if c.tipo == 'titulo' %}{{ d.produto.nome }} · {{ moeda(d.valor_total) }} em {{ d.qtd }} parcela(s) de {{ moeda(d.parcela) }}.{% else %}{{ d.produto.nome }} · {{ d.qtd }} cota(s) · {{ moeda((d.retirada or {}).valor or d.valor_total) }}.{% endif %}
   {% if c.tipo == 'aquisicao' %}As cotas serão ativadas assim que o depósito (TED/PIX) for identificado pela Capuzzo.
   {% elif c.tipo == 'retirada' %}O valor será creditado {{ d.produto_doc.prazo_credito }} a contar da assinatura, na conta informada no seu cadastro.
+  {% elif c.tipo == 'titulo' %}O valor será repassado conforme combinado. As parcelas vencem nas datas do contrato.
   {% else %}A renovação das suas cotas está confirmada.{% endif %}</p>
 {% if c.tipo == 'aquisicao' and cfg.instrucoes_deposito %}
 <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#faf8f2;border:1px solid #ece5cf;border-radius:6px;margin:0 0 18px;font-size:14px;">

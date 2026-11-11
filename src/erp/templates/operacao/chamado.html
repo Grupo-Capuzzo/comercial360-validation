@@ -27,10 +27,11 @@
         <li class="{{ 'evento' if m.status and not m.texto.strip() }}">
           <span class="op-quando">{{ data_hora_br(m.criado_em) }} · {{ m.autor }}{% if m.status %} · <span class="op-status st-{{ m.status }}">{{ STATUS_CHAMADO[m.status] }}</span>{% endif %}</span>
           <span class="op-texto">{{ m.texto }}</span>
+          {% if m.anexos %}<span class="op-anexos">{% for a in m.anexos %}<a class="op-anexo" href="{{ url_for('operacao.chamado_anexo', slug=empresa.slug, cid=c.id, aid=a.id) }}" target="_blank" rel="noopener">{{ oic('nota') }}<b>{{ a.nome }}</b><small>{{ a.tam }}</small></a>{% endfor %}</span>{% endif %}
         </li>
       {% endfor %}
     </ol>
-    <form class="op-nota-form" method="post" action="{{ url_for('operacao.chamado_mov', slug=empresa.slug, cid=c.id) }}">
+    <form class="op-nota-form" method="post" action="{{ url_for('operacao.chamado_mov', slug=empresa.slug, cid=c.id) }}" enctype="multipart/form-data">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <label class="lbl" for="m-texto">Nova movimentação</label>
       <textarea class="inp" id="m-texto" name="texto" rows="3" placeholder="Resposta, andamento, pedido de informação…"></textarea>
@@ -49,6 +50,8 @@
           </select>
         </div>
       </div>
+      <label class="lbl" for="m-anexos">Anexar arquivos <small>(até 10 arquivos de 15 MB)</small></label>
+      <input class="inp op-anexo-inp" id="m-anexos" name="anexos" type="file" multiple>
       <label class="lbl" for="m-setor">Setor <small>(troque para transferir o chamado)</small></label>
       <select class="inp" id="m-setor" name="setor">
         {% for st in SETORES %}<option value="{{ st }}" {{ 'selected' if c.setor == st }}>{{ st }}{{ ' (atual)' if c.setor == st }}</option>{% endfor %}
@@ -57,6 +60,14 @@
     </form>
   </section>
   <aside class="op-resumo">
+    {% if anexos %}
+    <section class="op-card">
+      <h3>Anexos ({{ anexos|length }})</h3>
+      <ul class="op-sessoes">
+        {% for a in anexos %}<li><a href="{{ url_for('operacao.chamado_anexo', slug=empresa.slug, cid=c.id, aid=a.id) }}" target="_blank" rel="noopener">{{ a.nome }}</a><b>{{ a.tam }} · {{ a.autor.split()[0] }} · {{ data_hora_br(a.criado_em) }}</b></li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
     <section class="op-card">
       <h3>Demandas deste chamado</h3>
       <p class="op-sub">Transforme o chamado em tarefa para medir o tempo de atendimento.</p>

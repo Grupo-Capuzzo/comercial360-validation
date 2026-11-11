@@ -25,6 +25,27 @@ import {
 import * as portal from "../portal";
 import { ICONES_OPERACAO } from "./icones";
 import { memo } from "../../core/memo";
+import { lerArquivo, salvarArquivo } from "../../core/arquivos";
+import { sendFile } from "../../core/flask";
+
+// Anexos dos chamados (guardados na tabela erp_arquivos)
+export const MAX_ANEXO = 15 * 1024 * 1024;
+function _anexos_enviados(): { ok: any[]; erro: string | null } {
+  const l = (request().files.get("anexos") ?? []).filter((a: any) => a && a.filename && a.size > 0);
+  const grande = l.find((a: any) => a.size > MAX_ANEXO);
+  if (grande) return { ok: [], erro: `O arquivo "${grande.filename}" passa de ${MAX_ANEXO / 1048576} MB.` };
+  if (l.length > 10) return { ok: [], erro: "Envie no máximo 10 arquivos por vez." };
+  return { ok: l, erro: null };
+}
+async function _salvar_anexos(cid: number, mov_id: number | null, uid: number, arquivos: any[]) {
+  for (const a of arquivos) {
+    const caminho = `chamados/${cid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await salvarArquivo(caminho, a.read(), a.mimetype || "application/octet-stream");
+    await _exec("INSERT INTO operacao_chamado_anexos (chamado_id, mov_id, usuario_id, nome, tipo, tamanho, caminho, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [cid, mov_id, uid, String(a.filename).slice(0, 200), a.mimetype || "", a.size, caminho, _iso(_agora())]);
+  }
+}
+export function tamanho_arquivo(n: number) { return n >= 1048576 ? `${(n / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(n / 1024))} KB`; }
 
 export const SETORES = portal.SETORES;
 export const STATUS_CHAMADO: Record<string, string> = { aberto: "Em aberto", atendimento: "Em atendimento", concluido: "Concluído" };
@@ -730,36 +751,52 @@ export function registrar() {
       flash("Informe o setor e o assunto do chamado.", "erro");
       return redirect(url_for("operacao.chamados", { slug }));
     }
+    const anx = _anexos_enviados();
+    if (anx.erro) { flash(anx.erro, "erro"); return redirect(url_for("operacao.chamados", { slug })); }
     const agora = _iso(_agora());
     const cid = (await _exec("INSERT INTO operacao_chamados (empresa_slug, setor, assunto, descricao, solicitante, aberto_por, " +
       "status, aberto_em, ultima_mov_em) VALUES (?, ?, ?, ?, ?, ?, 'aberto', ?, ?)",
       [slug, setor, assunto, (f.get("descricao") || "").trim(),
         (f.get("solicitante") || "").trim().slice(0, 160) || u.nome, u.id, agora, agora]))!;
-    await _exec("INSERT INTO operacao_chamado_mov (chamado_id, usuario_id, texto, status, criado_em) VALUES (?, ?, ?, 'aberto', ?)",
+    const mid = await _exec("INSERT INTO operacao_chamado_mov (chamado_id, usuario_id, texto, status, criado_em) VALUES (?, ?, ?, 'aberto', ?)",
       [cid, u.id, "Chamado aberto", agora]);
+    if (anx.ok.length) await _salvar_anexos(cid, mid, u.id, anx.ok);
     flash(`Chamado nº ${numero_chamado(cid)} aberto.`, "ok");
     return redirect(url_for("operacao.chamado", { slug, cid }));
   });
 
   route("operacao.chamado", "/operacao/<slug>/chamados/<int:cid>", ["GET"], async (slug: string, cid: number) => {
     const e = await _empresa(slug);
-    const [c, nomes, movs, tarefas, ctx] = await Promise.all([
+    const [c, nomes, movs, tarefas, ctx, anexos] = await Promise.all([
       _chamado_ou_404(slug, cid), nomes_usuarios(),
       _q("SELECT * FROM operacao_chamado_mov WHERE chamado_id = ? ORDER BY criado_em, id", [cid]),
       _q("SELECT id, titulo, status, responsavel_id FROM operacao_tarefas WHERE chamado_id = ? ORDER BY id", [cid]),
-      _ctx(e, "chamados")]);
-    for (const m of movs) m.autor = nomes.get(m.usuario_id) ?? "—";
+      _ctx(e, "chamados"),
+      _q("SELECT id, mov_id, usuario_id, nome, tipo, tamanho, criado_em FROM operacao_chamado_anexos WHERE chamado_id = ? ORDER BY id", [cid])]);
+    for (const a of anexos) { a.tam = tamanho_arquivo(a.tamanho); a.autor = nomes.get(a.usuario_id) ?? "—"; }
+    for (const m of movs) { m.autor = nomes.get(m.usuario_id) ?? "—"; m.anexos = anexos.filter((a: any) => a.mov_id === m.id); }
     const u = _usuario();
     for (const t of tarefas) {
       t.resp_nome = nomes.get(t.responsavel_id) ?? "—";
       t.posso_abrir = u.admin || t.responsavel_id === u.id;
     }
     return render_template("operacao/chamado.html", {
-      ...ctx, c, movs, tarefas,
+      ...ctx, c, movs, tarefas, anexos,
       aberto_por: nomes.get(c.aberto_por) ?? "—",
       resp_nome: c.responsavel_id ? (nomes.get(c.responsavel_id) ?? "") : "",
       usuarios: await usuarios_do_setor(slug, c.setor, c.responsavel_id),
     });
+  });
+
+  route("operacao.chamado_anexo", "/operacao/<slug>/chamados/<int:cid>/anexo/<int:aid>", ["GET"], async (slug: string, cid: number, aid: number) => {
+    await _empresa(slug);
+    await _chamado_ou_404(slug, cid);
+    const a = await _q1("SELECT * FROM operacao_chamado_anexos WHERE id = ? AND chamado_id = ?", [aid, cid]);
+    if (!a) abort(404);
+    const dados = await lerArquivo(a.caminho);
+    if (!dados) abort(404);
+    const inline = /^(application\/pdf|image\/)/.test(a.tipo || "");
+    return sendFile(dados, { download_name: a.nome, mimetype: a.tipo || "application/octet-stream", as_attachment: !inline });
   });
 
   route("operacao.chamado_mov", "/operacao/<slug>/chamados/<int:cid>/mov", ["POST"], async (slug: string, cid: number) => {
@@ -779,8 +816,10 @@ export function registrar() {
     const transferiu = novo_setor !== c.setor;
     // Transferido sem escolher outro responsável: volta para a fila do novo setor.
     if (transferiu && resp === c.responsavel_id) resp = null;
-    if (!texto && novo === c.status && resp === c.responsavel_id && !transferiu) {
-      flash("Escreva uma mensagem, altere o status ou transfira o setor.", "erro");
+    const anx = _anexos_enviados();
+    if (anx.erro) { flash(anx.erro, "erro"); return redirect(url_for("operacao.chamado", { slug, cid })); }
+    if (!texto && novo === c.status && resp === c.responsavel_id && !transferiu && !anx.ok.length) {
+      flash("Escreva uma mensagem, anexe um arquivo, altere o status ou transfira o setor.", "erro");
       return redirect(url_for("operacao.chamado", { slug, cid }));
     }
     const partes: string[] = [];
@@ -788,9 +827,11 @@ export function registrar() {
     if (novo !== c.status) partes.push(`Status: ${STATUS_CHAMADO[novo]}`);
     if (resp !== c.responsavel_id) partes.push(`Responsável: ${resp ? ((await nomes_usuarios()).get(resp) ?? "ninguém") : "ninguém"}`);
     const agora = _iso(_agora());
-    await _exec("INSERT INTO operacao_chamado_mov (chamado_id, usuario_id, texto, status, criado_em) VALUES (?, ?, ?, ?, ?)",
+    if (anx.ok.length) partes.push(`${anx.ok.length} anexo${anx.ok.length > 1 ? "s" : ""}`);
+    const mid = await _exec("INSERT INTO operacao_chamado_mov (chamado_id, usuario_id, texto, status, criado_em) VALUES (?, ?, ?, ?, ?)",
       [cid, u.id, (texto && partes.length ? texto + "\n" : texto) + partes.join(" · "),
         novo !== c.status ? novo : "", agora]);
+    if (anx.ok.length) await _salvar_anexos(cid, mid, u.id, anx.ok);
     await _exec("UPDATE operacao_chamados SET status = ?, responsavel_id = ?, setor = ?, ultima_mov_em = ? WHERE id = ?",
       [novo, resp, novo_setor, agora, cid]);
     if (transferiu && !u.admin) {
