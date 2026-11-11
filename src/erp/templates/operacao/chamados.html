@@ -56,7 +56,7 @@
 </div>
 
 <dialog id="dlg-chamado" class="dlg op-dlg">
-  <form method="post" action="{{ url_for('operacao.chamado_novo', slug=empresa.slug) }}">
+  <form method="post" action="{{ url_for('operacao.chamado_novo', slug=empresa.slug) }}" enctype="multipart/form-data">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <div class="dlg-head"><h3>Novo chamado</h3>
       <button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
@@ -77,6 +77,8 @@
     <input class="inp" id="c-assunto" name="assunto" maxlength="200" required placeholder="Resumo da solicitação">
     <label class="lbl" for="c-desc">Descrição</label>
     <textarea class="inp" id="c-desc" name="descricao" rows="4" placeholder="Explique o que precisa"></textarea>
+    <label class="lbl" for="c-anexos">Anexos <small>(opcional · até 10 arquivos de 15 MB)</small></label>
+    <input class="inp op-anexo-inp" id="c-anexos" name="anexos" type="file" multiple>
     <button class="btn-pill" type="submit">Abrir chamado</button>
   </form>
 </dialog>
