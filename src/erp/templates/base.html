@@ -42,8 +42,7 @@
            'titulos_privados_dashboard','titulos_privados_clientes',
            'titulos_privados_emprestimos','titulos_privados_parcelas',
            'titulos_privados_prorrogacoes','titulos_privados_amortizacoes',
-           'titulos_privados_calculadora_price',
-           'titulos_painel','titulos_lista','titulos_calculadora','titulos_quitacao','titulos_clientes'
+           'titulos_privados_calculadora_price'
          ] %}
 
       <!-- ── VISÃO GERAL ──────────────────────── -->
@@ -119,41 +118,10 @@
 
       </div>
 
-      <!-- Títulos Privados — grupo expansível -->
-      <button class="sidebar-group-btn {% if titulos_active %}group-open{% endif %}"
-              id="group-titulos-btn"
-              data-target="group-titulos-items"
-              type="button">
-        <span class="sidebar-link-icon">📜</span>
-        <span class="sidebar-group-label">Títulos Privados</span>
-        <span class="sidebar-group-arrow">&#9660;</span>
-      </button>
-
-      <div class="sidebar-subitems {% if titulos_active %}open{% endif %}"
-           id="group-titulos-items">
-
-        <a href="{{ url_for('titulos.painel') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_painel' %}active{% endif %}">
-          <span class="sidebar-link-icon">📊</span> Painel
-        </a>
-        <a href="{{ url_for('titulos.calculadora') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_calculadora' %}active{% endif %}">
-          <span class="sidebar-link-icon">🧮</span> Calculadora / Novo título
-        </a>
-        <a href="{{ url_for('titulos.lista') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_lista' %}active{% endif %}">
-          <span class="sidebar-link-icon">💰</span> Títulos
-        </a>
-        <a href="{{ url_for('titulos.quitacao') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_quitacao' %}active{% endif %}">
-          <span class="sidebar-link-icon">📉</span> Quitação / Amortização
-        </a>
-        <a href="{{ url_for('titulos.clientes') }}"
-           class="sidebar-sublink {% if active_page == 'titulos_clientes' %}active{% endif %}">
-          <span class="sidebar-link-icon">👤</span> Clientes
-        </a>
-
-      </div>
+      <!-- Títulos Privados: agora no Finanças da Capuzzo Assessoria -->
+      <a href="{{ url_for('titulos.painel', slug='assessoria') }}" class="sidebar-link">
+        <span class="sidebar-link-icon">📜</span> Títulos Privados
+      </a>
 
       <div class="sidebar-divider"></div>
 

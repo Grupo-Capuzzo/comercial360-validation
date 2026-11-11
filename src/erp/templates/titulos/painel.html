@@ -1,88 +1,73 @@
-{% extends "base.html" %}
-{% block title %}Títulos Privados — Painel{% endblock %}
-{% block content %}
+{% extends "financas/_layout.html" %}
+{% import "financas/cap/_macros.html" as m with context %}
+{% block fin_titulo %}Títulos Privados{% endblock %}
+{% block fin_conteudo %}
 {% include "titulos/_estilo.html" %}
-<div class="page-header">
-  <div class="page-header-icon">📊</div>
-  <div class="page-header-title">Títulos Privados</div>
-  <div class="page-header-sub">Empréstimos a terceiros. Valores atualizados todo dia pela taxa de cada título{% if atualizado %} · última atualização {{ data_br(atualizado) }}{% endif %}.</div>
-</div>
-<div class="page-actions" style="justify-content:flex-start;margin-bottom:18px;">
-  <a class="btn btn-primary" href="{{ url_for('titulos.calculadora') }}">🧮 Novo título</a>
-  <a class="btn btn-secondary" href="{{ url_for('titulos.quitacao') }}">📉 Calcular quitação</a>
-  <a class="btn btn-secondary" href="{{ url_for('titulos.lista') }}">💰 Todos os títulos</a>
+{% call m.cabecalho('Títulos Privados', 'Empréstimos a terceiros. Valores atualizados todo dia pela taxa de cada título' ~ ((' · última atualização ' ~ data_br(atualizado)) if atualizado else '') ~ '.', 'Produto · Títulos Privados') %}
+  <a class="btn-pill fin-btn" href="{{ url_for('titulos.calculadora', slug=empresa.slug) }}">{{ fic('calculo') }} Novo título</a>
+  <a class="btn-pill outline fin-btn" href="{{ url_for('titulos.quitacao', slug=empresa.slug) }}">{{ fic('fluxo') }} Calcular quitação</a>
+{% endcall %}
+
+<div class="vg-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="vg-kpi escuro"><small>{{ fic('pagar') }} Emprestado que não voltou</small><b>{{ moeda(cards.emprestado) }}</b><em>principal em aberto · {{ cards.titulos }} título(s) ativo(s)</em></div>
+  <div class="vg-kpi"><small>{{ fic('receber') }} Juros a receber</small><b>{{ moeda(cards.juros) }}</b><em>juros das parcelas em aberto</em></div>
+  <a class="vg-kpi {{ 'alerta' if cards.atraso }}" href="{{ url_for('titulos.lista', slug=empresa.slug, status='atraso') }}"><small>{{ fic('calendario') }} Em atraso (atualizado)</small><b class="{{ 'neg' if cards.atraso }}">{{ moeda(cards.atraso) }}</b><em>{{ moeda(cards.encargos) }} de encargos do atraso</em></a>
+  <div class="vg-kpi {{ 'alerta' if cards.clientes_atraso }}"><small>{{ fic('pessoas') }} Clientes em atraso</small><b class="{{ 'neg' if cards.clientes_atraso }}">{{ cards.clientes_atraso }}</b><em>a receber no total: {{ moeda(cards.saldo) }}</em></div>
 </div>
 
-<div class="tp-grid4">
-  <div class="metric-card"><div class="metric-value tp-gold">{{ moeda(cards.emprestado) }}</div><div class="metric-label">Emprestado que ainda não voltou</div><div class="metric-sub">principal em aberto · {{ cards.titulos }} título(s) ativo(s)</div></div>
-  <div class="metric-card"><div class="metric-value">{{ moeda(cards.juros) }}</div><div class="metric-label">Juros a receber</div><div class="metric-sub">juros das parcelas em aberto</div></div>
-  <div class="metric-card"><div class="metric-value tp-neg">{{ moeda(cards.atraso) }}</div><div class="metric-label">Em atraso (atualizado)</div><div class="metric-sub">{{ moeda(cards.encargos) }} de encargos do atraso</div></div>
-  <div class="metric-card"><div class="metric-value {{ 'tp-neg' if cards.clientes_atraso }}">{{ cards.clientes_atraso }}</div><div class="metric-label">Clientes em atraso</div><div class="metric-sub">a receber no total: {{ moeda(cards.saldo) }}</div></div>
-</div>
-
-<div class="tp-cols">
-  <section class="tp-box">
-    <h3>Projeção de recebimentos</h3>
-    <p class="tp-sub">Parcelas a vencer nos próximos 12 meses (valor devolvido + juros).{% if cards.atraso %} Além disso, <b class="tp-neg">{{ moeda(cards.atraso) }}</b> já estão em atraso.{% endif %}</p>
+<div class="vg-cols">
+  <section class="vg-box">
+    <header><h3>{{ fic('fluxo') }} Projeção de recebimentos</h3><span>próximos 12 meses</span></header>
+    <p class="fin-sub" style="margin-top:0">Parcelas a vencer (valor devolvido + juros).{% if cards.atraso %} Além disso, <b class="tp-neg">{{ moeda(cards.atraso) }}</b> já estão em atraso.{% endif %}</p>
     <div class="tp-proj">
-      {% for m in meses %}
-      {% set tot = m.principal + m.juros %}
-      <div class="col" title="{{ m.nome }}: {{ moeda(m.principal) }} devolvido + {{ moeda(m.juros) }} de juros ({{ m.n }} parcela(s))">
+      {% for mm in meses %}
+      {% set tot = mm.principal + mm.juros %}
+      <div class="col" title="{{ mm.nome }}: {{ moeda(mm.principal) }} devolvido + {{ moeda(mm.juros) }} de juros ({{ mm.n }} parcela(s))">
         <span class="v">{{ moeda(tot)|replace('R$ ', '') if tot else '' }}</span>
-        <div class="barra" style="height:{{ (tot * 150 / maior)|round|int }}px">
-          {% if tot %}<i class="pri" style="height:{{ (m.principal * 100 / tot)|round(1) }}%"></i><i class="jur" style="height:{{ (m.juros * 100 / tot)|round(1) }}%"></i>{% endif %}
+        <div class="barra" style="height:{{ (tot * 160 / maior)|round|int }}px">
+          {% if tot %}<i class="pri" style="height:{{ (mm.principal * 100 / tot)|round(1) }}%"></i><i class="jur" style="height:{{ (mm.juros * 100 / tot)|round(1) }}%"></i>{% endif %}
         </div>
-        <small>{{ m.nome }}</small>
+        <small>{{ mm.nome }}</small>
       </div>
       {% endfor %}
     </div>
-    <div class="tp-leg"><span><i style="background:#b9a26a"></i>Valor devolvido</span><span><i style="background:#d4af37"></i>Juros</span></div>
+    <div class="tp-leg"><span><i class="pri" style="background:color-mix(in srgb, var(--accent) 45%, #fff)"></i>Valor devolvido</span><span><i style="background:var(--accent)"></i>Juros</span></div>
   </section>
 
-  <section class="tp-box">
-    <h3>Ranking de clientes em atraso</h3>
-    <p class="tp-sub">Valor atualizado até hoje</p>
-    {% if ranking %}
-    <div class="table-wrap"><table>
-      <thead><tr><th>#</th><th>Cliente</th><th class="tp-right">Parcelas</th><th class="tp-right">Dias</th><th class="tp-right">Valor atualizado</th></tr></thead>
+  <section class="vg-box">
+    <header><h3>{{ fic('pessoas') }} Ranking de clientes em atraso</h3><span>atualizado até hoje</span></header>
+    <table class="pr-tabela">
+      <thead><tr><th>#</th><th>Cliente</th><th class="num">Parcelas</th><th class="num">Dias</th><th class="num">Valor</th></tr></thead>
       <tbody>
       {% for r in ranking %}
-        <tr><td class="text-dim">{{ loop.index }}</td>
-          <td><a class="text-gold" href="{{ url_for('titulos.quitacao', cliente=r.id) }}">{{ r.nome }}</a><div class="text-dim" style="font-size:.72rem">{{ r.titulos|join(', ') }}</div></td>
-          <td class="tp-right">{{ r.parcelas }}</td><td class="tp-right">{{ r.dias }}</td><td class="tp-right tp-neg tp-nowrap">{{ moeda(r.valor) }}</td></tr>
-      {% endfor %}
+        <tr class="clic" onclick="location.href='{{ url_for('titulos.quitacao', slug=empresa.slug, cliente=r.id) }}'"><td>{{ loop.index }}</td>
+          <td><b>{{ r.nome }}</b>{% if r.titulos|select|list %}<div class="fin-sub" style="margin:0">{{ r.titulos|select|join(', ') }}</div>{% endif %}</td>
+          <td class="num">{{ r.parcelas }}</td><td class="num">{{ r.dias }}</td><td class="num tp-neg"><b>{{ moeda(r.valor) }}</b></td></tr>
+      {% else %}<tr><td colspan="5" class="fin-vazio">Nenhum cliente em atraso.</td></tr>{% endfor %}
       </tbody>
-    </table></div>
-    {% else %}
-    <div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-title">Nenhum cliente em atraso</div></div>
-    {% endif %}
+    </table>
   </section>
 </div>
 
-<div class="tp-cols">
-  <section class="tp-box">
-    <h3>Vencendo nos próximos 15 dias</h3>
-    {% if vencendo %}
-    <div class="table-wrap"><table>
-      <thead><tr><th>Vencimento</th><th>Cliente</th><th>Título</th><th class="tp-right">Valor</th></tr></thead>
+<div class="vg-cols">
+  <section class="vg-box">
+    <header><h3>{{ fic('calendario') }} Vencendo nos próximos 15 dias</h3></header>
+    <table class="pr-tabela">
+      <thead><tr><th>Vencimento</th><th>Cliente</th><th>Título</th><th class="num">Valor</th></tr></thead>
       <tbody>{% for x in vencendo %}
-        <tr><td class="tp-nowrap">{{ data_br(x.p.vencimento) }}{% if x.p.vencimento == dia %} <span class="tp-tag hoje">hoje</span>{% endif %}</td>
-          <td>{{ x.t.cliente_nome }}</td><td><a class="text-gold" href="{{ url_for('titulos.titulo', tid=x.t.id) }}">{{ x.t.loan_number }}</a> · {{ x.p.installment_number }}/{{ x.t.parcelas|length }}</td>
-          <td class="tp-right tp-nowrap">{{ moeda(x.p.sit.saldo) }}</td></tr>
-      {% endfor %}</tbody>
-    </table></div>
-    {% else %}<p class="text-dim">Nenhuma parcela vence nos próximos 15 dias.</p>{% endif %}
+        <tr class="clic" onclick="location.href='{{ url_for('titulos.titulo', slug=empresa.slug, tid=x.t.id) }}'"><td>{{ data_br(x.p.vencimento) }}{% if x.p.vencimento == dia %} <span class="pr-st aviso">hoje</span>{% endif %}</td>
+          <td>{{ x.t.cliente_nome }}</td><td class="mono">{{ x.t.loan_number or ('#' ~ x.t.id) }} · {{ x.p.installment_number }}/{{ x.t.parcelas|length }}</td><td class="num">{{ moeda(x.p.sit.saldo) }}</td></tr>
+      {% else %}<tr><td colspan="4" class="fin-vazio">Nenhuma parcela vence nos próximos 15 dias.</td></tr>{% endfor %}</tbody>
+    </table>
   </section>
-  <section class="tp-box">
-    <h3>Aguardando assinatura</h3>
-    {% if aguardando %}
-    <div class="table-wrap"><table>
-      <thead><tr><th>Título</th><th>Cliente</th><th class="tp-right">Valor</th></tr></thead>
+  <section class="vg-box">
+    <header><h3>{{ fic('contrato') }} Aguardando assinatura</h3></header>
+    <table class="pr-tabela">
+      <thead><tr><th>Título</th><th>Cliente</th><th class="num">Valor</th></tr></thead>
       <tbody>{% for t in aguardando %}
-        <tr><td><a class="text-gold" href="{{ url_for('titulos.titulo', tid=t.id) }}">{{ t.loan_number }}</a></td><td>{{ t.cliente_nome }}</td><td class="tp-right tp-nowrap">{{ moeda(t.original_amount) }}</td></tr>
-      {% endfor %}</tbody>
-    </table></div>
-    {% else %}<p class="text-dim">Nenhum contrato aguardando assinatura.</p>{% endif %}
+        <tr class="clic" onclick="location.href='{{ url_for('titulos.titulo', slug=empresa.slug, tid=t.id) }}'"><td class="mono">{{ t.loan_number }}</td><td>{{ t.cliente_nome }}</td><td class="num">{{ moeda(t.original_amount) }}</td></tr>
+      {% else %}<tr><td colspan="3" class="fin-vazio">Nenhum contrato aguardando assinatura.</td></tr>{% endfor %}</tbody>
+    </table>
   </section>
 </div>
 {% endblock %}

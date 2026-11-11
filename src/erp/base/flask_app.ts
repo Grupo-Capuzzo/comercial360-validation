@@ -641,7 +641,7 @@ export function registrar() {
 
   // ─── TÍTULOS PRIVADOS ───────────────────────────────────────
   route("titulos_privados", "/titulos-privados", ["GET"], async () => {
-    return redirect(url_for("titulos.painel")); // Títulos Privados foi refeito (modulos/titulos)
+    return redirect(url_for("titulos.painel", { slug: "assessoria" })); // Títulos Privados foi refeito e mora no Finanças da Assessoria (modulos/titulos)
     const loans = await db.get_private_loans();
     const clients_summary = await db.get_private_loan_clients_summary();
     const hoje = PyDate.today();

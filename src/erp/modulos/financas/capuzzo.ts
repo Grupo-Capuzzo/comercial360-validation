@@ -8,7 +8,7 @@
 // IMPORTANTE: o módulo Condomínios original (rotas /, /cotas, /clientes, /apuracao...) continua sendo o
 // principal. Estas telas SÓ LEEM as tabelas existentes. Integração com o financeiro: cada produto tem um
 // centro de custo próprio (criado automaticamente); receitas e despesas lançadas nesse centro aparecem na aba do produto.
-import { PyDate, abort, get, pyRound, render_template, request } from "../../core/flask";
+import { PyDate, abort, get, pyRound, redirect, render_template, request, url_for } from "../../core/flask";
 import { PyFloat } from "../../core/py";
 import { CAST_NUM } from "../contratos/dados";
 import * as d from "./dados";
@@ -376,6 +376,7 @@ export function registrar() {
 
   // ───────────────────────── Títulos Privados ─────────────────────────
   get("financas.titulos_painel", "/financas/<slug>/titulos/", async (slug: string) => {
+    if (slug === "assessoria") return redirect(url_for("titulos.painel", { slug })); // nova área de Títulos Privados (modulos/titulos)
     const e = await _so_capuzzo(slug);
     const aba = request().args.get("aba", "carteira");
     const hoje = d.hoje().isoformat();

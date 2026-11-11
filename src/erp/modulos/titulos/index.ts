@@ -16,6 +16,8 @@ import {
 } from "../../core/flask";
 import { gravarConfig, lerConfig } from "../../core/arquivos";
 import { checar_csrf } from "../portal";
+import * as portal from "../portal";
+import { _ctx as fin_ctx } from "../financas/index";
 import * as ct from "../contratos/dados";
 import * as fin from "../financas/dados";
 import { r2, tabela_price, situacao_parcela, valor_quitacao, type Pagamento } from "./calc";
@@ -23,11 +25,11 @@ import { r2, tabela_price, situacao_parcela, valor_quitacao, type Pagamento } fr
 const EMPRESA = "assessoria";
 const ATIVOS = ["active", "overdue"];
 export const STATUS_TITULO: Record<string, [string, string]> = {
-  rascunho: ["Aguardando assinatura", "badge-pending"],
-  active: ["Ativo", "badge-active"],
-  overdue: ["Ativo", "badge-active"],
-  paid: ["Quitado", "badge-inactive"],
-  cancelled: ["Cancelado", "badge-inactive"],
+  rascunho: ["Aguardando assinatura", "aviso"],
+  active: ["Ativo", "ok"],
+  overdue: ["Ativo", "ok"],
+  paid: ["Quitado", "neutro"],
+  cancelled: ["Cancelado", "neutro"],
 };
 
 // ───────────────────────── utilidades ─────────────────────────
@@ -104,7 +106,7 @@ async function titulos_calculados(lista: any[], data_ref = hoje()) {
     t.pagas = t.parcelas.length - ab.length;
     t.proxima = ab.find((p: any) => p.sit.dias_atraso === 0) ?? null;
     t.status_nome = (STATUS_TITULO[t.status] ?? [t.status, ""])[0];
-    t.status_cls = (STATUS_TITULO[t.status] ?? ["", "badge-inactive"])[1];
+    t.st_cls = (STATUS_TITULO[t.status] ?? ["", "neutro"])[1];
   }
   return lista;
 }
@@ -274,8 +276,12 @@ function ler_calculo(src: any) {
 }
 
 // ───────────────────────── rotas ─────────────────────────
-function ctx(pagina: string, extra: Record<string, any>) {
-  return { active_page: pagina, moeda, data_br, pct, STATUS_TITULO, hoje_iso: hoje(), ...extra };
+/** Contexto das telas: layout do Finanças da empresa (menu lateral) + utilidades dos títulos. */
+async function fctx(slug: string, chave: string, extra: Record<string, any>) {
+  if (slug !== EMPRESA) abort(404);
+  const e = (await portal.empresas_com_status()).find((x: any) => x.slug === slug);
+  if (!e) abort(404);
+  return { ...(await fin_ctx(e, chave)), moeda, data_br, pct, STATUS_TITULO, hoje_iso: hoje(), ...extra };
 }
 
 export function registrar() {
@@ -286,7 +292,8 @@ export function registrar() {
     G.__erpTitulosRelogio.unref?.();
   }
 
-  get("titulos.painel", "/titulos", async () => {
+  get("titulos.painel", "/financas/<slug>/titulos/painel", async (slug: string) => {
+    if (slug !== EMPRESA) abort(404);
     await atualizar_se_preciso();
     const dia = hoje();
     const lista = await titulos_calculados(await titulos("WHERE l.status IN ('active', 'overdue')"));
@@ -326,38 +333,41 @@ export function registrar() {
     const maior = Math.max(1, ...meses.map((m) => m.principal + m.juros));
     const vencendo = lista.flatMap((t: any) => t.parcelas.filter((p: any) => !p.sit.quitada && p.sit.dias_atraso === 0 && p.vencimento <= PyDate.today().addDays(15).isoformat())
       .map((p: any) => ({ t, p }))).sort((a: any, b: any) => (a.p.vencimento < b.p.vencimento ? -1 : 1)).slice(0, 10);
-    return render_template("titulos/painel.html", ctx("titulos_painel", { cards, ranking, meses, maior, aguardando, vencendo, dia, atualizado: await lerConfig("titulos_atualizado_em", "") }));
+    return render_template("titulos/painel.html", await fctx(slug, "titulos_painel", { cards, ranking, meses, maior, aguardando, vencendo, dia, atualizado: await lerConfig("titulos_atualizado_em", "") }));
   });
 
   // Lista de títulos
-  get("titulos.lista", "/titulos/lista", async () => {
+  get("titulos.lista", "/financas/<slug>/titulos/lista", async (slug: string) => {
+    if (slug !== EMPRESA) abort(404);
     const st = String(request().args.get("status", "") || "");
     const busca = String(request().args.get("q", "") || "").trim().toLowerCase();
     let lista = await titulos_calculados(await titulos());
     if (st === "atraso") lista = lista.filter((t: any) => t.atrasadas.length);
     else if (st) lista = lista.filter((t: any) => (st === "active" ? ATIVOS.includes(t.status) : t.status === st));
     if (busca) lista = lista.filter((t: any) => `${t.cliente_nome} ${t.loan_number} ${t.cliente_doc ?? ""}`.toLowerCase().includes(busca));
-    return render_template("titulos/lista.html", ctx("titulos_lista", { lista, st, busca }));
+    return render_template("titulos/lista.html", await fctx(slug, "titulos_lista", { lista, st, busca }));
   });
 
   // Calculadora (Price) → gerar título
-  route("titulos.calculadora", "/titulos/calculadora", ["GET"], async () => {
+  route("titulos.calculadora", "/financas/<slug>/titulos/calculadora", ["GET"], async (slug: string) => {
+    if (slug !== EMPRESA) abort(404);
     const { entrada, resultado, erro } = ler_calculo(request().args);
     const cliente_sel = request().args.get("cliente", null, "int");
-    return render_template("titulos/calculadora.html", ctx("titulos_calculadora", { entrada, resultado, erro, clientes: await clientes(true), cliente_sel }));
+    return render_template("titulos/calculadora.html", await fctx(slug, "titulos_calculadora", { entrada, resultado, erro, clientes: await clientes(true), cliente_sel }));
   });
 
-  post("titulos.gerar", "/titulos/gerar", async () => {
+  post("titulos.gerar", "/financas/<slug>/titulos/gerar", async (slug: string) => {
+    if (slug !== EMPRESA) abort(404);
     checar_csrf();
     const f = request().form;
     const { entrada, resultado, erro } = ler_calculo(f);
-    const volta = url_for("titulos.calculadora", { ...entrada, cliente: f.get("cliente_id") || null });
+    const volta = url_for("titulos.calculadora", { slug,  ...entrada, cliente: f.get("cliente_id") || null });
     if (!resultado) { flash(erro || "Preencha a calculadora.", "error"); return redirect(volta); }
     const cid_cli = f.get("cliente_id", null, "int");
     const cli = cid_cli ? await q1("SELECT * FROM private_loan_clients WHERE id = ?", [cid_cli]) : null;
     if (!cli) { flash("Escolha o cliente do título.", "error"); return redirect(volta); }
     const falta = [["name", "nome"], ["document", "CPF/CNPJ"], ["email", "e-mail"]].filter(([k]) => !String(cli[k] || "").trim()).map(([, n]) => n);
-    if (falta.length) { flash(`Complete o cadastro do cliente antes de gerar o contrato — falta: ${falta.join(", ")}.`, "error"); return redirect(url_for("titulos.cliente", { pcid: cli.id, voltar: volta })); }
+    if (falta.length) { flash(`Complete o cadastro do cliente antes de gerar o contrato — falta: ${falta.join(", ")}.`, "error"); return redirect(url_for("titulos.cliente", { slug,  pcid: cli.id, voltar: volta })); }
     const numero = await proximo_numero();
     const L = resultado.linhas;
     const tid = (await run("INSERT INTO private_loans (private_client_id, loan_number, original_amount, contracted_amount, interest_rate_monthly, interest_rate_daily, " +
@@ -374,11 +384,12 @@ export function registrar() {
     const cid = await criar_contrato(t, cli, linhas);
     await run("UPDATE private_loans SET contrato_id = ? WHERE id = ?", [cid, tid]);
     flash(`Título ${numero} gerado. Confira o contrato e envie para o cliente assinar.`, "success");
-    return redirect(url_for("titulos.titulo", { tid }));
+    return redirect(url_for("titulos.titulo", { slug,  tid }));
   });
 
   // Detalhe do título
-  get("titulos.titulo", "/titulos/<int:tid>", async (tid: number) => {
+  get("titulos.titulo", "/financas/<slug>/titulos/<int:tid>", async (slug: string, tid: number) => {
+    if (slug !== EMPRESA) abort(404);
     const t0 = (await titulos("WHERE l.id = ?", [tid]))[0];
     if (!t0) abort(404);
     const [t] = await titulos_calculados([t0]);
@@ -388,13 +399,14 @@ export function registrar() {
     const contas = await q("SELECT id, nome FROM financas_contas WHERE empresa_slug = ? AND ativa = 1 AND considerada = 1 ORDER BY nome", [EMPRESA]);
     const pagamentos = t.parcelas.flatMap((p: any) => p.pagamentos.map((x: any) => ({ ...x, parcela: p.installment_number }))).sort((a: any, b: any) => (a.data < b.data ? 1 : -1));
     const repasse = t.repasse_lancamento_id ? await q1("SELECT id, valor, vencimento FROM financas_lancamentos WHERE id = ?", [t.repasse_lancamento_id]) : null;
-    return render_template("titulos/titulo.html", ctx("titulos_lista", {
-      t, cli, c, link, contas, pagamentos, repasse, STATUS_CONTRATO: ct.STATUS,
+    return render_template("titulos/titulo.html", await fctx(slug, "titulos_lista", {
+      tit: t, cli, c, link, contas, pagamentos, repasse, STATUS_CONTRATO: ct.STATUS,
       msg_wpp: c ? `Olá, ${String(cli.name).trim().split(/\s+/)[0]}! Segue o link para assinatura eletrônica do contrato do título ${t.loan_number} (${moeda(t.original_amount)} em ${t.parcelas.length} parcela(s)): ${link}` : "",
     }));
   });
 
-  post("titulos.contrato_acao", "/titulos/<int:tid>/contrato", async (tid: number) => {
+  post("titulos.contrato_acao", "/financas/<slug>/titulos/<int:tid>/contrato", async (slug: string, tid: number) => {
+    if (slug !== EMPRESA) abort(404);
     checar_csrf();
     const t = await q1("SELECT * FROM private_loans WHERE id = ?", [tid]);
     if (!t || !t.contrato_id) abort(404);
@@ -413,27 +425,29 @@ export function registrar() {
     } catch (e: any) {
       flash(`Não foi possível: ${e?.message ?? e}`, "error");
     }
-    return redirect(url_for("titulos.titulo", { tid }));
+    return redirect(url_for("titulos.titulo", { slug,  tid }));
   });
 
-  post("titulos.pagamento", "/titulos/<int:tid>/pagamento", async (tid: number) => {
+  post("titulos.pagamento", "/financas/<slug>/titulos/<int:tid>/pagamento", async (slug: string, tid: number) => {
+    if (slug !== EMPRESA) abort(404);
     checar_csrf();
     const f = request().form;
     const t = await q1("SELECT * FROM private_loans WHERE id = ?", [tid]);
     if (!t) abort(404);
-    if (!ATIVOS.includes(t.status)) { flash("O título não está ativo.", "error"); return redirect(url_for("titulos.titulo", { tid })); }
+    if (!ATIVOS.includes(t.status)) { flash("O título não está ativo.", "error"); return redirect(url_for("titulos.titulo", { slug,  tid })); }
     const p = await q1("SELECT * FROM private_loan_installments WHERE id = ? AND loan_id = ?", [f.get("parcela_id", null, "int"), tid]);
     const valor = num_br(f.get("valor"));
     const dia = String(f.get("data") || hoje());
-    if (!p || !(valor > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(dia)) { flash("Informe a parcela, a data e o valor recebido.", "error"); return redirect(url_for("titulos.titulo", { tid })); }
+    if (!p || !(valor > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(dia)) { flash("Informe a parcela, a data e o valor recebido.", "error"); return redirect(url_for("titulos.titulo", { slug,  tid })); }
     await registrar_recebimento(t, p, dia, valor, 0, f.get("conta_id", null, "int"));
     await atualizar_titulos([tid]);
     flash(`Recebimento de ${moeda(valor)} registrado na parcela ${p.installment_number}.`, "success");
-    return redirect(url_for("titulos.titulo", { tid }));
+    return redirect(url_for("titulos.titulo", { slug,  tid }));
   });
 
   // Quitação / amortização: valor para quitar hoje (ou numa data), por cliente e parcelas
-  get("titulos.quitacao", "/titulos/quitacao", async () => {
+  get("titulos.quitacao", "/financas/<slug>/titulos/quitacao", async (slug: string) => {
+    if (slug !== EMPRESA) abort(404);
     const a = request().args;
     const pcid = a.get("cliente", null, "int");
     const dia = /^\d{4}-\d{2}-\d{2}$/.test(String(a.get("data") || "")) ? String(a.get("data")) : hoje();
@@ -455,17 +469,18 @@ export function registrar() {
       };
     }
     const contas = await q("SELECT id, nome FROM financas_contas WHERE empresa_slug = ? AND ativa = 1 AND considerada = 1 ORDER BY nome", [EMPRESA]);
-    return render_template("titulos/quitacao.html", ctx("titulos_quitacao", { lista_cli, pcid, dia, linhas, tot, contas, cliente_nome: (lista_cli.find((c: any) => c.id === pcid) ?? {}).name ?? "" }));
+    return render_template("titulos/quitacao.html", await fctx(slug, "titulos_quitacao", { lista_cli, pcid, dia, linhas, tot, contas, cliente_nome: (lista_cli.find((c: any) => c.id === pcid) ?? {}).name ?? "" }));
   });
 
-  post("titulos.quitacao_registrar", "/titulos/quitacao", async () => {
+  post("titulos.quitacao_registrar", "/financas/<slug>/titulos/quitacao", async (slug: string) => {
+    if (slug !== EMPRESA) abort(404);
     checar_csrf();
     const f = request().form;
     const pcid = f.get("cliente", null, "int");
     const dia = hoje();
     const ids = new Set(f.getlist("p", "int"));
     const conta = f.get("conta_id", null, "int");
-    if (!pcid || !ids.size) { flash("Escolha o cliente e as parcelas.", "error"); return redirect(url_for("titulos.quitacao", { cliente: pcid })); }
+    if (!pcid || !ids.size) { flash("Escolha o cliente e as parcelas.", "error"); return redirect(url_for("titulos.quitacao", { slug,  cliente: pcid })); }
     const ts = await titulos_calculados(await titulos("WHERE l.private_client_id = ? AND l.status IN ('active', 'overdue')", [pcid]), dia);
     let total = 0, n = 0;
     for (const t of ts) for (const p of t.parcelas) {
@@ -477,11 +492,12 @@ export function registrar() {
     }
     await atualizar_titulos(ts.map((t: any) => t.id));
     flash(`Quitação registrada: ${n} parcela(s), ${moeda(total)} recebidos em ${data_br(dia)}.`, "success");
-    return redirect(url_for("titulos.quitacao", { cliente: pcid }));
+    return redirect(url_for("titulos.quitacao", { slug,  cliente: pcid }));
   });
 
   // Clientes
-  get("titulos.clientes", "/titulos/clientes", async () => {
+  get("titulos.clientes", "/financas/<slug>/titulos/clientes", async (slug: string) => {
+    if (slug !== EMPRESA) abort(404);
     const lista = await clientes();
     const ts = await titulos_calculados(await titulos("WHERE l.status IN ('active', 'overdue', 'rascunho')"));
     for (const c of lista) {
@@ -489,20 +505,21 @@ export function registrar() {
       c.n_titulos = meus.length; c.saldo = r2(meus.reduce((a: number, t: any) => a + (ATIVOS.includes(t.status) ? t.saldo : 0), 0));
       c.atraso = r2(meus.reduce((a: number, t: any) => a + t.saldo_atraso, 0));
     }
-    return render_template("titulos/clientes.html", ctx("titulos_clientes", { lista }));
+    return render_template("titulos/clientes.html", await fctx(slug, "titulos_clientes", { lista }));
   });
 
-  route("titulos.cliente", "/titulos/clientes/<int:pcid>", ["GET", "POST"], async (pcid: number) => {
+  route("titulos.cliente", "/financas/<slug>/titulos/clientes/<int:pcid>", ["GET", "POST"], async (slug: string, pcid: number) => {
+    if (slug !== EMPRESA) abort(404);
     const novo = pcid === 0;
     const cli = novo ? {} : await q1("SELECT * FROM private_loan_clients WHERE id = ?", [pcid]);
     if (!cli) abort(404);
-    const voltar = voltar_seguro(request().args.get("voltar") || request().form.get("voltar"), url_for("titulos.clientes"));
+    const voltar = voltar_seguro(request().args.get("voltar") || request().form.get("voltar"), url_for("titulos.clientes", { slug }));
     if (request().method === "POST") {
       checar_csrf();
       const f = request().form;
       const v: Record<string, string> = {};
       for (const k of CAMPOS_CLIENTE.map(([k]) => k)) v[k] = String(f.get(k) || "").trim();
-      if (!v.name) { flash("Informe o nome do cliente.", "error"); return render_template("titulos/cliente.html", ctx("titulos_clientes", { cli: { ...cli, ...v }, novo, voltar, CAMPOS_CLIENTE })); }
+      if (!v.name) { flash("Informe o nome do cliente.", "error"); return render_template("titulos/cliente.html", await fctx(slug, "titulos_clientes", { cli: { ...cli, ...v }, novo, voltar, CAMPOS_CLIENTE })); }
       if (novo) {
         const cols = Object.keys(v);
         const id = (await run(`INSERT INTO private_loan_clients (${cols.join(", ")}, status) VALUES (${cols.map(() => "?").join(", ")}, 'ativo')`, cols.map((k) => v[k]))).lastrowid;
@@ -516,7 +533,7 @@ export function registrar() {
       return redirect(voltar);
     }
     const meus = novo ? [] : await titulos_calculados(await titulos("WHERE l.private_client_id = ?", [pcid]));
-    return render_template("titulos/cliente.html", ctx("titulos_clientes", { cli, novo, voltar, CAMPOS_CLIENTE, meus }));
+    return render_template("titulos/cliente.html", await fctx(slug, "titulos_clientes", { cli, novo, voltar, CAMPOS_CLIENTE, meus }));
   });
 }
 
