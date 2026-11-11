@@ -13,14 +13,16 @@
 {% if aba != 'empresas' %}
 <div class="box">
   <table class="tbl">
-    <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th>Empresas</th><th>Último acesso</th><th></th></tr></thead>
+    <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Gestor</th><th>Setores</th><th>Situação</th><th>Empresas</th><th>Último acesso</th><th></th></tr></thead>
     <tbody>
     {% for u in usuarios %}
       <tr class="{{ 'sel' if editar and editar.id == u.id }}">
         <td><b>{{ u.nome }}</b></td><td>{{ u.email }}</td>
-        <td>{{ 'Administrador' if u.perfil == 'admin' else 'Usuário' }}</td>
+        <td>{{ 'Administrador' if u.perfil == 'admin' else 'Usuário' }}{% if u.equipe_n %} <small>· equipe de {{ u.equipe_n }}</small>{% endif %}</td>
+        <td>{{ u.gestor_nome or '—' }}</td>
+        <td>{{ u.setores|join(', ') if u.setores else 'Todos' }}</td>
         <td>{% if u.ativo %}<span class="tag tag-on">Ativo</span>{% else %}<span class="tag tag-off">Bloqueado</span>{% endif %}</td>
-        <td>{% if u.perfil == 'admin' %}Todas{% else %}{% for e in empresas if e.slug in u.empresas %}{{ e.nome }}{% if u.modulos.get(e.slug) %} <small>({{ e.modulos|selectattr('id', 'in', u.modulos.get(e.slug))|map(attribute='nome')|join(', ') }})</small>{% endif %}{{ ', ' if not loop.last }}{% else %}—{% endfor %}{% endif %}</td>
+        <td>{% if u.perfil == 'admin' and not u.empresas %}Todas{% else %}{% for e in u.emp_lista %}{{ e.nome }}{% if u.modulos.get(e.slug) %} <small>({{ e.modulos|selectattr('id', 'in', u.modulos.get(e.slug))|map(attribute='nome')|join(', ') }})</small>{% endif %}{{ ', ' if not loop.last }}{% else %}—{% endfor %}{% endif %}</td>
         <td>{{ (u.ultimo_login or '—')|replace('T', ' ') }}</td>
         <td><a class="lnk" href="{{ url_for('portal_admin', u=u.id) }}">Editar</a></td>
       </tr>
@@ -46,7 +48,19 @@
       <label><input type="radio" name="perfil" value="usuario" {% if not u or u.perfil != 'admin' %}checked{% endif %} {% if eu %}disabled{% endif %}> Usuário</label>
       <label><input type="radio" name="perfil" value="admin" {% if u and u.perfil == 'admin' %}checked{% endif %} {% if eu %}disabled{% endif %}> Administrador</label>
     </div>
-    <label class="lbl">Empresas liberadas <small>(para perfil Usuário)</small></label>
+    <label class="lbl">Gestor responsável</label>
+    <select class="inp" name="gestor_id">
+      <option value="">— Nenhum —</option>
+      {% for x in gestores if not u or x.id != u.id %}<option value="{{ x.id }}" {% if u and u.gestor_id == x.id %}selected{% endif %}>{{ x.nome }}</option>{% endfor %}
+    </select>
+    <p class="hint">O gestor vê no Início e em Demandas as demandas deste usuário. Só administradores podem ser gestores.</p>
+    <label class="lbl">Setores <small>(acessa e recebe os chamados desses setores)</small></label>
+    <div class="radios ger-setores">
+      {% for st in SETORES %}<label><input type="checkbox" name="setores" value="{{ st }}" {% if u and st in u.setores %}checked{% endif %}> {{ st }}</label>{% endfor %}
+    </div>
+    <p class="hint">Nenhum marcado = todos os setores. Administradores sempre veem todos os chamados.</p>
+    <label class="lbl">Empresas liberadas</label>
+    <p class="hint" style="margin-top:-.2rem">Para administrador: as empresas em que ele trabalha como gestor (nenhuma marcada = todas).</p>
     <div class="checks">
       {% for e in empresas %}
         <label><input type="checkbox" name="empresas" value="{{ e.slug }}" {% if u and e.slug in u.empresas %}checked{% endif %}>

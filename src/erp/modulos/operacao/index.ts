@@ -24,8 +24,9 @@ import {
 } from "../../core/flask";
 import * as portal from "../portal";
 import { ICONES_OPERACAO } from "./icones";
+import { memo } from "../../core/memo";
 
-export const SETORES = ["Financeiro", "Comercial", "Processos", "Contábil", "Jurídico"];
+export const SETORES = portal.SETORES;
 export const STATUS_CHAMADO: Record<string, string> = { aberto: "Em aberto", atendimento: "Em atendimento", concluido: "Concluído" };
 export const STATUS_TAREFA: Record<string, string> = { aberta: "A fazer", andamento: "Em andamento", concluida: "Concluída" };
 export const RECORRENCIAS: Record<string, string> = { diaria: "Diária", semanal: "Semanal", mensal: "Mensal" };
@@ -125,13 +126,26 @@ function _checar_csrf() {
 
 /** Colaboradores que podem receber demandas da empresa (ativos). */
 export async function usuarios_da_empresa(slug: string) {
-  return _q(
+  return memo(`portal:op_usu:${slug}`, 30000, () => _q(
     "SELECT id, nome FROM portal_usuarios WHERE ativo = 1 AND (perfil = 'admin' OR id IN " +
-    "(SELECT usuario_id FROM portal_usuario_empresas WHERE empresa_slug = ?)) ORDER BY nome", [slug]);
+    "(SELECT usuario_id FROM portal_usuario_empresas WHERE empresa_slug = ?)) ORDER BY nome", [slug]));
+}
+
+/** Quem pode receber um chamado do setor: administradores, quem tem o setor marcado e quem não tem
+ *  nenhum setor marcado (vê todos). O responsável atual continua na lista. */
+export async function usuarios_do_setor(slug: string, setor: string, atual: number | null = null) {
+  const [setores, adm, usu] = await Promise.all([
+    memo("portal:op_setores", 30000, () => _q("SELECT usuario_id, setor FROM portal_usuario_setores")),
+    memo("portal:op_admins", 30000, () => _q("SELECT id FROM portal_usuarios WHERE perfil = 'admin'")),
+    usuarios_da_empresa(slug)]);
+  const set = new Map<number, string[]>();
+  for (const r of setores) (set.get(r.usuario_id) ?? set.set(r.usuario_id, []).get(r.usuario_id)!).push(r.setor);
+  const admins = new Set(adm.map((r: any) => r.id));
+  return usu.filter((x: any) => admins.has(x.id) || x.id === atual || !set.has(x.id) || set.get(x.id)!.includes(setor));
 }
 
 export async function nomes_usuarios(): Promise<Map<number, string>> {
-  return new Map((await _q("SELECT id, nome FROM portal_usuarios")).map((r) => [r.id, r.nome]));
+  return new Map((await memo("portal:op_nomes", 30000, () => _q("SELECT id, nome FROM portal_usuarios"))).map((r: any) => [r.id, r.nome]));
 }
 
 // ─────────────────────────── cronômetros ───────────────────────────
@@ -280,16 +294,19 @@ export function situacao_tarefa(t: any, hoje?: string) {
   return "futura";
 }
 
-export async function contadores(uid: number, slug: string, admin = false) {
+export async function contadores(uid: number, slug: string, admin = false, escopo: number[] | null = null) {
   const hoje = PyDate.today().isoformat();
-  const filtro = admin ? "" : " AND responsavel_id = ?";
-  const params = admin ? [slug] : [slug, uid];
-  const r = (await _q1("SELECT " +
+  const ids = escopo && escopo.length ? escopo : [uid];
+  const filtro = admin && !escopo ? "" : ` AND responsavel_id IN (${ids.map(() => "?").join(",")})`;
+  const params = admin && !escopo ? [slug] : [slug, ...ids];
+  const [fc, fp] = await portal.filtro_chamados(_usuario());
+  const [r0, ch] = await Promise.all([_q1("SELECT " +
     "SUM(CASE WHEN status <> 'concluida' THEN 1 ELSE 0 END) AS abertas, " +
     `SUM(CASE WHEN status <> 'concluida' AND vencimento <> '' AND vencimento < '${hoje}' THEN 1 ELSE 0 END) AS atrasadas, ` +
     `SUM(CASE WHEN status <> 'concluida' AND (vencimento = '${hoje}') THEN 1 ELSE 0 END) AS hoje ` +
-    `FROM operacao_tarefas WHERE empresa_slug = ?${filtro}`, params)) ?? {};
-  const ch = await _q1("SELECT COUNT(*) AS n FROM operacao_chamados WHERE empresa_slug = ? AND status <> 'concluido'", [slug]);
+    `FROM operacao_tarefas WHERE empresa_slug = ?${filtro}`, params),
+    _q1("SELECT COUNT(*) AS n FROM operacao_chamados WHERE empresa_slug = ? AND status <> 'concluido'" + fc, [slug, ...fp])]);
+  const r = r0 ?? {};
   return { abertas: r.abertas || 0, atrasadas: r.atrasadas || 0, hoje: r.hoje || 0, chamados: ch ? ch.n : 0 };
 }
 
@@ -302,7 +319,7 @@ async function _ctx(empresa: any, ativo: string) {
     data_hora_br, numero_chamado,
     SETORES, STATUS_CHAMADO, STATUS_TAREFA,
     RECORRENCIAS, PRIORIDADES,
-    cont: await contadores(u.id, empresa.slug, u.admin),
+    cont: await contadores(u.id, empresa.slug, u.admin, await portal.escopo_demandas(u)),
   };
 }
 
@@ -363,17 +380,21 @@ export function registrar() {
     const hoje_iso = hoje.isoformat();
     const busca = (request().args.get("q") || "").trim();
     const tipo_f: string = request().args.get("tipo", "");
-    // Quadro do usuário logado. O administrador pode ver o de outra pessoa ou o da equipe toda.
+    // Quadro do usuário logado. O gestor (administrador) vê o dele, o da equipe dele
+    // (as pessoas que têm ele como gestor), o de cada pessoa da equipe ou o da empresa toda.
     let de: string = request().args.get("de", "eu");
     let resp: number | null = null;
+    const equipe = u.admin ? await portal.equipe_ids(u.id) : [];
     if (!u.admin) de = "eu";
-    else if (/^\d+$/.test(de)) resp = Number(de);
-    else if (de !== "equipe") de = "eu";
+    else if (/^\d+$/.test(de)) { resp = Number(de); if (resp === u.id) { de = "eu"; resp = null; } }
+    else if (de !== "equipe" && de !== "todos") de = "eu";
     const alvo_id = de === "eu" ? u.id : resp;
+    const grupo_ids: number[] | null = de === "equipe" ? [u.id, ...equipe] : null;
 
     let sql = "SELECT * FROM operacao_tarefas WHERE empresa_slug = ?";
     let params: any[] = [slug];
     if (alvo_id) { sql += " AND responsavel_id = ?"; params.push(alvo_id); }
+    else if (grupo_ids) { sql += ` AND responsavel_id IN (${grupo_ids.map(() => "?").join(",")})`; params.push(...grupo_ids); }
     if (busca) { sql += " AND (titulo LIKE ? OR descricao LIKE ?)"; params = [...params, `%${busca}%`, `%${busca}%`]; }
     if (tipo_f === "rotina") sql += " AND tipo = 'recorrente'";
     else if (tipo_f === "avulsa") sql += " AND tipo <> 'recorrente'";
@@ -417,27 +438,27 @@ export function registrar() {
     // Onde o tempo foi gasto (7 dias): por tarefa
     const d6 = hoje.addDays(-6);
     const desde = _iso(new PyDate(d6.year, d6.month, d6.day, 0, 0, 0, true));
-    const todos = !alvo_id;
-    const filtro_u = todos ? "" : " AND tt.usuario_id = ?";
-    const p2 = [slug, desde, ...(todos ? [] : [alvo_id])];
-    const gasto = await _q(`SELECT t.id, t.titulo, CAST(SUM(${SEG("COALESCE(tt.fim, ?)")} - ${SEG("tt.inicio")}) AS bigint) AS s ` +
+    const ids_u: number[] = alvo_id ? [alvo_id] : (grupo_ids ?? []);
+    const filtro_u = ids_u.length ? ` AND tt.usuario_id IN (${ids_u.map(() => "?").join(",")})` : "";
+    const p2 = [slug, desde, ...ids_u];
+    const gastoP = _q(`SELECT t.id, t.titulo, CAST(SUM(${SEG("COALESCE(tt.fim, ?)")} - ${SEG("tt.inicio")}) AS bigint) AS s ` +
       "FROM operacao_tarefa_tempo tt JOIN operacao_tarefas t ON t.id = tt.tarefa_id " +
       `WHERE t.empresa_slug = ? AND tt.inicio >= ?${filtro_u} GROUP BY t.id ORDER BY s DESC LIMIT 8`,
       [_iso(_agora()), ...p2]);
+    const alvo = alvo_id || u.id;
+    const dias = Array.from({ length: 7 }, (_, k) => hoje.addDays(k - 6));
+    const [gasto, segs, ctx, usuarios] = await Promise.all([
+      gastoP, Promise.all(dias.map((dia) => segundos_jornada(alvo, slug, dia))), _ctx(e, "demandas"), usuarios_da_empresa(slug)]);
+    const semana: any[] = dias.map((dia, k) => ({ dia, s: segs[k] }));
     const maior = Math.max(...(gasto.length ? gasto.map((r) => r.s || 0) : [1])) || 1;
 
-    // Tempo na empresa: hoje e nos últimos 7 dias (do usuário filtrado)
-    const alvo = alvo_id || u.id;
-    const semana: any[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const dia = hoje.addDays(-i);
-      semana.push({ dia, s: await segundos_jornada(alvo, slug, dia) });
-    }
-
-    const ctx = await _ctx(e, "demandas");
+    // Tempo na empresa: hoje e nos últimos 7 dias (do usuário filtrado) — calculado acima, em paralelo
+    const eq = new Set(equipe);
     return render_template("operacao/demandas.html", {
-      ...ctx, aba, lista, abas, colunas, busca, resp, de, tipo_f, usuarios: await usuarios_da_empresa(slug), gasto, maior,
-      semana, hoje_iso, alvo_nome: alvo_id ? (nomes.get(alvo_id) ?? "—") : "Toda a equipe",
+      ...ctx, aba, lista, abas, colunas, busca, resp, de, tipo_f, usuarios, gasto, maior,
+      equipe_lista: usuarios.filter((x: any) => eq.has(x.id)),
+      outros_lista: usuarios.filter((x: any) => !eq.has(x.id) && x.id !== u.id),
+      semana, hoje_iso, alvo_nome: alvo_id ? (nomes.get(alvo_id) ?? "—") : de === "equipe" ? "Minha equipe" : "Toda a empresa",
     });
   });
 
@@ -656,6 +677,11 @@ export function registrar() {
   async function _chamado_ou_404(slug: string, cid: number) {
     const c = await _q1("SELECT * FROM operacao_chamados WHERE id = ? AND empresa_slug = ?", [cid, slug]);
     if (!c) abort(404);
+    const u = _usuario();
+    if (!u.admin) {
+      const set = await portal.setores_do_usuario(u.id);
+      if (set.length && !set.includes(c.setor) && c.aberto_por !== u.id && c.responsavel_id !== u.id) abort(403);
+    }
     return c;
   }
 
@@ -665,8 +691,9 @@ export function registrar() {
     const st: string = args.get("status", "abertos");
     const setor: string = args.get("setor", "");
     const busca = (args.get("q") || "").trim();
-    let sql = "SELECT * FROM operacao_chamados WHERE empresa_slug = ?";
-    let params: any[] = [slug];
+    const [fc, fp] = await portal.filtro_chamados(_usuario());
+    let sql = "SELECT * FROM operacao_chamados WHERE empresa_slug = ?" + fc;
+    let params: any[] = [slug, ...fp];
     if (st === "abertos") {
       sql += " AND status <> 'concluido'";
     } else if (st in STATUS_CHAMADO) {
@@ -681,14 +708,14 @@ export function registrar() {
       sql += " AND (assunto LIKE ? OR solicitante LIKE ? OR descricao LIKE ? OR CAST(id AS TEXT) LIKE ?)";
       params = [...params, `%${busca}%`, `%${busca}%`, `%${busca}%`, `%${busca.replace(/^[#0]+/, "") || busca}%`];
     }
-    const lista = await _q(sql + " ORDER BY ultima_mov_em DESC, id DESC", params);
-    const nomes = await nomes_usuarios();
+    const [lista, nomes, tot_l, ctx, usuarios] = await Promise.all([
+      _q(sql + " ORDER BY ultima_mov_em DESC, id DESC", params), nomes_usuarios(),
+      _q("SELECT status, COUNT(*) AS n FROM operacao_chamados WHERE empresa_slug = ?" + fc + " GROUP BY status", [slug, ...fp]),
+      _ctx(e, "chamados"), usuarios_da_empresa(slug)]);
     for (const c of lista) c.resp_nome = c.responsavel_id ? (nomes.get(c.responsavel_id) ?? "") : "";
-    const totais = Object.fromEntries((await _q(
-      "SELECT status, COUNT(*) AS n FROM operacao_chamados WHERE empresa_slug = ? GROUP BY status", [slug])).map((r) => [r.status, r.n]));
-    const ctx = await _ctx(e, "chamados");
+    const totais = Object.fromEntries(tot_l.map((r: any) => [r.status, r.n]));
     return render_template("operacao/chamados.html", {
-      ...ctx, lista, st, setor, busca, totais, usuarios: await usuarios_da_empresa(slug),
+      ...ctx, lista, st, setor, busca, totais, usuarios,
     });
   });
 
@@ -716,22 +743,22 @@ export function registrar() {
 
   route("operacao.chamado", "/operacao/<slug>/chamados/<int:cid>", ["GET"], async (slug: string, cid: number) => {
     const e = await _empresa(slug);
-    const c = await _chamado_ou_404(slug, cid);
-    const nomes = await nomes_usuarios();
-    const movs = await _q("SELECT * FROM operacao_chamado_mov WHERE chamado_id = ? ORDER BY criado_em, id", [cid]);
+    const [c, nomes, movs, tarefas, ctx] = await Promise.all([
+      _chamado_ou_404(slug, cid), nomes_usuarios(),
+      _q("SELECT * FROM operacao_chamado_mov WHERE chamado_id = ? ORDER BY criado_em, id", [cid]),
+      _q("SELECT id, titulo, status, responsavel_id FROM operacao_tarefas WHERE chamado_id = ? ORDER BY id", [cid]),
+      _ctx(e, "chamados")]);
     for (const m of movs) m.autor = nomes.get(m.usuario_id) ?? "—";
-    const tarefas = await _q("SELECT id, titulo, status, responsavel_id FROM operacao_tarefas WHERE chamado_id = ? ORDER BY id", [cid]);
     const u = _usuario();
     for (const t of tarefas) {
       t.resp_nome = nomes.get(t.responsavel_id) ?? "—";
       t.posso_abrir = u.admin || t.responsavel_id === u.id;
     }
-    const ctx = await _ctx(e, "chamados");
     return render_template("operacao/chamado.html", {
       ...ctx, c, movs, tarefas,
       aberto_por: nomes.get(c.aberto_por) ?? "—",
       resp_nome: c.responsavel_id ? (nomes.get(c.responsavel_id) ?? "") : "",
-      usuarios: await usuarios_da_empresa(slug),
+      usuarios: await usuarios_do_setor(slug, c.setor, c.responsavel_id),
     });
   });
 
@@ -748,20 +775,32 @@ export function registrar() {
       const r = f.get("responsavel_id", null, "int");
       resp = (await usuarios_da_empresa(slug)).some((x) => x.id === r) ? r : null;
     }
-    if (!texto && novo === c.status && resp === c.responsavel_id) {
-      flash("Escreva uma mensagem ou altere o status.", "erro");
+    const novo_setor = SETORES.includes(f.get("setor")) ? f.get("setor") : c.setor;
+    const transferiu = novo_setor !== c.setor;
+    // Transferido sem escolher outro responsável: volta para a fila do novo setor.
+    if (transferiu && resp === c.responsavel_id) resp = null;
+    if (!texto && novo === c.status && resp === c.responsavel_id && !transferiu) {
+      flash("Escreva uma mensagem, altere o status ou transfira o setor.", "erro");
       return redirect(url_for("operacao.chamado", { slug, cid }));
     }
     const partes: string[] = [];
+    if (transferiu) partes.push(`Transferido de ${c.setor} para ${novo_setor}`);
     if (novo !== c.status) partes.push(`Status: ${STATUS_CHAMADO[novo]}`);
     if (resp !== c.responsavel_id) partes.push(`Responsável: ${resp ? ((await nomes_usuarios()).get(resp) ?? "ninguém") : "ninguém"}`);
     const agora = _iso(_agora());
     await _exec("INSERT INTO operacao_chamado_mov (chamado_id, usuario_id, texto, status, criado_em) VALUES (?, ?, ?, ?, ?)",
       [cid, u.id, (texto && partes.length ? texto + "\n" : texto) + partes.join(" · "),
         novo !== c.status ? novo : "", agora]);
-    await _exec("UPDATE operacao_chamados SET status = ?, responsavel_id = ?, ultima_mov_em = ? WHERE id = ?",
-      [novo, resp, agora, cid]);
-    flash("Movimentação registrada.", "ok");
+    await _exec("UPDATE operacao_chamados SET status = ?, responsavel_id = ?, setor = ?, ultima_mov_em = ? WHERE id = ?",
+      [novo, resp, novo_setor, agora, cid]);
+    if (transferiu && !u.admin) {
+      const set = await portal.setores_do_usuario(u.id);
+      if (set.length && !set.includes(novo_setor) && c.aberto_por !== u.id && resp !== u.id) {
+        flash(`Chamado nº ${numero_chamado(cid)} transferido para ${novo_setor}.`, "ok");
+        return redirect(url_for("operacao.chamados", { slug }));
+      }
+    }
+    flash(transferiu ? `Chamado transferido para ${novo_setor}.` : "Movimentação registrada.", "ok");
     return redirect(url_for("operacao.chamado", { slug, cid }));
   });
 }
