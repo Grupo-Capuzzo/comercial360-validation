@@ -820,6 +820,21 @@ export function registrar() {
         flash(`${marcadas.size} conta(s) considerada(s) no sistema. As demais saem dos saldos, listas e relatórios.`, "ok");
         return redirect(url_for("financas.cad_contas", { slug }));
       }
+      if (f.get("acao") === "excluir") { // só conta sem nenhum lançamento, baixa ou movimento
+        const xid = await _do_slug("financas_contas", _int("id"), slug);
+        if (!xid) { flash("Conta não encontrada.", "erro"); return redirect(url_for("financas.cad_contas", { slug })); }
+        const usos = await d.q("SELECT (SELECT COUNT(*) FROM financas_lancamentos WHERE conta_id = ?) + (SELECT COUNT(*) FROM financas_baixas WHERE conta_id = ?) + " +
+          "(SELECT COUNT(*) FROM financas_movimentos WHERE conta_id = ?) + (SELECT COUNT(*) FROM financas_transferencias WHERE origem_id = ? OR destino_id = ?) + " +
+          "(SELECT COUNT(*) FROM financas_extrato_importado WHERE conta_id = ?) AS n", [xid, xid, xid, xid, xid, xid], true);
+        if (Number(usos?.n || 0) > 0) {
+          flash(`Esta conta já tem ${usos.n} lançamento(s)/movimento(s) e não pode ser excluída. Desmarque "Conta ativa" para tirá-la das listas.`, "erro");
+          return redirect(url_for("financas.cad_contas", { slug, editar: xid }));
+        }
+        await d.ex("DELETE FROM financas_api_map WHERE empresa_slug = ? AND tipo = 'conta' AND local_id = ?", [slug, xid]);
+        await d.ex("DELETE FROM financas_contas WHERE id = ? AND empresa_slug = ?", [xid, slug]);
+        flash("Conta excluída.", "ok");
+        return redirect(url_for("financas.cad_contas", { slug }));
+      }
       const cid = await _do_slug("financas_contas", _int("id"), slug);
       const nome = corta((f.get("nome") || "").trim(), 80);
       if (!nome) {
@@ -835,6 +850,12 @@ export function registrar() {
           "WHERE id = ?", [...campos, cid]);
         flash("Conta atualizada.", "ok");
       } else {
+        // Proteção contra conta repetida (ex.: clicar em Salvar várias vezes)
+        const igual = await d.q("SELECT id FROM financas_contas WHERE empresa_slug = ? AND lower(trim(nome)) = lower(?)", [slug, nome], true);
+        if (igual) {
+          flash(`Já existe uma conta chamada "${nome}". Abri ela para você editar.`, "erro");
+          return redirect(url_for("financas.cad_contas", { slug, editar: igual.id }));
+        }
         await d.ex("INSERT INTO financas_contas (nome, tipo, banco, agencia, numero, saldo_inicial, data_saldo_inicial, ativa, considerada, empresa_slug, criado_em) " +
           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [...campos, slug, d.agora_iso()]);
         flash("Conta cadastrada.", "ok");
