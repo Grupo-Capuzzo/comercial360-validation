@@ -27,6 +27,70 @@
   </form>
 </section>
 
+<nav class="oc-abas">
+  <a href="#itens">Itens <b>{{ itens|length }}</b></a><a href="#cotacoes">Cotações <b>{{ cots|length }}</b></a>
+  {% if itens and cots %}<a href="#mapa">Mapa de cotação</a>{% endif %}<a href="#arquivos">Arquivos <b>{{ arquivos|length }}</b></a><a href="#historico">Histórico</a>
+</nav>
+
+<section class="oc-box" id="itens">
+  <h3>Itens por etapa da obra <small class="oc-sub">{{ itens|length }} item(ns){% if mapa.etapas|length > 1 or (mapa.etapas and mapa.etapas[0].nome) %} · {{ mapa.etapas|length }} etapa(s){% endif %}</small></h3>
+  {% if itens %}
+  <div class="oc-etp-ctl"><button type="button" class="fin-link lnk" onclick="ocEtapas(true)">Abrir todas</button> · <button type="button" class="fin-link lnk" onclick="ocEtapas(false)">Fechar todas</button></div>
+  {% for e in mapa.etapas %}
+  <details class="oc-etp" open>
+    <summary><span class="oc-etp-n">{{ e.nome or 'Sem etapa' }}</span><small>{{ e.itens|length }} item(ns)</small>
+      {% if not bloqueado %}<form method="post" action="{{ url_for('orcamentos.item_excluir', slug=empresa.slug, oid=o.id) }}" onsubmit="return confirm('Apagar todos os itens da etapa “{{ e.nome or 'Sem etapa' }}”?')" style="margin-left:auto">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="etapa_nome" value="{{ e.nome }}"><button class="fin-link lnk" type="submit" style="color:#c0392b;font-size:.75rem">apagar etapa</button></form>{% endif %}
+    </summary>
+    <table class="oc-tab oc-itens"><thead><tr><th style="width:2.2rem">#</th><th>Descrição</th><th style="width:4.5rem">Un.</th><th class="num" style="width:6rem">Qtd.</th><th>Obs.</th><th style="width:5.5rem"></th></tr></thead>
+      <tbody>{% for it in e.itens %}<tr>
+        <td style="color:var(--muted)">{{ loop.index }}</td><td>{{ it.descricao }}</td><td>{{ it.unidade or '—' }}</td>
+        <td class="num">{{ (it.quantidade|string).replace('.', ',') }}</td><td><small>{{ it.obs }}</small></td>
+        <td>{% if not bloqueado %}<div class="oc-acoes">
+          <button class="fin-link lnk" type="button" style="font-size:.75rem" onclick='editarItem({{ {"id": it.id, "etapa": it.etapa, "descricao": it.descricao, "unidade": it.unidade, "quantidade": (it.quantidade|string).replace(".", ","), "obs": it.obs}|tojson }})'>Editar</button>
+          <form method="post" action="{{ url_for('orcamentos.item_excluir', slug=empresa.slug, oid=o.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ it.id }}"><button class="fin-link lnk" type="submit" style="font-size:.75rem;color:#c0392b" title="Excluir item">✕</button></form>
+        </div>{% endif %}</td></tr>{% endfor %}</tbody></table>
+  </details>
+  {% endfor %}
+  {% else %}
+  <p class="oc-vazio">Quando a engenharia mandar a lista de materiais/serviços, importe aqui. Os itens ficam separados por <b>etapa da obra</b> (fundação, alvenaria, elétrica…) e cada fornecedor informa o preço de cada item no <b>mapa de cotação</b>.</p>
+  {% endif %}
+
+  {% if not bloqueado %}
+  <div class="oc-itens-acoes">
+    <details class="oc-imp" {{ 'open' if not itens }}>
+      <summary>{{ ic('upload_file') }} Importar lista da engenharia</summary>
+      <form method="post" action="{{ url_for('orcamentos.itens_importar', slug=empresa.slug, oid=o.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <p class="oc-dica">Cole as linhas copiadas do Excel <b>ou</b> envie a planilha (.xlsx / .csv). Colunas reconhecidas: <code>Etapa</code>, <code>Descrição</code>, <code>Unidade</code>, <code>Quantidade</code>, <code>Obs</code>. Uma linha só com texto (sem quantidade) vira o título de uma nova etapa.</p>
+        <textarea class="inp" name="colar" rows="6" placeholder="Etapa	Descrição	Un	Qtd&#10;Fundação	Cimento CP-II 50kg	sc	120&#10;Fundação	Aço CA-50 10mm	br	80&#10;Elétrica	Cabo flexível 2,5mm	m	500"></textarea>
+        <div class="oc-f3" style="margin-top:.5rem">
+          <div><label class="lbl">Ou planilha</label><input class="inp" type="file" name="planilha" accept=".xlsx,.csv,.txt"></div>
+          <div><label class="lbl">Etapa (se a lista não tiver)</label><input class="inp" name="etapa" list="oc-etapas-obra" placeholder="Ex.: Fundação"></div>
+          <div style="align-self:end"><button class="btn-pill" type="submit">Importar itens</button></div>
+        </div>
+      </form>
+    </details>
+    <details class="oc-imp" id="item-form-box">
+      <summary>{{ ic('add') }} <span id="item-titulo">Adicionar item</span></summary>
+      <form method="post" action="{{ url_for('orcamentos.item', slug=empresa.slug, oid=o.id) }}" id="f-item">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" id="it-id">
+        <div class="oc-f4">
+          <div><label class="lbl">Etapa</label><input class="inp" name="etapa" id="it-etapa" list="oc-etapas-obra" placeholder="Ex.: Alvenaria"></div>
+          <div class="span2"><label class="lbl">Descrição *</label><input class="inp" name="descricao" id="it-descricao" required maxlength="300"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem"><div><label class="lbl">Un.</label><input class="inp" name="unidade" id="it-unidade" maxlength="20"></div><div><label class="lbl">Qtd.</label><input class="inp" name="quantidade" id="it-quantidade" value="1" inputmode="decimal"></div></div>
+          <div class="span4" style="grid-column:1/-1"><label class="lbl">Obs.</label><input class="inp" name="obs" id="it-obs" maxlength="300" placeholder="Marca, especificação…"></div>
+        </div>
+        <div class="oc-acoes" style="margin-top:.6rem"><button class="btn-pill" type="submit">Salvar item</button></div>
+      </form>
+    </details>
+    {% if itens %}<form method="post" action="{{ url_for('orcamentos.item_excluir', slug=empresa.slug, oid=o.id) }}" onsubmit="return confirm('Apagar a lista inteira de itens (e os preços do mapa)?')" style="margin-left:auto">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="tudo" value="1"><button class="fin-link lnk" type="submit" style="color:#c0392b;font-size:.8rem">Apagar lista</button></form>{% endif %}
+  </div>
+  {% endif %}
+  <datalist id="oc-etapas-obra">{% for n in n_etapas_nomes %}<option>{{ n }}</option>{% endfor %}<option>Serviços preliminares</option><option>Fundação</option><option>Estrutura</option><option>Alvenaria</option><option>Cobertura</option><option>Instalações elétricas</option><option>Instalações hidráulicas</option><option>Revestimentos</option><option>Pisos</option><option>Esquadrias</option><option>Pintura</option><option>Acabamento</option><option>Limpeza</option></datalist>
+</section>
+
   <section class="oc-box" id="cotacoes">
     <h3>Cotações ({{ cots|length }}) {% if cots|length > 1 %}<small style="font-weight:400;color:var(--muted);font-size:.78rem">menor total: <span class="oc-melhor">{{ moeda(menor) }}</span></small>{% endif %}</h3>
     {% if cots %}
@@ -55,6 +119,54 @@
       {% endfor %}</tbody>
     </table></div>
     {% else %}<p style="color:var(--muted)">Nenhuma cotação ainda. Cadastre abaixo a proposta de cada fornecedor.</p>{% endif %}
+  </section>
+
+  {% if itens and cots %}
+  <section class="oc-box" id="mapa">
+    <h3>Mapa de cotação <small class="oc-sub">preço unitário de cada fornecedor por item · menor preço em verde</small></h3>
+    <form method="post" action="{{ url_for('orcamentos.mapa', slug=empresa.slug, oid=o.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="oc-mapa-w"><table class="oc-tab oc-mapa">
+        <thead><tr><th class="fix">Item</th><th class="num">Qtd.</th>{% for c in cots %}<th class="num forn {{ 'venc' if c.vencedora }}">{{ c.nome or '—' }}{% if c.vencedora %} ✓{% endif %}<br><small>unit. · total</small></th>{% endfor %}</tr></thead>
+        <tbody>
+        {% for e in mapa.etapas %}
+          <tr class="oc-mapa-etp"><td class="fix" colspan="2">{{ e.nome or 'Sem etapa' }}</td>{% for c in cots %}<td class="num">{{ moeda(e.subtot[loop.index0]) if e.subtot[loop.index0] else '' }}</td>{% endfor %}</tr>
+          {% for it in e.itens %}<tr>
+            <td class="fix">{{ it.descricao }}</td><td class="num">{{ (it.quantidade|string).replace('.', ',') }} {{ it.unidade }}</td>
+            {% for c in cots %}{% set p = it.precos[loop.index0] %}
+            <td class="num {{ 'min' if p and it.min == p.total and cots|length > 1 }}">
+              {% if bloqueado %}{{ moeda(p.unit) if p else '—' }}{% else %}<input class="inp oc-pr" name="p_{{ c.id }}_{{ it.id }}" data-moeda value="{{ valor_campo(p.unit) if p else '' }}" placeholder="—">{% endif %}
+              <small>{{ moeda(p.total) if p else '' }}</small></td>
+            {% endfor %}
+          </tr>{% endfor %}
+        {% endfor %}
+        </tbody>
+        <tfoot><tr><td class="fix" colspan="2">Total dos itens</td>{% for c in cots %}<td class="num"><b class="{{ 'oc-melhor' if mapa.totais[loop.index0] and mapa.completos[loop.index0] and mapa.totais[loop.index0] == mapa.melhor_inteira }}">{{ moeda(mapa.totais[loop.index0]) }}</b>{% if not mapa.completos[loop.index0] %}<br><small class="oc-dif">faltam preços</small>{% endif %}</td>{% endfor %}</tr></tfoot>
+      </table></div>
+      {% if mapa.itens_cotados %}
+      <p class="oc-dica" style="margin-top:.6rem">Comprando cada item de quem tem o menor preço, o total seria <b class="oc-melhor">{{ moeda(mapa.melhor_comb) }}</b> ({{ mapa.itens_cotados }} de {{ itens|length }} itens cotados){% if mapa.melhor_inteira and mapa.melhor_comb < mapa.melhor_inteira %} — economia de <b>{{ moeda(mapa.melhor_inteira - mapa.melhor_comb) }}</b> sobre a melhor proposta inteira{% endif %}.</p>
+      {% endif %}
+      {% if not bloqueado %}<div class="oc-acoes" style="margin-top:.6rem"><button class="btn-pill" type="submit">Salvar preços</button><small style="color:var(--muted)">O valor de cada cotação passa a ser a soma dos itens (quantidade × preço). Frete continua separado.</small></div>{% endif %}
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="oc-box" id="arquivos">
+    <h3>Arquivos <small class="oc-sub">cotações recebidas, planilhas, projetos, fotos</small></h3>
+    
+    <form method="post" action="{{ url_for('orcamentos.arquivos', slug=empresa.slug, oid=o.id) }}" enctype="multipart/form-data" class="oc-drop" id="oc-drop">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="file" name="anexos" multiple id="oc-arq-in" hidden>
+      <div class="oc-drop-txt">{{ ic('cloud_upload') }}<span>Arraste os arquivos aqui ou <button type="button" class="fin-link lnk" onclick="document.getElementById('oc-arq-in').click()">escolha no computador</button></span><small>Até 20 arquivos por vez · 25 MB cada</small></div>
+      {% if cots %}<label class="oc-drop-cot">Da cotação de <select class="inp" name="cotacao_id"><option value="">— geral do orçamento —</option>{% for c in cots %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></label>{% endif %}
+      <small id="oc-drop-msg"></small>
+    </form>
+    {% if arquivos %}
+    <ul class="oc-arqs">{% for a in arquivos %}
+      <li><a target="_blank" href="{{ url_for('orcamentos.anexo', slug=empresa.slug, oid=o.id, aid=a.id) }}"><span class="oc-ext">{{ (a.nome.split('.')|last)[:4]|upper if '.' in a.nome else 'ARQ' }}</span><span class="oc-arq-n">{{ a.nome }}<small>{% if a.fornecedor %}{{ a.fornecedor }} · {% endif %}{{ (a.tamanho / 1024)|round|int }} KB · {{ data_br(a.criado_em[:10]) }}</small></span></a>
+        <form method="post" action="{{ url_for('orcamentos.arquivo_excluir', slug=empresa.slug, oid=o.id, aid=a.id) }}" onsubmit="return confirm('Excluir o arquivo {{ a.nome|replace("'", "") }}?')"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link lnk" type="submit" title="Excluir" style="color:#c0392b">✕</button></form></li>
+    {% endfor %}</ul>
+    {% else %}<p class="oc-vazio">Nenhum arquivo ainda.</p>{% endif %}
   </section>
 
 <div class="oc-grid2">
@@ -165,7 +277,6 @@
       <label class="lbl">Descrição / escopo</label><textarea class="inp" name="descricao" rows="5">{{ o.descricao }}</textarea>
       <div class="oc-acoes" style="margin-top:.7rem"><button class="btn-pill" type="submit">Salvar</button></div>
     </form>
-    {% if anexos %}<div style="margin-top:.6rem">{% for a in anexos %}<a class="oc-anexo" target="_blank" href="{{ url_for('orcamentos.anexo', slug=empresa.slug, oid=o.id, aid=a.id) }}">📎 {{ a.nome }}</a>{% endfor %}</div>{% endif %}
   </section>
 
   <section class="oc-box" id="historico">
@@ -213,6 +324,29 @@
       Object.keys(m).forEach(function (k) { var el = novo.querySelector('[data-campo="' + k + '"]'); if (el && !el.value) el.value = m[k] || ''; });
     }).catch(function () {});
   });
+  window.ocEtapas = function (abre) { document.querySelectorAll('details.oc-etp').forEach(function (d) { d.open = abre; }); };
+  window.editarItem = function (it) {
+    var box = document.getElementById('item-form-box'); box.open = true;
+    document.getElementById('item-titulo').textContent = 'Editar item';
+    ['id', 'etapa', 'descricao', 'unidade', 'quantidade', 'obs'].forEach(function (k) { document.getElementById('it-' + k).value = it[k] == null ? '' : it[k]; });
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  // Arquivos: arrastar e soltar (envia na hora)
+  var drop = document.getElementById('oc-drop'), inp = document.getElementById('oc-arq-in'), dmsg = document.getElementById('oc-drop-msg');
+  function enviar(files) {
+    if (!files || !files.length) return;
+    var fd = new FormData(drop); fd.delete('anexos');
+    for (var i = 0; i < files.length; i++) fd.append('anexos', files[i]);
+    dmsg.textContent = 'Enviando ' + files.length + ' arquivo(s)…'; drop.classList.add('env');
+    fetch(drop.action, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'x-requested-with': 'fetch' } })
+      .then(function () { location.hash = 'arquivos'; location.reload(); }).catch(function () { dmsg.textContent = 'Falha no envio. Tente de novo.'; drop.classList.remove('env'); });
+  }
+  if (drop) {
+    inp.addEventListener('change', function () { enviar(inp.files); });
+    ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('sobre'); }); });
+    ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('sobre'); }); });
+    drop.addEventListener('drop', function (e) { enviar(e.dataTransfer.files); });
+  }
   // valores em R$
   document.querySelectorAll('[data-moeda]').forEach(function (el) {
     el.addEventListener('blur', function () { var v = el.value.replace(/[^\d,.-]/g, ''); if (!v) return; var n = v.indexOf(',') >= 0 ? parseFloat(v.replace(/\./g, '').replace(',', '.')) : parseFloat(v); if (!isNaN(n)) el.value = n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); });

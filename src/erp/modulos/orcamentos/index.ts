@@ -6,10 +6,69 @@
 import {
   PyDate, abort, flash, g, get, jsonify, post, q, q1, redirect, render_template, request, route, run, sendFile, url_for,
 } from "../../core/flask";
-import { lerArquivo, salvarArquivo } from "../../core/arquivos";
+import { apagarArquivo, lerArquivo, salvarArquivo } from "../../core/arquivos";
 import * as portal from "../portal";
 import * as d from "../financas/dados";
 import { cnpj_valido, cpf_valido } from "../financas/consulta_doc";
+import ExcelJS from "exceljs";
+
+// ───────────── Itens (lista da engenharia, por etapa da obra) e mapa de cotação ─────────────
+// Inspirado no "mapa de cotação" dos sistemas de suprimentos de obra (Sienge) e no "bid leveling" do Procore:
+// a lista de itens é a mesma para todos os fornecedores, cada um informa o preço unitário, e o sistema compara
+// item a item (menor preço destacado) e no total.
+function num_br(v: any): number {
+  let t = String(v ?? "").trim().replace(/[R$\s]/g, "");
+  if (!t) return NaN;
+  if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+  return Number(t);
+}
+function celula(v: any): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") { if ("result" in v) return celula((v as any).result); if ("text" in v) return String((v as any).text); if ("richText" in v) return (v as any).richText.map((r: any) => r.text).join(""); }
+  return String(v).trim();
+}
+/** Linhas de uma planilha colada (Excel/Sheets: tabulação) ou CSV. */
+export function linhas_coladas(texto: string): string[][] {
+  const ls = String(texto || "").replace(/\r/g, "").split("\n").filter((l) => l.trim());
+  const sep = ls.some((l) => l.includes("\t")) ? "\t" : ls.some((l) => l.includes(";")) ? ";" : ",";
+  return ls.map((l) => l.split(sep).map((c) => c.trim().replace(/^"|"$/g, "")));
+}
+export async function linhas_xlsx(buf: Uint8Array): Promise<string[][]> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(Buffer.from(buf) as any);
+  const ws = wb.worksheets[0];
+  const out: string[][] = [];
+  ws?.eachRow({ includeEmpty: false }, (row) => { const v = (row.values as any[]).slice(1).map(celula); if (v.some((x) => x)) out.push(v); });
+  return out;
+}
+/** Converte as linhas em itens: reconhece o cabeçalho (Etapa, Descrição, Unidade, Quantidade, Obs) e
+ *  linhas de título de etapa (só texto, sem quantidade) como subtópicos. */
+export function itens_das_linhas(linhas: string[][], etapa_padrao = "") {
+  if (!linhas.length) return [];
+  const h = linhas[0].map((c) => c.toLowerCase());
+  const acha = (re: RegExp) => h.findIndex((c) => re.test(c));
+  let ix = { etapa: acha(/etapa|fase|grupo|ambiente|local|disciplina/), desc: acha(/descri|^item|material|produto|insumo|servi/), un: acha(/^un|unid|medida/), qtd: acha(/qt|quant/), obs: acha(/obs|nota|espec/) };
+  let corpo = linhas;
+  if (ix.desc >= 0 && (ix.qtd >= 0 || ix.un >= 0)) corpo = linhas.slice(1);
+  else {
+    const n = Math.max(...linhas.map((l) => l.length));
+    ix = n >= 4 ? { etapa: 0, desc: 1, un: 2, qtd: 3, obs: 4 } : n === 3 ? { etapa: -1, desc: 0, un: 1, qtd: 2, obs: -1 } : n === 2 ? { etapa: -1, desc: 0, un: -1, qtd: 1, obs: -1 } : { etapa: -1, desc: 0, un: -1, qtd: -1, obs: -1 };
+  }
+  const itens: any[] = [];
+  let atual = etapa_padrao;
+  for (const l of corpo) {
+    const cheias = l.filter((c) => c.trim());
+    if (cheias.length === 1 && isNaN(num_br(cheias[0]))) { atual = corta(cheias[0].trim(), 120); continue; } // título de etapa
+    const g = (i: number) => (i >= 0 ? (l[i] ?? "").trim() : "");
+    const desc = g(ix.desc), un = g(ix.un), qs = g(ix.qtd), et = g(ix.etapa);
+    if (et) atual = et;
+    if (!desc) continue;
+    const q = num_br(qs);
+    itens.push({ etapa: corta(atual, 120), descricao: corta(desc, 300), unidade: corta(un, 20), quantidade: isNaN(q) || q <= 0 ? 1 : q, obs: corta(g(ix.obs), 300) });
+  }
+  return itens;
+}
+
 
 export const ETAPAS: [string, string, string][] = [
   ["entrada", "Entrada", "#9a9a9a"],
@@ -74,6 +133,15 @@ async function listar(slug: string, busca = "", prio = "", resp: number | null =
     ids.length ? q(`SELECT c.orcamento_id, c.id, c.valor, c.frete, p.nome FROM orc_cotacoes c LEFT JOIN financas_pessoas p ON p.id = c.pessoa_id WHERE c.orcamento_id IN (${ids.map(() => "?").join(",")})`, ids) : Promise.resolve([]),
     q("SELECT id, nome FROM portal_usuarios"),
   ]);
+  const cont = new Map<number, any>();
+  if (ids.length) {
+    const mk = ids.map(() => "?").join(",");
+    const [an, it] = await Promise.all([
+      q(`SELECT orcamento_id, COUNT(*) AS n FROM orc_anexos WHERE orcamento_id IN (${mk}) GROUP BY orcamento_id`, ids),
+      q(`SELECT orcamento_id, COUNT(*) AS n, COUNT(DISTINCT etapa) AS e FROM orc_itens WHERE orcamento_id IN (${mk}) GROUP BY orcamento_id`, ids)]);
+    for (const r of an) cont.set(r.orcamento_id, { ...(cont.get(r.orcamento_id) ?? {}), anexos: r.n });
+    for (const r of it) cont.set(r.orcamento_id, { ...(cont.get(r.orcamento_id) ?? {}), itens: r.n, etapas: r.e });
+  }
   const nm = new Map(nomes.map((r: any) => [r.id, r.nome]));
   for (const o of lista) {
     const cs = cots.filter((c: any) => c.orcamento_id === o.id);
@@ -84,6 +152,7 @@ async function listar(slug: string, busca = "", prio = "", resp: number | null =
     o.sit = situacao_prazo(o);
     o.prio_nome = PRIO[o.prioridade]?.[0] ?? o.prioridade; o.prio_cor = PRIO[o.prioridade]?.[1] ?? "#999";
     o.resp_nome = o.responsavel_id ? (nm.get(o.responsavel_id) ?? "") : "";
+    const c = cont.get(o.id) ?? {}; o.n_anexos = Number(c.anexos || 0); o.n_itens = Number(c.itens || 0); o.n_etapas = Number(c.etapas || 0);
   }
   return lista;
 }
@@ -116,6 +185,14 @@ async function salvar_fornecedor(slug: string, f: any): Promise<number> {
   }
   return (await run(`INSERT INTO financas_pessoas (${Object.keys(base).join(", ")}, empresa_slug, criado_em) VALUES (${Object.keys(base).map(() => "?").join(", ")}, ?, ?)`,
     [...Object.values(base), slug, d.agora_iso()])).lastrowid!;
+}
+
+/** Cotações com preço por item: o valor passa a ser a soma (quantidade × preço unitário). */
+async function recalcular_cotacoes(oid: number) {
+  for (const c of await q("SELECT id FROM orc_cotacoes WHERE orcamento_id = ?", [oid])) {
+    const r = await q1("SELECT COUNT(*) AS n, SUM(p.preco_unit * i.quantidade) AS s FROM orc_precos p JOIN orc_itens i ON i.id = p.item_id WHERE p.cotacao_id = ?", [c.id]);
+    if (Number(r?.n || 0) > 0) await run("UPDATE orc_cotacoes SET valor = ? WHERE id = ?", [Math.round(Number(r!.s || 0)), c.id]);
+  }
 }
 
 async function ctx(e: any, ativo: string, extra: Record<string, any> = {}) {
@@ -191,11 +268,33 @@ export function registrar() {
       c.anexos = anexos.filter((a: any) => a.cotacao_id === c.id);
       c.vencedora = c.id === o.cotacao_vencedora_id;
     }
+    // Itens por etapa e mapa de cotação (preço unitário de cada fornecedor por item)
+    const itens = await q("SELECT * FROM orc_itens WHERE orcamento_id = ? ORDER BY ordem, id", [oid]);
+    const precos = itens.length && cots.length ? await q(`SELECT * FROM orc_precos WHERE cotacao_id IN (${cots.map(() => "?").join(",")})`, cots.map((c: any) => c.id)) : [];
+    const pm = new Map(precos.map((p: any) => [`${p.cotacao_id}_${p.item_id}`, Number(p.preco_unit)]));
+    const etapas: any[] = [];
+    let melhor_comb = 0, itens_cotados = 0;
+    for (const it of itens) {
+      it.precos = cots.map((c: any) => { const p = pm.get(`${c.id}_${it.id}`); return p ? { unit: p, total: Math.round(p * Number(it.quantidade)) } : null; });
+      const vals = it.precos.filter(Boolean).map((p: any) => p.total);
+      it.min = vals.length ? Math.min(...vals) : null;
+      if (it.min !== null) { melhor_comb += it.min; itens_cotados++; }
+      let e = etapas.find((x) => x.nome === it.etapa);
+      if (!e) etapas.push(e = { nome: it.etapa, itens: [], subtot: cots.map(() => 0) });
+      e.itens.push(it);
+      it.precos.forEach((p: any, i: number) => { if (p) e.subtot[i] += p.total; });
+    }
+    const mapa = { etapas, melhor_comb, itens_cotados, tem_precos: precos.length > 0,
+      totais: cots.map((c: any) => itens.reduce((s2: number, it: any) => s2 + (pm.has(`${c.id}_${it.id}`) ? Math.round(pm.get(`${c.id}_${it.id}`)! * Number(it.quantidade)) : 0), 0)),
+      completos: cots.map((c: any) => itens.every((it: any) => pm.has(`${c.id}_${it.id}`))) };
+    const inteiras = mapa.totais.filter((v: number, i: number) => v > 0 && mapa.completos[i]);
+    (mapa as any).melhor_inteira = inteiras.length ? Math.min(...inteiras) : 0;
     o.sit = situacao_prazo(o);
     const lancs = o.lancamento_ids ? await q(`SELECT id, descricao, valor, vencimento FROM financas_lancamentos WHERE id IN (${String(o.lancamento_ids).split(",").filter(Boolean).map(() => "?").join(",") || "0"})`,
       String(o.lancamento_ids).split(",").filter(Boolean).map(Number)) : [];
     return render_template("orcamentos/orcamento.html", await ctx(e, "quadro", {
-      o, cots, menor, anexos: anexos.filter((a: any) => !a.cotacao_id), hist, usuarios, categorias, centros, contas, fornecedores, lancs,
+      o, cots, menor, anexos: anexos.filter((a: any) => !a.cotacao_id),
+      arquivos: anexos.map((a: any) => ({ ...a, fornecedor: a.cotacao_id ? (cots.find((c: any) => c.id === a.cotacao_id)?.nome ?? "") : "" })).reverse(), itens, mapa, n_etapas_nomes: [...new Set(itens.map((i: any) => i.etapa).filter(Boolean))], hist, usuarios, categorias, centros, contas, fornecedores, lancs,
       venc: cots.find((c: any) => c.vencedora) ?? null, FORMAS: d.FORMAS, BANCOS: d.BANCOS, CONTA_TIPOS: d.CONTA_TIPOS, PIX_TIPOS: d.PIX_TIPOS,
     }));
   });
@@ -364,6 +463,132 @@ export function registrar() {
     const dados = await lerArquivo(a.caminho);
     if (!dados) abort(404);
     return sendFile(dados, { download_name: a.nome, mimetype: a.tipo || "application/octet-stream", as_attachment: !/^(application\/pdf|image\/)/.test(a.tipo || "") });
+  });
+
+  // ── Itens (lista de materiais/serviços por etapa) ──
+  post("orcamentos.itens_importar", "/orcamentos/<slug>/<int:oid>/itens/importar", async (slug: string, oid: number) => {
+    await empresa(slug);
+    csrf();
+    const o = await orc_ou_404(slug, oid);
+    const volta = url_for("orcamentos.ver", { slug, oid }) + "#itens";
+    if (o.status === "lancado") { flash("Orçamento já lançado.", "erro"); return redirect(volta); }
+    const f = request().form;
+    const etapa = corta((f.get("etapa") || "").trim(), 120);
+    let linhas: string[][] = [];
+    const arq = request().file("planilha");
+    try {
+      if (arq && arq.filename && arq.size) {
+        const nome = arq.filename.toLowerCase();
+        if (nome.endsWith(".xlsx")) linhas = await linhas_xlsx(arq.read());
+        else if (nome.endsWith(".csv") || nome.endsWith(".txt")) linhas = linhas_coladas(Buffer.from(arq.read()).toString("utf8"));
+        else { flash("Envie a planilha em .xlsx ou .csv (ou cole as linhas do Excel).", "erro"); return redirect(volta); }
+        // a planilha também fica nos arquivos do orçamento
+        const caminho = `orcamentos/${oid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        await salvarArquivo(caminho, arq.read(), arq.mimetype || "application/octet-stream");
+        await run("INSERT INTO orc_anexos (orcamento_id, cotacao_id, nome, tipo, tamanho, caminho, usuario_id, criado_em) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)",
+          [oid, corta(arq.filename, 200), arq.mimetype || "", arq.size, caminho, u().id, agora()]);
+      } else linhas = linhas_coladas(f.get("colar") || "");
+    } catch (ex: any) { flash(`Não consegui ler a planilha: ${ex?.message ?? ex}`, "erro"); return redirect(volta); }
+    const itens = itens_das_linhas(linhas, etapa);
+    if (!itens.length) { flash("Nenhum item encontrado. Use colunas Etapa, Descrição, Unidade e Quantidade (ou cole direto do Excel).", "erro"); return redirect(volta); }
+    const base = Number((await q1("SELECT COALESCE(MAX(ordem), 0) AS m FROM orc_itens WHERE orcamento_id = ?", [oid]))?.m || 0);
+    let i = 0;
+    for (const it of itens) await run("INSERT INTO orc_itens (orcamento_id, etapa, descricao, unidade, quantidade, obs, ordem) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [oid, it.etapa, it.descricao, it.unidade, it.quantidade, it.obs, base + ++i]);
+    const ets = new Set(itens.map((x) => x.etapa).filter(Boolean));
+    await historico(oid, `Lista importada: ${itens.length} item(ns)${ets.size ? ` em ${ets.size} etapa(s)` : ""}`);
+    flash(`${itens.length} item(ns) importado(s)${ets.size ? ` em ${ets.size} etapa(s)` : ""}.`, "ok");
+    return redirect(volta);
+  });
+
+  post("orcamentos.item", "/orcamentos/<slug>/<int:oid>/itens/salvar", async (slug: string, oid: number) => {
+    await empresa(slug);
+    csrf();
+    const o = await orc_ou_404(slug, oid);
+    const volta = url_for("orcamentos.ver", { slug, oid }) + "#itens";
+    if (o.status === "lancado") return redirect(volta);
+    const f = request().form;
+    const desc = corta((f.get("descricao") || "").trim(), 300);
+    if (!desc) { flash("Informe a descrição do item.", "erro"); return redirect(volta); }
+    const qtd = num_br(f.get("quantidade"));
+    const vals = [corta((f.get("etapa") || "").trim(), 120), desc, corta((f.get("unidade") || "").trim(), 20), isNaN(qtd) || qtd <= 0 ? 1 : qtd, corta((f.get("obs") || "").trim(), 300)];
+    const iid = f.get("id", null, "int");
+    if (iid) await run("UPDATE orc_itens SET etapa = ?, descricao = ?, unidade = ?, quantidade = ?, obs = ? WHERE id = ? AND orcamento_id = ?", [...vals, iid, oid]);
+    else await run("INSERT INTO orc_itens (orcamento_id, etapa, descricao, unidade, quantidade, obs, ordem) VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(ordem), 0) + 1 FROM orc_itens WHERE orcamento_id = ?))", [oid, ...vals, oid]);
+    await recalcular_cotacoes(oid);
+    return redirect(volta);
+  });
+
+  post("orcamentos.item_excluir", "/orcamentos/<slug>/<int:oid>/itens/excluir", async (slug: string, oid: number) => {
+    await empresa(slug);
+    csrf();
+    const o = await orc_ou_404(slug, oid);
+    const volta = url_for("orcamentos.ver", { slug, oid }) + "#itens";
+    if (o.status === "lancado") return redirect(volta);
+    const f = request().form;
+    if (f.get("tudo") === "1") { await run("DELETE FROM orc_itens WHERE orcamento_id = ?", [oid]); await historico(oid, "Lista de itens apagada"); }
+    else if (f.has("etapa_nome")) { await run("DELETE FROM orc_itens WHERE orcamento_id = ? AND etapa = ?", [oid, f.get("etapa_nome")]); }
+    else await run("DELETE FROM orc_itens WHERE id = ? AND orcamento_id = ?", [f.get("id", null, "int"), oid]);
+    await recalcular_cotacoes(oid);
+    return redirect(volta);
+  });
+
+  // ── Mapa de cotação: preços unitários de cada fornecedor por item ──
+  post("orcamentos.mapa", "/orcamentos/<slug>/<int:oid>/mapa", async (slug: string, oid: number) => {
+    await empresa(slug);
+    csrf();
+    const o = await orc_ou_404(slug, oid);
+    const volta = url_for("orcamentos.ver", { slug, oid }) + "#mapa";
+    if (o.status === "lancado") return redirect(volta);
+    const f = request().form;
+    const cots = await q("SELECT id FROM orc_cotacoes WHERE orcamento_id = ?", [oid]);
+    const itens = await q("SELECT id FROM orc_itens WHERE orcamento_id = ?", [oid]);
+    let n = 0;
+    for (const c of cots) for (const it of itens) {
+      const k = `p_${c.id}_${it.id}`;
+      if (!f.has(k)) continue;
+      const v = d.para_centavos(f.get(k));
+      if (v && v > 0) { await run("INSERT INTO orc_precos (cotacao_id, item_id, preco_unit) VALUES (?, ?, ?) ON CONFLICT (cotacao_id, item_id) DO UPDATE SET preco_unit = excluded.preco_unit", [c.id, it.id, v]); n++; }
+      else await run("DELETE FROM orc_precos WHERE cotacao_id = ? AND item_id = ?", [c.id, it.id]);
+    }
+    await recalcular_cotacoes(oid);
+    await historico(oid, `Mapa de cotação atualizado (${n} preço(s))`);
+    flash("Preços salvos. O valor de cada cotação foi recalculado pela soma dos itens.", "ok");
+    return redirect(volta);
+  });
+
+  // ── Arquivos do orçamento (planilhas, cotações recebidas, fotos…) ──
+  post("orcamentos.arquivos", "/orcamentos/<slug>/<int:oid>/arquivos", async (slug: string, oid: number) => {
+    await empresa(slug);
+    csrf();
+    await orc_ou_404(slug, oid);
+    const arqs = (request().files.get("anexos") ?? []).filter((x: any) => x && x.filename && x.size > 0);
+    const grandes = arqs.filter((x: any) => x.size > 25 * 1024 * 1024);
+    let n = 0;
+    for (const a of arqs.filter((x: any) => x.size <= 25 * 1024 * 1024).slice(0, 20)) {
+      const caminho = `orcamentos/${oid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      await salvarArquivo(caminho, a.read(), a.mimetype || "application/octet-stream");
+      await run("INSERT INTO orc_anexos (orcamento_id, cotacao_id, nome, tipo, tamanho, caminho, usuario_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [oid, request().form.get("cotacao_id", null, "int"), corta(a.filename, 200), a.mimetype || "", a.size, caminho, u().id, agora()]);
+      n++;
+    }
+    if (n) await historico(oid, `📎 ${n} arquivo(s) anexado(s)`);
+    if (grandes.length) flash(`${grandes.length} arquivo(s) acima de 25 MB não foram enviados.`, "erro");
+    if (request().headers.get("x-requested-with") === "fetch") return jsonify({ ok: true, n });
+    return redirect(url_for("orcamentos.ver", { slug, oid }) + "#arquivos");
+  });
+
+  post("orcamentos.arquivo_excluir", "/orcamentos/<slug>/<int:oid>/arquivo/<int:aid>/excluir", async (slug: string, oid: number, aid: number) => {
+    await empresa(slug);
+    csrf();
+    await orc_ou_404(slug, oid);
+    const a = await q1("SELECT * FROM orc_anexos WHERE id = ? AND orcamento_id = ?", [aid, oid]);
+    if (a) {
+      await apagarArquivo(a.caminho);
+      await run("DELETE FROM orc_anexos WHERE id = ?", [aid]);
+      await historico(oid, `Arquivo excluído: ${a.nome}`);
+    }
+    return redirect(url_for("orcamentos.ver", { slug, oid }) + "#arquivos");
   });
 
   route("orcamentos.excluir", "/orcamentos/<slug>/<int:oid>/excluir", ["POST"], async (slug: string, oid: number) => {
