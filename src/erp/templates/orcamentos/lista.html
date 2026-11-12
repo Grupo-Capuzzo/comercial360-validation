@@ -1,0 +1,26 @@
+{% extends "orcamentos/_layout.html" %}
+{% block orc_conteudo %}
+<div class="oc-head">
+  <div><div class="eyebrow-line">{{ empresa.nome }}</div><h1>Orçamentos — lista</h1><p>Todos os orçamentos com etapa, prazo, cotações e vencedor.</p></div>
+  <button class="btn-pill" type="button" onclick="novoOrcamento()">{{ ic('add') }} Novo orçamento</button>
+</div>
+<form class="oc-barra" method="get">
+  <label class="search">{{ ic('search') }}<input type="search" name="q" value="{{ busca }}" placeholder="Buscar…"></label>
+  <select class="inp" name="status" onchange="this.form.submit()"><option value="">Todas as etapas</option>{% for k, n, c in ETAPAS %}<option value="{{ k }}" {{ 'selected' if st == k }}>{{ n }}</option>{% endfor %}<option value="cancelado" {{ 'selected' if st == 'cancelado' }}>Cancelados</option></select>
+  <select class="inp" name="prio" onchange="this.form.submit()"><option value="">Todas as prioridades</option>{% for k, n, c in PRIORIDADES %}<option value="{{ k }}" {{ 'selected' if prio == k }}>{{ n }}</option>{% endfor %}</select>
+</form>
+<section class="oc-box" style="overflow-x:auto">
+  <table class="oc-tab">
+    <thead><tr><th>Orçamento</th><th>Etapa</th><th>Prioridade</th><th>Prazo</th><th>Responsável</th><th class="num">Cotações</th><th class="num">Menor / vencedor</th></tr></thead>
+    <tbody>{% for o in lista %}
+      <tr class="clic" onclick="location.href='{{ url_for('orcamentos.ver', slug=empresa.slug, oid=o.id) }}'">
+        <td><b>{{ o.titulo }}</b>{% if o.tipo %}<br><small style="color:var(--muted)">{{ o.tipo }}</small>{% endif %}</td>
+        <td>{{ NOME_ETAPA.get(o.status, 'Cancelado') }}</td>
+        <td><span class="oc-tag" style="--tc:{{ o.prio_cor }}">{{ o.prio_nome }}</span></td>
+        <td><span class="oc-prazo {{ o.sit }}" style="margin:0"><i></i>{{ data_br(o.prazo) if o.prazo else 'Sem prazo' }}</span></td>
+        <td>{{ o.resp_nome or '—' }}</td><td class="num">{{ o.n_cot }}</td>
+        <td class="num">{% if o.vencedora %}<b>{{ moeda(o.vencedora.total) }}</b><br><small>{{ o.vencedora.nome }}</small>{% elif o.menor is not none %}{{ moeda(o.menor) }}{% else %}—{% endif %}</td></tr>
+    {% else %}<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem">Nenhum orçamento.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+{% endblock %}

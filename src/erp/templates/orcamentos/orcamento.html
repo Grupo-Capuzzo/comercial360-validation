@@ -1,0 +1,222 @@
+{% extends "orcamentos/_layout.html" %}
+{% block orc_titulo %}{{ o.titulo }}{% endblock %}
+{% block orc_conteudo %}
+{% set bloqueado = o.status == 'lancado' %}
+<a class="op-voltar" href="{{ url_for('orcamentos.quadro', slug=empresa.slug) }}" style="display:inline-flex;gap:.3rem;align-items:center;color:var(--muted);text-decoration:none;font-size:.85rem">{{ ic('arrow_back') }} Orçamentos</a>
+<div class="oc-head">
+  <div>
+    <div class="eyebrow-line">Orçamento #{{ o.id }}{% if o.tipo %} · {{ o.tipo }}{% endif %}</div>
+    <h1>{{ o.titulo }}</h1>
+    <div class="oc-tags" style="font-size:.8rem">
+      <span class="oc-tag" style="--tc:{{ PRIO[o.prioridade][1] }}">{{ PRIO[o.prioridade][0] }}</span>
+      <span class="oc-prazo {{ o.sit }}" style="margin:0"><i></i>{% if o.sit == 'sem' %}Sem prazo{% elif o.sit == 'atrasado' %}Atrasado · {{ data_br(o.prazo) }}{% else %}Prazo {{ data_br(o.prazo) }}{% endif %}</span>
+    </div>
+  </div>
+  {% if not bloqueado %}
+  <form method="post" action="{{ url_for('orcamentos.excluir', slug=empresa.slug, oid=o.id) }}" onsubmit="return confirm('Excluir este orçamento e as cotações?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn-pill outline" type="submit" style="color:#c0392b">Excluir</button></form>
+  {% endif %}
+</div>
+
+<section class="oc-box">
+  <h3>Etapa</h3>
+  <form method="post" action="{{ url_for('orcamentos.etapa', slug=empresa.slug, oid=o.id) }}" class="oc-etapas">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% for k, n, c in ETAPAS %}<button type="submit" name="status" value="{{ k }}" style="--c:{{ c }}" class="{{ 'on' if o.status == k }}" {{ 'disabled' if bloqueado or k == 'lancado' }}>{{ n }}</button>{% endfor %}
+    {% if not bloqueado %}<button type="submit" name="status" value="cancelado" style="--c:#999" class="{{ 'on' if o.status == 'cancelado' }}">Cancelado</button>{% endif %}
+  </form>
+</section>
+
+  <section class="oc-box" id="cotacoes">
+    <h3>Cotações ({{ cots|length }}) {% if cots|length > 1 %}<small style="font-weight:400;color:var(--muted);font-size:.78rem">menor total: <span class="oc-melhor">{{ moeda(menor) }}</span></small>{% endif %}</h3>
+    {% if cots %}
+    <div style="overflow-x:auto"><table class="oc-tab">
+      <thead><tr><th>Fornecedor</th><th class="num">Valor</th><th class="num">Frete</th><th class="num">Total</th><th>Entrega</th><th>Pagamento</th><th>Validade</th><th></th></tr></thead>
+      <tbody>{% for c in cots %}
+        <tr class="{{ 'venc' if c.vencedora }}">
+          <td><b>{{ c.nome or '—' }}</b>{% if c.vencedora %} <span class="oc-tag" style="--tc:#3e9b6a">Vencedora</span>{% endif %}
+            <br><small style="color:var(--muted)">{{ c.documento or 'sem CPF/CNPJ' }}{% if c.telefone %} · {{ c.telefone }}{% endif %}{% if c.email %} · {{ c.email }}{% endif %}</small>
+            {% if c.pix_chave or c.conta %}<br><small style="color:var(--muted)">{% if c.pix_chave %}Pix {{ c.pix_chave }}{% endif %}{% if c.conta %} · {{ c.banco_codigo }} ag {{ c.agencia }} cc {{ c.conta }}{% if c.conta_dv %}-{{ c.conta_dv }}{% endif %}{% endif %}</small>{% endif %}
+            {% if c.obs %}<br><small>{{ c.obs }}</small>{% endif %}
+            {% if c.anexos %}<br>{% for a in c.anexos %}<a class="oc-anexo" target="_blank" href="{{ url_for('orcamentos.anexo', slug=empresa.slug, oid=o.id, aid=a.id) }}">📎 {{ a.nome }}</a>{% endfor %}{% endif %}</td>
+          <td class="num">{{ moeda(c.valor) }}</td><td class="num">{{ moeda(c.frete) if c.frete else '—' }}</td>
+          <td class="num"><b class="{{ 'oc-melhor' if c.dif == 0 and cots|length > 1 }}">{{ moeda(c.total) }}</b>{% if c.dif %}<br><span class="oc-dif">+{{ moeda(c.dif) }}</span>{% endif %}</td>
+          <td>{{ c.prazo_entrega or '—' }}</td>
+          <td>{{ c.forma_pagamento or '—' }}{% if c.parcelas > 1 %} · {{ c.parcelas }}x{% endif %}{% if c.primeiro_venc %}<br><small>1º venc. {{ data_br(c.primeiro_venc) }}</small>{% endif %}</td>
+          <td>{{ data_br(c.validade) if c.validade else '—' }}</td>
+          <td>{% if not bloqueado %}<div class="oc-acoes" style="flex-direction:column;align-items:stretch">
+            {% if not c.vencedora %}<form method="post" action="{{ url_for('orcamentos.cotacao_acao', slug=empresa.slug, oid=o.id, cid=c.id, acao='vencedora') }}" onsubmit="var m=prompt('Aprovar esta cotação. Motivo/observação (opcional):',''); if(m===null) return false; this.motivo.value=m; return true;">
+              <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="motivo"><button class="btn-pill" type="submit" style="padding:.3rem .7rem;font-size:.78rem">✓ Aprovar</button></form>{% endif %}
+            <button class="fin-link lnk" type="button" style="font-size:.78rem" onclick='editarCotacao({{ {"id": c.id, "pessoa_id": c.pessoa_id, "valor": valor_campo(c.valor), "frete": valor_campo(c.frete) if c.frete else "", "prazo_entrega": c.prazo_entrega, "validade": c.validade, "forma_pagamento": c.forma_pagamento, "parcelas": c.parcelas, "primeiro_venc": c.primeiro_venc, "intervalo_dias": c.intervalo_dias, "obs": c.obs}|tojson }})'>Editar</button>
+            <form method="post" action="{{ url_for('orcamentos.cotacao_acao', slug=empresa.slug, oid=o.id, cid=c.id, acao='excluir') }}" onsubmit="return confirm('Excluir esta cotação?')">
+              <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link lnk" type="submit" style="font-size:.78rem;color:#c0392b">Excluir</button></form>
+          </div>{% endif %}</td>
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p style="color:var(--muted)">Nenhuma cotação ainda. Cadastre abaixo a proposta de cada fornecedor.</p>{% endif %}
+  </section>
+
+<div class="oc-grid2">
+<div>
+  {% if not bloqueado %}
+  <section class="oc-box" id="nova-cotacao">
+    <h3 id="cot-titulo">Adicionar cotação</h3>
+    <form method="post" action="{{ url_for('orcamentos.cotacao', slug=empresa.slug, oid=o.id) }}" enctype="multipart/form-data" id="f-cot">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" id="cot-id">
+      <label class="lbl">Fornecedor *</label>
+      <select class="inp" name="pessoa_id" id="cot-pessoa" required>
+        <option value="">Escolha o fornecedor…</option>
+        <option value="novo">+ Cadastrar novo fornecedor</option>
+        {% for p in fornecedores %}<option value="{{ p.id }}">{{ p.nome }}{% if p.documento %} · {{ p.documento }}{% endif %}</option>{% endfor %}
+      </select>
+
+      <div id="cot-novo" hidden>
+        <div class="oc-f4">
+          <div class="oc-sec">Dados do fornecedor (vão para o cadastro de fornecedores do Finanças)</div>
+          <div><label class="lbl">CPF / CNPJ</label><input class="inp" name="f_documento" id="f-doc" maxlength="18" placeholder="Digite e o sistema busca" inputmode="numeric"></div>
+          <div class="span2"><label class="lbl">Razão social / nome *</label><input class="inp" name="f_nome" data-campo="nome" maxlength="160"></div>
+          <div><label class="lbl">Nome fantasia</label><input class="inp" name="f_nome_fantasia" data-campo="nome_fantasia" maxlength="160"></div>
+          <div class="span2"><label class="lbl">E-mail</label><input class="inp" type="email" name="f_email" data-campo="email"></div>
+          <div><label class="lbl">Telefone</label><input class="inp" name="f_telefone" data-campo="telefone"></div>
+          <div><label class="lbl">Atividade</label><input class="inp" name="f_atividade" data-campo="atividade"></div>
+          <div><label class="lbl">CEP</label><input class="inp" name="f_cep" id="f-cep" data-campo="cep" maxlength="9"></div>
+          <div class="span2"><label class="lbl">Logradouro</label><input class="inp" name="f_logradouro" data-campo="logradouro"></div>
+          <div><label class="lbl">Número</label><input class="inp" name="f_numero" data-campo="numero"></div>
+          <div><label class="lbl">Complemento</label><input class="inp" name="f_complemento" data-campo="complemento"></div>
+          <div><label class="lbl">Bairro</label><input class="inp" name="f_bairro" data-campo="bairro"></div>
+          <div><label class="lbl">Cidade</label><input class="inp" name="f_cidade" data-campo="cidade"></div>
+          <div><label class="lbl">UF</label><input class="inp" name="f_uf" data-campo="uf" maxlength="2"></div>
+          <input type="hidden" name="f_situacao_receita" data-campo="situacao">
+          <div class="oc-sec">Dados para pagamento</div>
+          <div><label class="lbl">Banco</label><input class="inp" name="f_banco_codigo" list="oc-bancos" placeholder="341 - Itaú"><datalist id="oc-bancos">{% for k, n in BANCOS %}<option value="{{ k }} - {{ n }}">{% endfor %}</datalist></div>
+          <div><label class="lbl">Agência</label><input class="inp" name="f_agencia"></div>
+          <div><label class="lbl">Conta</label><input class="inp" name="f_conta"></div>
+          <div><label class="lbl">Dígito</label><input class="inp" name="f_conta_dv" maxlength="2"></div>
+          <div><label class="lbl">Tipo de conta</label><select class="inp" name="f_conta_tipo"><option value="">—</option>{% for k, n in CONTA_TIPOS.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
+          <div><label class="lbl">Tipo da chave Pix</label><select class="inp" name="f_pix_tipo"><option value="">—</option>{% for k, n in PIX_TIPOS.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
+          <div class="span2"><label class="lbl">Chave Pix</label><input class="inp" name="f_pix_chave"></div>
+          <div class="span2"><label class="lbl">Titular da conta (se diferente)</label><input class="inp" name="f_titular_nome"></div>
+          <div class="span2"><label class="lbl">CPF/CNPJ do titular</label><input class="inp" name="f_titular_documento"></div>
+        </div>
+        <small id="f-msg" style="color:var(--muted)"></small>
+      </div>
+
+      <div class="oc-f4">
+        <div class="oc-sec">Proposta</div>
+        <div><label class="lbl">Valor (R$) *</label><input class="inp" name="valor" id="cot-valor" data-moeda required placeholder="R$ 0,00"></div>
+        <div><label class="lbl">Frete (R$)</label><input class="inp" name="frete" id="cot-frete" data-moeda placeholder="R$ 0,00"></div>
+        <div><label class="lbl">Prazo de entrega</label><input class="inp" name="prazo_entrega" id="cot-prazo_entrega" placeholder="Ex.: 10 dias úteis"></div>
+        <div><label class="lbl">Validade da proposta</label><input class="inp" type="date" name="validade" id="cot-validade"></div>
+        <div><label class="lbl">Forma de pagamento</label><select class="inp" name="forma_pagamento" id="cot-forma_pagamento"><option value="">—</option>{% for x in FORMAS %}<option>{{ x }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Parcelas</label><input class="inp" type="number" min="1" max="120" name="parcelas" id="cot-parcelas" value="1"></div>
+        <div><label class="lbl">1º vencimento</label><input class="inp" type="date" name="primeiro_venc" id="cot-primeiro_venc"></div>
+        <div><label class="lbl">Intervalo (dias)</label><input class="inp" type="number" min="1" max="365" name="intervalo_dias" id="cot-intervalo_dias" value="30"></div>
+        <div class="span4" style="grid-column:1/-1"><label class="lbl">Observações</label><input class="inp" name="obs" id="cot-obs" maxlength="2000" placeholder="Marca, condições, o que está incluso…"></div>
+        <div class="span4" style="grid-column:1/-1"><label class="lbl">Proposta / anexos (PDF, foto…)</label><input class="inp" type="file" name="anexos" multiple></div>
+      </div>
+      <div class="oc-acoes" style="margin-top:.8rem"><button class="btn-pill" type="submit">Salvar cotação</button>
+        <button class="btn-pill outline" type="button" id="cot-limpar" hidden onclick="location.hash='';location.reload()">Cancelar edição</button></div>
+    </form>
+  </section>
+  {% endif %}
+
+  {% if venc %}
+  <section class="oc-box" id="lancar">
+    <h3>Contas a pagar {% if bloqueado %}<span class="oc-tag" style="--tc:#2f7d4f">Lançado</span>{% endif %}</h3>
+    {% if bloqueado %}
+      <p style="margin:.2rem 0 .6rem">Lançado em {{ data_br(o.lancado_em) }} no contas a pagar de {{ empresa.nome }} — fornecedor <b>{{ venc.nome }}</b>.</p>
+      <table class="oc-tab"><thead><tr><th>Lançamento</th><th>Vencimento</th><th class="num">Valor</th></tr></thead>
+        <tbody>{% for l in lancs %}<tr><td><a href="{{ url_for('financas.lancamento', slug=empresa.slug, lid=l.id) }}">{{ l.descricao }}</a></td><td>{{ data_br(l.vencimento) }}</td><td class="num">{{ moeda(l.valor) }}</td></tr>{% endfor %}</tbody></table>
+    {% else %}
+      <p style="margin:.2rem 0 .8rem;color:var(--muted)">Cotação aprovada: <b style="color:var(--text)">{{ venc.nome }}</b> · {{ moeda(venc.total) }}. Confira e gere o lançamento no contas a pagar.</p>
+      <form method="post" action="{{ url_for('orcamentos.lancar', slug=empresa.slug, oid=o.id) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="oc-f4">
+          <div class="span2"><label class="lbl">Descrição</label><input class="inp" name="descricao" value="Orçamento #{{ o.id }} — {{ o.titulo }}" maxlength="200"></div>
+          <div><label class="lbl">Valor total</label><input class="inp" name="valor" data-moeda value="{{ valor_campo(venc.total) }}"></div>
+          <div><label class="lbl">Categoria</label><select class="inp" name="categoria_id"><option value="">—</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></div>
+          <div><label class="lbl">Parcelas</label><input class="inp" type="number" min="1" max="120" name="parcelas" value="{{ venc.parcelas }}"></div>
+          <div><label class="lbl">1º vencimento *</label><input class="inp" type="date" name="primeiro_venc" value="{{ venc.primeiro_venc or hoje_iso }}" required></div>
+          <div><label class="lbl">Intervalo (dias)</label><input class="inp" type="number" min="1" max="365" name="intervalo_dias" value="{{ venc.intervalo_dias }}"></div>
+          <div><label class="lbl">Centro de custo</label><select class="inp" name="centro_id"><option value="">—</option>{% for c in centros %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></div>
+          <div class="span2"><label class="lbl">Conta de pagamento (opcional)</label><select class="inp" name="conta_id"><option value="">—</option>{% for c in contas %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></div>
+        </div>
+        <div class="oc-acoes" style="margin-top:.8rem"><button class="btn-pill" type="submit">Gerar contas a pagar</button>
+          <small style="color:var(--muted)">Fornecedor, forma de pagamento e dados bancários vêm da cotação aprovada.</small></div>
+      </form>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+
+<div>
+  <section class="oc-box">
+    <h3>Dados do orçamento</h3>
+    <form method="post" action="{{ url_for('orcamentos.salvar', slug=empresa.slug, oid=o.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label class="lbl">Título</label><input class="inp" name="titulo" value="{{ o.titulo }}" maxlength="200" required>
+      <div class="oc-f3" style="grid-template-columns:1fr 1fr">
+        <div><label class="lbl">Tipo</label><input class="inp" name="tipo" value="{{ o.tipo }}" list="oc-tipos"></div>
+        <div><label class="lbl">Prioridade</label><select class="inp" name="prioridade">{% for k, n, c in PRIORIDADES %}<option value="{{ k }}" {{ 'selected' if o.prioridade == k }}>{{ n }}</option>{% endfor %}</select></div>
+        <div><label class="lbl">Prazo</label><input class="inp" type="date" name="prazo" value="{{ o.prazo }}"></div>
+        <div><label class="lbl">Responsável</label><select class="inp" name="responsavel_id">{% for x in usuarios %}<option value="{{ x.id }}" {{ 'selected' if o.responsavel_id == x.id }}>{{ x.nome }}</option>{% endfor %}</select></div>
+      </div>
+      <label class="lbl">Descrição / escopo</label><textarea class="inp" name="descricao" rows="5">{{ o.descricao }}</textarea>
+      <div class="oc-acoes" style="margin-top:.7rem"><button class="btn-pill" type="submit">Salvar</button></div>
+    </form>
+    {% if anexos %}<div style="margin-top:.6rem">{% for a in anexos %}<a class="oc-anexo" target="_blank" href="{{ url_for('orcamentos.anexo', slug=empresa.slug, oid=o.id, aid=a.id) }}">📎 {{ a.nome }}</a>{% endfor %}</div>{% endif %}
+  </section>
+
+  <section class="oc-box" id="historico">
+    <h3>Histórico e comentários</h3>
+    <form method="post" action="{{ url_for('orcamentos.comentar', slug=empresa.slug, oid=o.id) }}" enctype="multipart/form-data" style="margin-bottom:.8rem">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <textarea class="inp" name="texto" rows="2" placeholder="Comentário, retorno do fornecedor…"></textarea>
+      <div class="oc-acoes" style="margin-top:.4rem"><input class="inp" type="file" name="anexos" multiple style="flex:1"><button class="btn-pill" type="submit">Registrar</button></div>
+    </form>
+    <ul class="oc-hist">{% for h in hist %}<li>{{ h.texto }}<small>{{ (h.autor or '—') }} · {{ data_br(h.criado_em[:10]) }} {{ h.criado_em[11:16] }}</small></li>{% endfor %}</ul>
+  </section>
+</div>
+</div>
+<datalist id="oc-tipos"><option>Obra</option><option>Material</option><option>Serviço</option><option>Equipamento</option><option>Manutenção</option></datalist>
+
+<script>
+(function () {
+  var sel = document.getElementById('cot-pessoa'), novo = document.getElementById('cot-novo');
+  if (sel) sel.addEventListener('change', function () { novo.hidden = sel.value !== 'novo'; var n = novo.querySelector('[name=f_nome]'); n.required = !novo.hidden; });
+  window.editarCotacao = function (c) {
+    document.getElementById('cot-titulo').textContent = 'Editar cotação';
+    document.getElementById('cot-id').value = c.id; sel.value = c.pessoa_id || ''; novo.hidden = true;
+    ['valor', 'frete', 'prazo_entrega', 'validade', 'forma_pagamento', 'parcelas', 'primeiro_venc', 'intervalo_dias', 'obs'].forEach(function (k) { var el = document.getElementById('cot-' + k); if (el) el.value = c[k] == null ? '' : c[k]; });
+    document.getElementById('cot-limpar').hidden = false;
+    document.getElementById('nova-cotacao').scrollIntoView({ behavior: 'smooth' });
+  };
+  // CNPJ → dados da Receita (mesma consulta do cadastro de fornecedores)
+  var doc = document.getElementById('f-doc'), msg = document.getElementById('f-msg');
+  function dig(v) { return String(v || '').replace(/\D/g, ''); }
+  if (doc) doc.addEventListener('blur', function () {
+    var d = dig(doc.value); if (d.length !== 14 && d.length !== 11) return;
+    msg.textContent = 'Consultando…';
+    fetch('{{ url_for("financas.cad_pessoas_consulta", slug=empresa.slug) }}?doc=' + d, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.ja_cadastrado) { msg.textContent = 'Já cadastrado: ' + j.ja_cadastrado.nome + '. Os dados que você preencher completam o cadastro.'; }
+      if (!j.ok) { if (!j.ja_cadastrado) msg.textContent = j.msg || ''; return; }
+      var n = 0; Object.keys(j.dados || {}).forEach(function (k) { var el = novo.querySelector('[data-campo="' + k + '"]'); if (el && !el.value && j.dados[k]) { el.value = j.dados[k]; n++; } });
+      msg.textContent = n ? '✓ ' + n + ' campo(s) preenchido(s) com dados de ' + j.fonte + '.' : (msg.textContent || '');
+    }).catch(function () { msg.textContent = 'Não foi possível consultar agora.'; });
+  });
+  var cep = document.getElementById('f-cep');
+  if (cep) cep.addEventListener('blur', function () {
+    var d = dig(cep.value); if (d.length !== 8) return;
+    fetch('https://viacep.com.br/ws/' + d + '/json/').then(function (r) { return r.json(); }).then(function (j) {
+      if (j.erro) return; var m = { logradouro: j.logradouro, bairro: j.bairro, cidade: j.localidade, uf: j.uf };
+      Object.keys(m).forEach(function (k) { var el = novo.querySelector('[data-campo="' + k + '"]'); if (el && !el.value) el.value = m[k] || ''; });
+    }).catch(function () {});
+  });
+  // valores em R$
+  document.querySelectorAll('[data-moeda]').forEach(function (el) {
+    el.addEventListener('blur', function () { var v = el.value.replace(/[^\d,.-]/g, ''); if (!v) return; var n = v.indexOf(',') >= 0 ? parseFloat(v.replace(/\./g, '').replace(',', '.')) : parseFloat(v); if (!isNaN(n)) el.value = n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); });
+  });
+})();
+</script>
+{% endblock %}

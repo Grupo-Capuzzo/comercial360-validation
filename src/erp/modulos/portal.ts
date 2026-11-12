@@ -59,8 +59,12 @@ export const EMPRESAS: any[] = [
 ];
 // Módulo Finanças nas empresas que o utilizam.
 for (const e of EMPRESAS) {
-  if (["assessoria", "cred", "ethernexus", "terceiriza", "hortstufas", "worldgym"].includes(e.slug)) {
+  if (["assessoria", "cred", "ethernexus", "terceiriza", "hortstufas", "worldgym", "grao"].includes(e.slug)) {
     e.modulos.push({ id: "financas", nome: "Finanças", icone: "payments", desc: "Contas a pagar e receber, extrato, conciliação, fluxo de caixa e DRE.", destino: `/financas/${e.slug}/` });
+  }
+  // Orçamentos (cotações de fornecedores → aprovação → contas a pagar)
+  if (["ethernexus", "grao"].includes(e.slug)) {
+    e.modulos.push({ id: "orcamentos", nome: "Orçamentos", icone: "receipt_long", desc: "Cotações com fornecedores, aprovação e lançamento no contas a pagar.", destino: `/orcamentos/${e.slug}/` });
   }
 }
 export const EMPRESAS_POR_SLUG: Record<string, any> = Object.fromEntries(EMPRESAS.map((e) => [e.slug, e]));
@@ -244,6 +248,8 @@ export function registrar() {
     for (const [prefixo, slug] of Object.entries(PREFIXOS_MODULOS)) {
       if (caminho === prefixo || caminho.startsWith(prefixo + "/")) return (await pode_ver(G.portal_user, slug)) ? null : abort(403);
     }
+    const orc = /^\/orcamentos\/([^/]+)/.exec(caminho);
+    if (orc) return (await pode_ver_modulo(G.portal_user, orc[1], "orcamentos")) ? null : abort(403);
     const fin = /^\/financas\/([^/]+)/.exec(caminho);
     if (fin) return (await pode_ver_modulo(G.portal_user, fin[1], "financas")) ? null : abort(403);
     if (caminho.startsWith("/operacao/")) return null; // cada rota confere a empresa

@@ -1,0 +1,98 @@
+{% extends "portal/base.html" %}
+{% block title %}{% block orc_titulo %}Orçamentos{% endblock %} · {{ empresa.nome }}{% endblock %}
+{% block brand %}
+  <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt=""></span>
+  <span class="tb-name"><b>{{ empresa.nome }}</b><small>Grupo Capuzzo</small></span>
+{% endblock %}
+{% block tb_links %}
+  <a class="tb-btn" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">{{ ic('grid_view') }}<span class="lbl">Módulos</span></a>
+  {% include "operacao/_barra_empresa.html" ignore missing %}
+{% endblock %}
+{% block content %}
+<style>
+  .oc-head { display:flex; justify-content:space-between; align-items:flex-end; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
+  .oc-head h1 { margin:.2rem 0 .2rem; } .oc-head p { margin:0; color:var(--muted); }
+  .oc-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.8rem; margin-bottom:1rem; }
+  .oc-kpi { background:var(--surface); border-radius:16px; padding:.8rem 1rem; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .oc-kpi b { display:block; font-size:1.35rem; } .oc-kpi span { font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-weight:600; }
+  .oc-kpi.risco b { color:#c0392b; }
+  .oc-barra { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
+  .oc-barra .inp { width:auto; min-width:180px; }
+  .oc-kb { display:flex; gap:.8rem; overflow-x:auto; padding-bottom:1rem; align-items:flex-start; }
+  .oc-col { flex:0 0 280px; background:color-mix(in srgb, var(--c) 9%, var(--surface)); border-radius:16px; padding:.6rem; min-height:120px; }
+  .oc-col-h { display:flex; align-items:center; gap:.45rem; padding:.2rem .3rem .6rem; }
+  .oc-col-h .pill { background:color-mix(in srgb, var(--c) 22%, transparent); color:color-mix(in srgb, var(--c) 75%, #000); border-radius:99px; padding:.15rem .6rem; font-size:.78rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .oc-col-h .pill::before { content:""; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--c); margin-right:.35rem; vertical-align:1px; }
+  .oc-col-h small { color:var(--muted); font-weight:600; }
+  .oc-lista { display:flex; flex-direction:column; gap:.5rem; min-height:40px; border-radius:12px; }
+  .oc-lista.alvo { outline:2px dashed var(--c); outline-offset:2px; }
+  .oc-card { display:block; background:var(--surface); border-radius:12px; padding:.65rem .75rem; text-decoration:none; color:inherit; box-shadow:0 1px 3px rgba(0,0,0,.06); cursor:grab; border-left:4px solid var(--pc, transparent); }
+  .oc-card:hover { box-shadow:0 3px 10px rgba(0,0,0,.1); }
+  .oc-card b { display:block; font-size:.9rem; line-height:1.3; margin-bottom:.35rem; }
+  .oc-tags { display:flex; flex-wrap:wrap; gap:.3rem; font-size:.72rem; }
+  .oc-tag { border-radius:6px; padding:.1rem .45rem; font-weight:600; background:color-mix(in srgb, var(--tc, #888) 18%, transparent); color:color-mix(in srgb, var(--tc, #888) 80%, #000); }
+  .oc-prazo { font-size:.74rem; color:var(--muted); display:flex; align-items:center; gap:.3rem; margin-top:.35rem; }
+  .oc-prazo i { width:8px; height:8px; border-radius:50%; background:#bbb; display:inline-block; }
+  .oc-prazo.atrasado { color:#c0392b; font-weight:600; } .oc-prazo.atrasado i { background:#c0392b; }
+  .oc-prazo.hoje i { background:#d4a017; } .oc-prazo.no_prazo i { background:#3e9b6a; }
+  .oc-val { font-size:.76rem; margin-top:.3rem; color:var(--muted); } .oc-val b { display:inline; font-size:.8rem; color:var(--text); }
+  .oc-novo-card { width:100%; border:1.5px dashed color-mix(in srgb, var(--c) 40%, transparent); background:transparent; border-radius:12px; padding:.45rem; color:var(--muted); cursor:pointer; font:inherit; font-size:.82rem; }
+  .oc-box { background:var(--surface); border-radius:18px; padding:1rem 1.15rem; box-shadow:0 1px 3px rgba(0,0,0,.05); margin-bottom:1rem; }
+  .oc-box h3 { margin:0 0 .6rem; font-size:1rem; display:flex; justify-content:space-between; gap:.6rem; align-items:center; }
+  .oc-tab { width:100%; border-collapse:collapse; font-size:.86rem; }
+  .oc-tab th { text-align:left; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:.5rem; border-bottom:1px solid var(--line, #ddd); }
+  .oc-tab td { padding:.55rem .5rem; border-bottom:1px solid color-mix(in srgb, var(--text) 7%, transparent); vertical-align:top; }
+  .oc-tab .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .oc-tab tr.venc td { background:color-mix(in srgb, #3e9b6a 9%, transparent); }
+  .oc-tab tr.clic { cursor:pointer; } .oc-tab tr.clic:hover td { background:color-mix(in srgb, var(--accent) 6%, transparent); }
+  .oc-grid2 { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:1rem; align-items:start; }
+  .oc-f3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.1rem .8rem; }
+  .oc-f4 { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.1rem .8rem; }
+  .oc-f3 .span2, .oc-f4 .span2 { grid-column:span 2; } .oc-f3 .span3, .oc-f4 .span4 { grid-column:1 / -1; }
+  .oc-sec { font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; color:var(--accent-dark); font-weight:700; margin:1rem 0 .2rem; grid-column:1 / -1; }
+  .oc-melhor { color:#2f7d4f; font-weight:700; } .oc-dif { color:#a8700b; font-size:.75rem; }
+  .oc-hist { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.55rem; }
+  .oc-hist li { font-size:.84rem; border-left:2px solid color-mix(in srgb, var(--accent) 40%, transparent); padding-left:.6rem; white-space:pre-line; }
+  .oc-hist small { display:block; color:var(--muted); font-size:.72rem; }
+  .oc-anexo { display:inline-flex; gap:.3rem; align-items:center; font-size:.78rem; padding:.15rem .5rem; border-radius:8px; background:color-mix(in srgb, var(--accent) 10%, transparent); text-decoration:none; color:inherit; margin:.15rem .2rem 0 0; }
+  .oc-etapas { display:flex; flex-wrap:wrap; gap:.3rem; }
+  .oc-etapas button { border:1px solid color-mix(in srgb, var(--c) 40%, transparent); background:transparent; color:inherit; border-radius:99px; padding:.2rem .6rem; font:inherit; font-size:.76rem; cursor:pointer; }
+  .oc-etapas button.on { background:color-mix(in srgb, var(--c) 22%, transparent); font-weight:700; }
+  .oc-acoes { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; } .oc-acoes form { margin:0; }
+  @media (max-width: 1000px) { .oc-kpis { grid-template-columns:repeat(2,1fr); } .oc-grid2, .oc-f3, .oc-f4 { grid-template-columns:1fr; } .oc-f3 .span2, .oc-f4 .span2 { grid-column:auto; } }
+</style>
+<div class="mod-layout op-layout">
+  <aside class="side">
+    <div class="side-title">Orçamentos</div>
+    <a class="side-link {{ 'on' if orc_ativo == 'quadro' }}" href="{{ url_for('orcamentos.quadro', slug=empresa.slug) }}">{{ ic('grid_view') }}Quadro</a>
+    <a class="side-link {{ 'on' if orc_ativo == 'lista' }}" href="{{ url_for('orcamentos.lista', slug=empresa.slug) }}">{{ ic('checklist') }}Lista</a>
+    <div class="side-sep"></div>
+    <div class="side-title">Módulos</div>
+    {% for m in modulos %}<a class="side-link" href="{{ url_for('portal_modulo', slug=empresa.slug, modulo_id=m.id) }}">{{ ic(m.icone) }}{{ m.nome }}</a>{% endfor %}
+    <div class="side-sep"></div>
+    <a class="side-link" href="{{ url_for('portal_empresa', slug=empresa.slug) }}">{{ ic('arrow_back') }}Voltar à empresa</a>
+  </aside>
+  <section class="mod-main op-main">
+    {% block orc_conteudo %}{% endblock %}
+  </section>
+</div>
+
+<dialog id="dlg-novo-orc" class="dlg">
+  <form method="post" action="{{ url_for('orcamentos.novo', slug=empresa.slug) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="status" id="novo-status" value="entrada">
+    <div class="dlg-head"><h3>Novo orçamento</h3><button type="button" class="ico" onclick="this.closest('dialog').close()">{{ ic('close') }}</button></div>
+    <label class="lbl">O que precisa ser orçado *</label><input class="inp" name="titulo" required maxlength="200" placeholder="Ex.: Hidráulica — 5º andar — banheiros">
+    <div class="oc-f3">
+      <div><label class="lbl">Tipo</label><input class="inp" name="tipo" maxlength="80" placeholder="Obra, material, serviço…" list="oc-tipos"></div>
+      <div><label class="lbl">Prioridade</label><select class="inp" name="prioridade">{% for k, n, c in PRIORIDADES %}<option value="{{ k }}" {{ 'selected' if k == 'normal' }}>{{ n }}</option>{% endfor %}</select></div>
+      <div><label class="lbl">Prazo</label><input class="inp" type="date" name="prazo"></div>
+    </div>
+    <label class="lbl">Descrição / escopo</label><textarea class="inp" name="descricao" rows="4" placeholder="Quantidades, medidas, especificações, local de entrega…"></textarea>
+    <datalist id="oc-tipos"><option>Obra</option><option>Material</option><option>Serviço</option><option>Equipamento</option><option>Manutenção</option></datalist>
+    <div class="row-btns"><button class="btn-pill" type="submit">Criar orçamento</button></div>
+  </form>
+</dialog>
+<script>
+function novoOrcamento(st) { document.getElementById('novo-status').value = st || 'entrada'; document.getElementById('dlg-novo-orc').showModal(); }
+</script>
+{% endblock %}
