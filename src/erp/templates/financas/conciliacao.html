@@ -58,7 +58,7 @@
   .cz-painel h4 { margin:0 0 .5rem; font-size:.88rem; }
   .cz-busca-res { display:flex; flex-direction:column; gap:.35rem; margin-top:.6rem; max-height:320px; overflow:auto; }
   .cz-res { display:flex; gap:.6rem; align-items:center; background:var(--surface); border-radius:10px; padding:.45rem .6rem; }
-  .cz-res > span { flex:1; min-width:0; display:flex; flex-direction:column; font-size:.84rem; }
+  .cz-res > span:first-of-type { flex:1; min-width:0; display:flex; flex-direction:column; font-size:.84rem; }
   .cz-res small { color:var(--muted); font-size:.74rem; }
   .cz-novo { display:grid; grid-template-columns:2fr 1fr 1fr; gap:.2rem .7rem; }
   .cz-novo .lbl { margin-top:.35rem; }
@@ -105,13 +105,15 @@
         </div>
         <div class="cz-det">
           <span>Vence {{ data_br(s.vencimento) }}{% if s.dif_dias %} <span class="dif">({{ s.dif_dias }} dia(s) de diferença)</span>{% else %} <span class="ok">mesma data</span>{% endif %}</span>
-          <span>Em aberto {{ moeda(s.saldo) }}{% if s.valor_ok %} <span class="ok">valor igual</span>{% else %} <span class="dif">dif. {{ moeda(s.dif_valor) }}</span>{% endif %}</span>
+          <span>Em aberto {{ moeda(s.saldo) }}{% if s.valor_ok %} <span class="ok">valor igual</span>{% elif s.parcial %} <span class="dif">pagamento parcial · ficam {{ moeda(s.resta) }}</span>{% else %} <span class="dif">dif. {{ moeda(s.dif_valor) }}</span>{% endif %}</span>
           {% if s.nome_ok %}<span class="ok">nome confere</span>{% endif %}
         </div>
         <div class="cz-acoes">
           <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='vincular') }}">
             <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="lancamento_id" value="{{ s.id }}">
-            {% if s.saldo > (x.valor|abs) %}<label class="fin-check" style="display:inline-flex;margin-right:.4rem"><input type="checkbox" name="quitar" value="1"> quitar com desconto</label>{% endif %}
+            {% if s.saldo > (x.valor|abs) %}<select class="inp" name="forma" style="display:inline-block;width:auto;padding:.3rem .5rem;margin-right:.4rem" title="O banco tem valor menor que o lançamento">
+              <option value="parcial">Baixa parcial (fica {{ moeda(s.saldo - (x.valor|abs)) }} em aberto)</option>
+              <option value="quitar">Quitar com desconto de {{ moeda(s.saldo - (x.valor|abs)) }}</option></select>{% endif %}
             <button class="btn-pill fin-btn mini" type="submit">{{ fic('check') }} Conciliar</button></form>
           <button class="fin-link" type="button" data-abre="busca-{{ x.id }}">{{ fic('search') }} Buscar outro</button>
           <button class="fin-link" type="button" data-abre="novo-{{ x.id }}">{{ fic('add') }} Novo lançamento</button>
@@ -213,7 +215,7 @@
         return '<form class="cz-res" method="post" action="' + inp.dataset.vincular + '"><input type="hidden" name="_csrf" value="' + csrf + '"><input type="hidden" name="lancamento_id" value="' + l.id + '">' +
           '<span><b>' + esc(l.descricao) + '</b><small>' + esc(l.pessoa || '—') + (l.categoria ? ' · ' + esc(l.categoria) : '') + ' · vence ' + esc(l.vencimento) + ' · em aberto ' + esc(l.saldo) + '</small></span>' +
           '<span class="cz-pct ' + cls + '">' + l.nota + '%</span>' +
-          (l.maior ? '<label class="fin-check" style="font-size:.74rem"><input type="checkbox" name="quitar" value="1"> quitar</label>' : '') +
+          (l.maior ? '<select class="inp" name="forma" style="width:auto;padding:.3rem .5rem;font-size:.78rem"><option value="parcial">Baixa parcial (fica ' + esc(l.resta) + ')</option><option value="quitar">Quitar com desconto</option></select>' : '') +
           '<button class="btn-pill fin-btn mini" type="submit">Conciliar</button></form>';
       }).join('');
     }).catch(function () { res.innerHTML = '<small class="fin-sub">Não foi possível buscar agora.</small>'; });
