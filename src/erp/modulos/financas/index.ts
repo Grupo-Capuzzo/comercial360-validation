@@ -687,13 +687,16 @@ export function registrar() {
     let pend: any[] = [], feitas: any[] = [];
     if (conta) {
       pend = await d.q("SELECT * FROM financas_extrato_importado WHERE conta_id = ? AND status = 'pendente' ORDER BY data, id", [conta.id]);
-      for (const p of pend) p.sugestoes = await d.sugestoes_conciliacao(slug, p);
+      await d.sugestoes_lote(slug, pend);
+      const criado = _int("criado", request().args);
+      for (const p of pend) p.aberta = p.id === criado;
       feitas = await d.q("SELECT * FROM financas_extrato_importado WHERE conta_id = ? AND status <> 'pendente' ORDER BY data DESC, id DESC LIMIT 30",
         [conta.id]);
     }
     return render_template("financas/conciliacao.html", {
       ...(await _ctx(e, "conciliacao")), contas, conta, pend,
       feitas, categorias: await d.categorias(slug), pessoas: await d.pessoas(slug),
+      n_auto: pend.filter((p: any) => p.sugestoes?.length && p.sugestoes[0].nota >= 95).length,
       importacoes: conta ? await d.q("SELECT * FROM financas_importacoes WHERE conta_id = ? ORDER BY id DESC LIMIT 5", [conta.id]) : [],
     });
   });
@@ -731,6 +734,49 @@ export function registrar() {
     return redirect(volta);
   });
 
+  /** Baixa o lançamento com a linha do extrato e marca a linha como conciliada. */
+  async function _conciliar(slug: string, x: any, l: any, quitar: boolean, uid: any) {
+    const valor = Math.abs(x.valor);
+    const juros = Math.max(valor - l.saldo, 0);
+    const desconto = quitar ? Math.max(l.saldo - valor, 0) : 0;
+    const [, mid] = await d.registrar_baixa(slug, l, x.conta_id, x.data, valor, juros, desconto, uid);
+    await d.ex("UPDATE financas_movimentos SET conciliado = 1, fitid = ? WHERE id = ?", [x.fitid, mid]);
+    await d.ex("UPDATE financas_extrato_importado SET status = 'conciliado', movimento_id = ? WHERE id = ?", [mid, x.id]);
+  }
+
+  // Buscar lançamento em aberto para uma linha (tela de conciliação)
+  route("financas.conciliacao_buscar", "/financas/<slug>/conciliacao/<int:xid>/buscar", ["GET"], async (slug: string, xid: number) => {
+    await _empresa(slug);
+    const x = await _linha_ou_404(slug, xid);
+    const itens = await d.buscar_para_conciliar(slug, x, String(request().args.get("q") || ""));
+    return jsonify({ itens: itens.map((l: any) => ({
+      id: l.id, descricao: l.descricao, pessoa: l.pessoa_nome || "", categoria: l.categoria_nome || "", vencimento: d.data_br(l.vencimento),
+      saldo: d.moeda(l.saldo), nota: l.nota, maior: l.saldo > Math.abs(x.valor),
+    })) });
+  });
+
+  // Conciliar de uma vez as linhas com sugestão de 95% ou mais
+  post("financas.conciliacao_auto", "/financas/<slug>/conciliacao/auto", async (slug: string) => {
+    await _empresa(slug);
+    _csrf();
+    const conta = await _do_slug("financas_contas", _int("conta_id"), slug);
+    const volta = url_for("financas.conciliacao", { slug, conta });
+    if (!conta) return redirect(volta);
+    const pend = await d.q("SELECT * FROM financas_extrato_importado WHERE conta_id = ? AND status = 'pendente' ORDER BY data, id", [conta]);
+    await d.sugestoes_lote(slug, pend);
+    const usados = new Set<number>();
+    let n = 0;
+    for (const x of pend) {
+      const s = (x.sugestoes || [])[0];
+      if (!s || s.nota < 95 || usados.has(s.id)) continue;
+      usados.add(s.id);
+      await _conciliar(slug, x, s, false, _usuario().id);
+      n++;
+    }
+    flash(`${n} linha(s) conciliada(s) automaticamente (sugestões com 95% ou mais de certeza).`, "ok");
+    return redirect(volta);
+  });
+
   post("financas.conciliacao_acao", "/financas/<slug>/conciliacao/<int:xid>/<any(vincular, criar, ignorar, desfazer):acao>", async (slug: string, xid: number, acao: string) => {
     await _empresa(slug);
     _csrf();
@@ -747,7 +793,6 @@ export function registrar() {
       return redirect(volta);
     }
     if (x.status !== "pendente") return redirect(volta);
-    let mid: number;
     if (acao === "vincular") {
       const l = (await d.completar([await _lanc_ou_404(slug, _int("lancamento_id") || 0)], slug))[0];
       const tipo_ok = (l.tipo === "receber") === (x.valor > 0);
@@ -755,29 +800,25 @@ export function registrar() {
         flash("Esse lançamento não combina com a linha do extrato.", "erro");
         return redirect(volta);
       }
-      const valor = Math.abs(x.valor);
-      const juros = Math.max(valor - l.saldo, 0);
-      const desconto = f.get("quitar") ? Math.max(l.saldo - valor, 0) : 0;
-      [, mid] = await d.registrar_baixa(slug, l, x.conta_id, x.data, valor, juros, desconto, u.id);
-    } else { // criar lançamento novo já pago a partir da linha
-      const tipo = x.valor > 0 ? "receber" : "pagar";
-      const tipo_cat = tipo === "receber" ? "receita" : "despesa";
-      let cat = _int("categoria_id");
-      if (cat && !(await d.q("SELECT 1 FROM financas_categorias WHERE id = ? AND empresa_slug = ? AND tipo = ?", [cat, slug, tipo_cat])).length) cat = null;
-      const dados = {
-        descricao: corta((f.get("descricao") || x.descricao).trim(), 200), valor: Math.abs(x.valor),
-        vencimento: x.data, competencia: x.data, categoria_id: cat,
-        pessoa_id: await _do_slug("financas_pessoas", _int("pessoa_id"), slug), conta_id: x.conta_id,
-        modo: "unico", parcelas: 1,
-      };
-      const lid = (await d.criar_lancamentos(slug, tipo, dados, u.id))[0];
-      [, mid] = await d.registrar_baixa(slug, await d.q("SELECT * FROM financas_lancamentos WHERE id = ?", [lid], true),
-        x.conta_id, x.data, Math.abs(x.valor), 0, 0, u.id);
+      await _conciliar(slug, x, l, !!f.get("quitar"), u.id);
+      flash("Conciliado.", "ok");
+      return redirect(volta);
     }
-    await d.ex("UPDATE financas_movimentos SET conciliado = 1, fitid = ? WHERE id = ?", [x.fitid, mid]);
-    await d.ex("UPDATE financas_extrato_importado SET status = 'conciliado', movimento_id = ? WHERE id = ?", [mid, xid]);
-    flash("Conciliado.", "ok");
-    return redirect(volta);
+    // criar: só cria o lançamento (em aberto, no contas a pagar/receber). Ele aparece como sugestão para conciliar.
+    const tipo = x.valor > 0 ? "receber" : "pagar";
+    const tipo_cat = tipo === "receber" ? "receita" : "despesa";
+    let cat = _int("categoria_id");
+    if (cat && !(await d.q("SELECT 1 FROM financas_categorias WHERE id = ? AND empresa_slug = ? AND tipo = ?", [cat, slug, tipo_cat])).length) cat = null;
+    const venc = d.data_valida(f.get("vencimento"), x.data);
+    const dados = {
+      descricao: corta((f.get("descricao") || x.descricao).trim(), 200), valor: d.para_centavos(f.get("valor")) || Math.abs(x.valor),
+      vencimento: venc, competencia: d.data_valida(f.get("competencia"), venc), categoria_id: cat,
+      pessoa_id: await _do_slug("financas_pessoas", _int("pessoa_id"), slug), conta_id: x.conta_id,
+      documento: corta((f.get("documento") || "").trim(), 60), modo: "unico", parcelas: 1,
+    };
+    await d.criar_lancamentos(slug, tipo, dados, u.id);
+    flash(`${tipo === "receber" ? "Conta a receber" : "Conta a pagar"} criada. Confira a sugestão e clique em Conciliar.`, "ok");
+    return redirect(url_for("financas.conciliacao", { slug, conta: x.conta_id, criado: xid }) + `#x${xid}`);
   });
 
   // ───────────────────────── relatórios ─────────────────────────

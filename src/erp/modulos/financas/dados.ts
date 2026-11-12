@@ -495,27 +495,94 @@ export function ler_ofx(conteudo: Uint8Array | string): any[] {
     if (!(dt.length === 8 && /^\d+$/.test(dt)) || !valor) continue;
     if (!/^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/.test(valor)) continue;
     const cent = pyRound(parseFloat(valor) * 100);
-    const desc = campo("MEMO") || campo("NAME") || "Lançamento do extrato";
+    const memo = campo("MEMO"), nome = campo("NAME");
+    let desc = memo || nome || "Lançamento do extrato";
+    if (memo && nome && !_norm(memo).includes(_norm(nome).trim())) desc = `${memo} · ${nome}`; // o nome do favorecido ajuda a achar o lançamento
     itens.push({ data: `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)}`, valor: cent, descricao: Array.from(desc).slice(0, 200).join(""), fitid: campo("FITID") });
   }
   return itens;
 }
 
-/** Lançamentos em aberto do mesmo tipo e valor próximo da data da linha do extrato. */
-export async function sugestoes_conciliacao(slug: string, linha: any, limite = 4): Promise<any[]> {
-  const tipo = linha.valor > 0 ? "receber" : "pagar";
-  const d = PyDate.fromisoformat(linha.data);
-  let cands: any[] = await q("SELECT * FROM financas_lancamentos WHERE empresa_slug = ? AND tipo = ? AND cancelado = 0 " +
-    "AND vencimento BETWEEN ? AND ?" + filtro_consideradas() + " ORDER BY id", [slug, tipo, d.addDays(-20).isoformat(), d.addDays(20).isoformat()]);
-  cands = (await completar(cands, slug)).filter((l) => ["aberto", "vencido", "parcial"].includes(l.situacao));
+// ───────────────────────── conciliação: sugestões com % de certeza ─────────────────────────
+const PALAVRAS_VAZIAS = new Set(["pix", "enviado", "recebido", "recebida", "ted", "doc", "pagamento", "pagto", "pgto", "transferencia", "transf", "boleto",
+  "ltda", "eireli", "the", "dos", "das", "para", "com", "por", "credito", "debito", "conta", "valor", "lancamento", "extrato", "titulo",
+  "parcela", "tarifa", "compra", "cartao", "banco", "inter", "itau", "bradesco", "santander", "caixa", "nubank", "btg"]);
+function _tokens(...txts: any[]): Set<string> {
+  const out = new Set<string>();
+  for (const t of txts) for (const w of _norm(t).split(" ")) if (w.length >= 3 && !PALAVRAS_VAZIAS.has(w) && !/^\d+$/.test(w)) out.add(w);
+  return out;
+}
+/** Nota de 0 a 100 de quanto o lançamento combina com a linha do extrato (valor, data e nome). */
+export function nota_conciliacao(linha: any, l: any, tk_linha?: Set<string>): any {
   const alvo = Math.abs(linha.valor);
-  for (const l of cands) {
-    l.dif_valor = Math.abs(l.saldo - alvo);
-    l.dif_dias = Math.abs(PyDate.fromisoformat(l.vencimento).diffDays(d));
+  const dif = Math.abs((l.saldo ?? l.valor) - alvo);
+  const nv = dif <= 1 ? 1 : Math.max(0, 1 - dif / (alvo * 0.1 + 100));
+  const dias = Math.abs(PyDate.fromisoformat(String(l.vencimento).slice(0, 10)).diffDays(PyDate.fromisoformat(linha.data)));
+  const nd = Math.max(0, 1 - dias / 30);
+  const a = tk_linha ?? _tokens(linha.descricao);
+  const b = _tokens(l.descricao, l.pessoa_nome, l.documento);
+  let comum = 0;
+  for (const w of a) if (b.has(w) || [...b].some((x) => x.length >= 5 && w.length >= 5 && (x.startsWith(w) || w.startsWith(x)))) comum++;
+  const nn = a.size && b.size ? Math.min(1, comum / Math.min(a.size, b.size)) : 0;
+  let nota = Math.round(100 * (0.55 * nv + 0.2 * nd + 0.25 * nn));
+  if (nv === 1 && nn >= 0.5 && dias <= 3) nota = Math.max(nota, 97);
+  return { nota, dif_valor: dif, dif_dias: dias, nome_ok: nn >= 0.5, valor_ok: nv === 1 };
+}
+
+/** Sugestões para várias linhas de uma vez (uma consulta só): lançamentos em aberto do mesmo tipo, com a nota. */
+export async function sugestoes_lote(slug: string, linhas: any[], limite = 4): Promise<void> {
+  if (!linhas.length) return;
+  const datas = linhas.map((x) => x.data).sort();
+  const de = PyDate.fromisoformat(datas[0]).addDays(-60).isoformat(), ate = PyDate.fromisoformat(datas[datas.length - 1]).addDays(60).isoformat();
+  const cands = (await completar(await q("SELECT * FROM financas_lancamentos WHERE empresa_slug = ? AND cancelado = 0 AND vencimento BETWEEN ? AND ?" +
+    filtro_consideradas() + " ORDER BY id", [slug, de, ate]), slug)).filter((l) => ["aberto", "vencido", "parcial"].includes(l.situacao));
+  for (const x of linhas) {
+    const tipo = x.valor > 0 ? "receber" : "pagar";
+    const tk = _tokens(x.descricao);
+    const alvo = Math.abs(x.valor);
+    const lista: any[] = [];
+    for (const l of cands) {
+      if (l.tipo !== tipo) continue;
+      const n = nota_conciliacao(x, l, tk);
+      if (Math.abs(l.saldo - alvo) > alvo * 0.3 + 100 && !n.nome_ok) continue;
+      if (n.nota < 35) continue;
+      lista.push({ ...l, ...n });
+    }
+    ordenar(lista, (l: any) => [-l.nota, l.dif_valor, l.dif_dias]);
+    x.sugestoes = lista;
   }
-  cands = cands.filter((l) => l.dif_valor <= Math.max(alvo * 0.05, 100));
-  ordenar(cands, (l) => [l.dif_valor, l.dif_dias]);
-  return cands.slice(0, limite);
+  // Um lançamento não deve ser sugerido para duas linhas: fica com a linha em que tem a maior certeza.
+  const dono = new Map<number, [number, any]>();
+  for (const x of linhas) for (const l of x.sugestoes) { const a = dono.get(l.id); if (!a || l.nota > a[0]) dono.set(l.id, [l.nota, x]); }
+  for (const x of linhas) x.sugestoes = x.sugestoes.filter((l: any) => dono.get(l.id)![1] === x).slice(0, limite);
+}
+
+/** Busca livre de lançamentos em aberto para conciliar uma linha (texto, pessoa, documento ou valor). */
+export async function buscar_para_conciliar(slug: string, linha: any, termo: string): Promise<any[]> {
+  const tipo = linha.valor > 0 ? "receber" : "pagar";
+  let sql = "SELECT * FROM financas_lancamentos WHERE empresa_slug = ? AND tipo = ? AND cancelado = 0" + filtro_consideradas();
+  const p: any[] = [slug, tipo];
+  const t = String(termo || "").trim();
+  const cent = para_centavos(t);
+  if (t && cent && /^[\d.,\sR$]+$/.test(t)) { sql += " AND valor BETWEEN ? AND ?"; p.push(Math.round(cent * 0.9), Math.round(cent * 1.1) + 1); }
+  else if (t) {
+    sql += " AND (descricao LIKE ? OR documento LIKE ? OR pessoa_id IN (SELECT id FROM financas_pessoas WHERE empresa_slug = ? AND nome LIKE ?))";
+    p.push(`%${t}%`, `%${t}%`, slug, `%${t}%`);
+  } else {
+    sql += " AND vencimento BETWEEN ? AND ?";
+    const d = PyDate.fromisoformat(linha.data); p.push(d.addDays(-45).isoformat(), d.addDays(45).isoformat());
+  }
+  const lst = (await completar(await q(sql + " ORDER BY vencimento DESC, id DESC LIMIT 300", p), slug)).filter((l) => ["aberto", "vencido", "parcial"].includes(l.situacao));
+  const tk = _tokens(linha.descricao);
+  for (const l of lst) Object.assign(l, nota_conciliacao(linha, l, tk));
+  ordenar(lst, (l: any) => [-l.nota, l.dif_valor]);
+  return lst.slice(0, 30);
+}
+
+/** Compatibilidade: sugestões de uma linha só. */
+export async function sugestoes_conciliacao(slug: string, linha: any, limite = 4): Promise<any[]> {
+  await sugestoes_lote(slug, [linha], limite);
+  return linha.sugestoes;
 }
 
 // ───────────────────────── relatórios ─────────────────────────
