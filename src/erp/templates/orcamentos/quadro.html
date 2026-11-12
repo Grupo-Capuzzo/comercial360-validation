@@ -1,0 +1,64 @@
+{% extends "orcamentos/_layout.html" %}
+{% block orc_conteudo %}
+<div class="oc-head">
+  <div><div class="eyebrow-line">{{ empresa.nome }}</div><h1>Orçamentos</h1><p>Da solicitação ao lançamento no contas a pagar. Arraste os cartões entre as etapas.</p></div>
+  <button class="btn-pill" type="button" onclick="novoOrcamento()">{{ ic('add') }} Novo orçamento</button>
+</div>
+<div class="oc-kpis">
+  <div class="oc-kpi"><b>{{ kpi.abertos }}</b><span>Em andamento</span></div>
+  <div class="oc-kpi {{ 'risco' if kpi.atrasados }}"><b>{{ kpi.atrasados }}</b><span>Atrasados</span></div>
+  <div class="oc-kpi"><b>{{ kpi.aprovados }}</b><span>Aprovados, sem lançar</span></div>
+  <div class="oc-kpi"><b>{{ moeda(kpi.lancados_valor) }}</b><span>Lançado no contas a pagar</span></div>
+</div>
+<form class="oc-barra" method="get">
+  <label class="search">{{ ic('search') }}<input type="search" name="q" value="{{ busca }}" placeholder="Buscar orçamento…"></label>
+  <select class="inp" name="prio" onchange="this.form.submit()"><option value="">Todas as prioridades</option>{% for k, n, c in PRIORIDADES %}<option value="{{ k }}" {{ 'selected' if prio == k }}>{{ n }}</option>{% endfor %}</select>
+  <select class="inp" name="resp" onchange="this.form.submit()"><option value="">Todos os responsáveis</option>{% for x in usuarios %}<option value="{{ x.id }}" {{ 'selected' if resp == x.id }}>{{ x.nome }}</option>{% endfor %}</select>
+</form>
+<div class="oc-kb" id="oc-kb" data-csrf="{{ csrf_token() }}">
+  {% for col in colunas %}
+  <section class="oc-col" style="--c:{{ col.cor }}">
+    <header class="oc-col-h"><span class="pill">{{ col.nome }}</span><small>{{ col.itens|length }}</small></header>
+    <div class="oc-lista" data-drop="{{ col.id if col.id != 'lancado' else '' }}">
+      {% for o in col.itens %}
+      <a class="oc-card" draggable="{{ 'false' if o.status == 'lancado' else 'true' }}" href="{{ url_for('orcamentos.ver', slug=empresa.slug, oid=o.id) }}" data-id="{{ o.id }}" data-status="{{ o.status }}"
+         data-acao="{{ url_for('orcamentos.etapa', slug=empresa.slug, oid=o.id) }}" style="--pc:{{ o.prio_cor }}">
+        <b>{{ o.titulo }}</b>
+        <span class="oc-tags">
+          <span class="oc-tag" style="--tc:{{ o.prio_cor }}">{{ o.prio_nome }}</span>
+          {% if o.tipo %}<span class="oc-tag" style="--tc:#7a6aa8">{{ o.tipo }}</span>{% endif %}
+          {% if o.n_cot %}<span class="oc-tag" style="--tc:#3b82f6">{{ o.n_cot }} cotação(ões)</span>{% endif %}
+        </span>
+        <span class="oc-prazo {{ o.sit }}"><i></i>{% if o.sit == 'sem' %}SEM PRAZO{% elif o.sit == 'atrasado' %}ATRASADO · {{ data_br(o.prazo) }}{% elif o.sit == 'hoje' %}VENCE HOJE{% else %}{{ data_br(o.prazo) }}{% endif %}</span>
+        {% if o.vencedora %}<div class="oc-val">Vencedor: <b>{{ o.vencedora.nome }}</b> · {{ moeda(o.vencedora.total) }}</div>
+        {% elif o.menor is not none %}<div class="oc-val">Menor cotação: <b>{{ moeda(o.menor) }}</b></div>{% endif %}
+        {% if o.resp_nome %}<div class="oc-val">{{ o.resp_nome.split()[0] }}</div>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    {% if col.id not in ['aprovado', 'lancado'] %}<button class="oc-novo-card" type="button" onclick="novoOrcamento('{{ col.id }}')">+ Novo</button>{% endif %}
+  </section>
+  {% endfor %}
+</div>
+<script>
+(function () {
+  var kb = document.getElementById('oc-kb'), csrf = kb.dataset.csrf, arr = null;
+  kb.querySelectorAll('.oc-card[draggable=true]').forEach(function (c) {
+    c.addEventListener('dragstart', function (e) { arr = c; e.dataTransfer.effectAllowed = 'move'; });
+    c.addEventListener('dragend', function () { kb.querySelectorAll('.oc-lista').forEach(function (l) { l.classList.remove('alvo'); }); });
+  });
+  kb.querySelectorAll('.oc-lista').forEach(function (l) {
+    var dest = l.dataset.drop;
+    l.addEventListener('dragover', function (e) { if (!dest || !arr) return; e.preventDefault(); l.classList.add('alvo'); });
+    l.addEventListener('dragleave', function () { l.classList.remove('alvo'); });
+    l.addEventListener('drop', function (e) {
+      e.preventDefault(); l.classList.remove('alvo'); var c = arr; arr = null;
+      if (!c || !dest || c.dataset.status === dest) return;
+      var fd = new FormData(); fd.append('_csrf', csrf); fd.append('status', dest);
+      fetch(c.dataset.acao, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'x-requested-with': 'fetch' } })
+        .then(function (r) { return r.json(); }).then(function (j) { if (!j.ok) alert(j.msg); location.reload(); }).catch(function () { location.reload(); });
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -9,6 +9,7 @@ import * as contratos from "./modulos/contratos/index";
 import * as operacao from "./modulos/operacao/index";
 import * as juridico from "./modulos/juridico/index";
 import * as titulos from "./modulos/titulos/index";
+import * as orcamentos from "./modulos/orcamentos/index";
 
 const g = globalThis as unknown as { __erpRegistrado?: boolean };
 
@@ -24,6 +25,7 @@ export function registrarTudo() {
   operacao.registrar();   // modulos/operacao
   juridico.registrar();
   titulos.registrar();    // Títulos Privados (nova versão)
+  orcamentos.registrar(); // Orçamentos (Grão e Ether Nexus)
 }
 
 export async function atender(req: Request): Promise<Response> {
