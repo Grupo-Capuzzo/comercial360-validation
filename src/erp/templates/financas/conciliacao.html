@@ -5,7 +5,7 @@
   <div>
     <div class="eyebrow-line">Finanças</div>
     <h1>Conciliação bancária</h1>
-    <p>Importe o extrato do banco (OFX) e confirme cada linha com um lançamento. O que não existir, você cria na hora.</p>
+    <p>Importe o extrato do banco (OFX). Para cada linha, o sistema procura o lançamento correspondente no contas a pagar e a receber e mostra o % de certeza. Você confere e concilia, busca outro ou cria um novo.</p>
   </div>
 </div>
 {% if not contas %}
@@ -25,44 +25,168 @@
   <button class="btn-pill fin-btn" type="submit">Importar</button>
 </form>
 
+<style>
+  .cz-topo { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:.6rem; }
+  .cz-cab { display:grid; grid-template-columns:minmax(0,1fr) 46px minmax(0,1.25fr); gap:.6rem; font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:0 .2rem .4rem; }
+  .cz-linha { display:grid; grid-template-columns:minmax(0,1fr) 46px minmax(0,1.25fr); gap:.6rem; align-items:stretch; padding:.7rem 0; border-top:1px solid var(--line); scroll-margin-top:90px; }
+  .cz-banco, .cz-sis { border-radius:14px; padding:.8rem .95rem; min-width:0; }
+  .cz-banco { background:color-mix(in srgb, var(--text) 4%, transparent); display:flex; flex-direction:column; gap:.2rem; }
+  .cz-banco .dt { font-size:.78rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .cz-banco b.desc { font-size:.92rem; overflow-wrap:anywhere; }
+  .cz-banco .val { font-size:1.15rem; font-weight:700; font-variant-numeric:tabular-nums; margin-top:auto; }
+  .cz-meio { display:flex; align-items:center; justify-content:center; }
+  .cz-meio span { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:color-mix(in srgb, var(--text) 6%, transparent); color:var(--muted); font-weight:700; }
+  .cz-meio span.ok { background:color-mix(in srgb, var(--fin-pos) 18%, transparent); color:var(--fin-pos); }
+  .cz-sis { border:1.5px dashed color-mix(in srgb, var(--text) 18%, transparent); display:flex; flex-direction:column; gap:.45rem; }
+  .cz-sis.tem { border-style:solid; border-color:color-mix(in srgb, var(--accent) 45%, transparent); background:color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+  .cz-sis.alta { border-style:solid; border-color:color-mix(in srgb, var(--fin-pos) 55%, transparent); background:color-mix(in srgb, var(--fin-pos) 6%, var(--surface)); }
+  .cz-sug-topo { display:flex; justify-content:space-between; gap:.6rem; align-items:flex-start; }
+  .cz-sug-topo b { font-size:.92rem; overflow-wrap:anywhere; }
+  .cz-sug-topo small, .cz-det { color:var(--muted); font-size:.78rem; }
+  .cz-pct { flex:none; font-weight:800; font-size:.82rem; padding:.2rem .55rem; border-radius:99px; font-variant-numeric:tabular-nums; }
+  .cz-pct.a { background:color-mix(in srgb, var(--fin-pos) 18%, transparent); color:var(--fin-pos); }
+  .cz-pct.m { background:color-mix(in srgb, #d99a1b 20%, transparent); color:#a8700b; }
+  .cz-pct.b { background:color-mix(in srgb, var(--fin-neg) 14%, transparent); color:var(--fin-neg); }
+  .cz-det { display:flex; flex-wrap:wrap; gap:.15rem .9rem; }
+  .cz-det .ok { color:var(--fin-pos); font-weight:600; } .cz-det .dif { color:#a8700b; font-weight:600; }
+  .cz-acoes { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; margin-top:.15rem; }
+  .cz-acoes form { margin:0; }
+  .cz-acoes .fin-link { font-size:.82rem; }
+  .cz-outras { display:flex; flex-wrap:wrap; gap:.35rem; font-size:.76rem; color:var(--muted); align-items:center; }
+  .cz-outras button { border:1px solid var(--line); background:var(--surface); border-radius:99px; padding:.15rem .55rem; font:inherit; cursor:pointer; color:var(--text); }
+  .cz-painel { grid-column:1 / -1; background:color-mix(in srgb, var(--text) 3%, transparent); border-radius:14px; padding:.8rem .95rem; }
+  .cz-painel h4 { margin:0 0 .5rem; font-size:.88rem; }
+  .cz-busca-res { display:flex; flex-direction:column; gap:.35rem; margin-top:.6rem; max-height:320px; overflow:auto; }
+  .cz-res { display:flex; gap:.6rem; align-items:center; background:var(--surface); border-radius:10px; padding:.45rem .6rem; }
+  .cz-res > span { flex:1; min-width:0; display:flex; flex-direction:column; font-size:.84rem; }
+  .cz-res small { color:var(--muted); font-size:.74rem; }
+  .cz-novo { display:grid; grid-template-columns:2fr 1fr 1fr; gap:.2rem .7rem; }
+  .cz-novo .lbl { margin-top:.35rem; }
+  @media (max-width:900px) { .cz-linha, .cz-cab { grid-template-columns:1fr; } .cz-meio { display:none; } .cz-novo { grid-template-columns:1fr; } }
+</style>
 <section class="fin-box">
-  <header><h3>Para conciliar ({{ pend|length }})</h3><span>sugestões por valor e data próximos</span></header>
+  <div class="cz-topo">
+    <header style="margin:0"><h3>Para conciliar ({{ pend|length }})</h3></header>
+    {% if n_auto %}
+    <form method="post" action="{{ url_for('financas.conciliacao_auto', slug=empresa.slug) }}" onsubmit="return confirm('Conciliar {{ n_auto }} linha(s) com sugestão de 95% ou mais de certeza?')">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="conta_id" value="{{ conta.id }}">
+      <button class="btn-pill fin-btn" type="submit">{{ fic('check') }} Conciliar as {{ n_auto }} com 95%+ de certeza</button></form>
+    {% endif %}
+  </div>
+  {% if pend %}<div class="cz-cab"><span>No extrato do banco</span><span></span><span>No sistema (contas a pagar e a receber)</span></div>{% endif %}
   {% for x in pend %}
-  <article class="fin-conc">
-    <div class="fin-conc-linha">
+  {% set s = x.sugestoes[0] if x.sugestoes else none %}
+  {% set rec = x.valor > 0 %}
+  <article class="cz-linha" id="x{{ x.id }}">
+    <div class="cz-banco">
       <span class="dt">{{ data_br(x.data) }}</span>
-      <span class="txt"><b>{{ x.descricao }}</b><small>Extrato do banco</small></span>
-      <b class="num {{ 'pos' if x.valor > 0 else 'risco' }}">{{ moeda(x.valor, true) }}</b>
+      <b class="desc">{{ x.descricao }}</b>
+      <span class="val {{ 'pos' if rec else 'risco' }}" style="color:{{ 'var(--fin-pos)' if rec else 'var(--fin-neg)' }}">{{ moeda(x.valor, true) }}</span>
     </div>
-    <div class="fin-conc-opcoes">
-      {% for s in x.sugestoes %}
-        <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='vincular') }}" class="fin-sug">
-          <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="lancamento_id" value="{{ s.id }}">
-          <span><b>{{ s.descricao }}</b><small>{{ s.pessoa_nome or s.categoria_nome or '—' }} · vence {{ data_br(s.vencimento) }} · saldo {{ moeda(s.saldo) }}</small></span>
-          {% if s.saldo > (x.valor|abs) %}<label class="fin-check"><input type="checkbox" name="quitar" value="1"> quitar com desconto</label>{% endif %}
-          <button class="btn-pill fin-btn mini" type="submit">{{ fic('check') }} Conciliar</button>
-        </form>
-      {% endfor %}
-      <details class="fin-conc-novo" {{ 'open' if not x.sugestoes }}>
-        <summary>{{ 'Nenhum lançamento parecido — ' if not x.sugestoes }}Criar {{ 'receita' if x.valor > 0 else 'despesa' }} com esta linha</summary>
-        <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='criar') }}" class="fin-conc-form">
-          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-          <input class="inp" name="descricao" value="{{ x.descricao }}" aria-label="Descrição">
-          <select class="inp" name="categoria_id" aria-label="Categoria"><option value="">Categoria…</option>
-            {% for c in categorias %}{% if (x.valor > 0) == (c.tipo == 'receita') %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endif %}{% endfor %}</select>
-          <select class="inp" name="pessoa_id" aria-label="Cliente/fornecedor"><option value="">{{ 'Cliente' if x.valor > 0 else 'Fornecedor' }}…</option>
-            {% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select>
-          <button class="btn-pill fin-btn mini" type="submit">Criar e conciliar</button>
-        </form>
-      </details>
-      <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='ignorar') }}">
-        <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link" type="submit">Ignorar esta linha</button></form>
+    <div class="cz-meio"><span class="{{ 'ok' if s and s.nota >= 80 }}">{{ '=' if s else '?' }}</span></div>
+    <div class="cz-sis {{ ('alta' if s.nota >= 80 else 'tem') if s }}">
+      {% if s %}
+        <div class="cz-sug-topo">
+          <div><b>{{ s.descricao }}</b><br><small>{{ s.pessoa_nome or 'Sem ' ~ ('cliente' if rec else 'fornecedor') }}{% if s.categoria_nome %} · {{ s.categoria_nome }}{% endif %}</small></div>
+          <span class="cz-pct {{ 'a' if s.nota >= 80 else ('m' if s.nota >= 55 else 'b') }}" title="Certeza: valor, data e nome">{{ s.nota }}%</span>
+        </div>
+        <div class="cz-det">
+          <span>Vence {{ data_br(s.vencimento) }}{% if s.dif_dias %} <span class="dif">({{ s.dif_dias }} dia(s) de diferença)</span>{% else %} <span class="ok">mesma data</span>{% endif %}</span>
+          <span>Em aberto {{ moeda(s.saldo) }}{% if s.valor_ok %} <span class="ok">valor igual</span>{% else %} <span class="dif">dif. {{ moeda(s.dif_valor) }}</span>{% endif %}</span>
+          {% if s.nome_ok %}<span class="ok">nome confere</span>{% endif %}
+        </div>
+        <div class="cz-acoes">
+          <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='vincular') }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="lancamento_id" value="{{ s.id }}">
+            {% if s.saldo > (x.valor|abs) %}<label class="fin-check" style="display:inline-flex;margin-right:.4rem"><input type="checkbox" name="quitar" value="1"> quitar com desconto</label>{% endif %}
+            <button class="btn-pill fin-btn mini" type="submit">{{ fic('check') }} Conciliar</button></form>
+          <button class="fin-link" type="button" data-abre="busca-{{ x.id }}">{{ fic('search') }} Buscar outro</button>
+          <button class="fin-link" type="button" data-abre="novo-{{ x.id }}">{{ fic('add') }} Novo lançamento</button>
+          <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='ignorar') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link" type="submit">Ignorar</button></form>
+        </div>
+        {% if x.sugestoes|length > 1 %}
+        <div class="cz-outras">Outras sugestões:
+          {% for o in x.sugestoes[1:] %}
+          <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='vincular') }}" style="margin:0" onsubmit="return confirm('Conciliar com {{ o.descricao|replace("'", "") }} ({{ moeda(o.saldo) }})?')">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="lancamento_id" value="{{ o.id }}">
+            <button type="submit" title="{{ o.pessoa_nome }} · vence {{ data_br(o.vencimento) }}">{{ o.nota }}% · {{ o.descricao[:38] }} · {{ moeda(o.saldo) }}</button></form>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% else %}
+        <div class="cz-sug-topo"><div><b>Nenhum lançamento encontrado</b><br><small>Não há {{ 'conta a receber' if rec else 'conta a pagar' }} em aberto parecida com esta linha.</small></div></div>
+        <div class="cz-acoes">
+          <button class="btn-pill outline fin-btn mini" type="button" data-abre="busca-{{ x.id }}">{{ fic('search') }} Buscar lançamento</button>
+          <button class="btn-pill fin-btn mini" type="button" data-abre="novo-{{ x.id }}">{{ fic('add') }} Novo lançamento</button>
+          <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='ignorar') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link" type="submit">Ignorar</button></form>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="cz-painel" id="busca-{{ x.id }}" hidden>
+      <h4>Buscar {{ 'conta a receber' if rec else 'conta a pagar' }} em aberto</h4>
+      <div style="display:flex;gap:.5rem"><input class="inp cz-q" placeholder="Descrição, {{ 'cliente' if rec else 'fornecedor' }}, documento ou valor (ex.: 1.250,00)" data-url="{{ url_for('financas.conciliacao_buscar', slug=empresa.slug, xid=x.id) }}"
+        data-vincular="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='vincular') }}"><button class="btn-pill fin-btn mini cz-buscar" type="button">Buscar</button></div>
+      <div class="cz-busca-res"></div>
+    </div>
+
+    <div class="cz-painel" id="novo-{{ x.id }}" {{ '' if x.aberta else 'hidden' }}>
+      <h4>Novo lançamento em {{ 'contas a receber' if rec else 'contas a pagar' }}</h4>
+      <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='criar') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="cz-novo">
+          <div><label class="lbl">Descrição</label><input class="inp" name="descricao" value="{{ x.descricao }}" maxlength="200" required></div>
+          <div><label class="lbl">Valor</label><input class="inp" name="valor" data-moeda value="{{ valor_campo(x.valor|abs) }}"></div>
+          <div><label class="lbl">Vencimento</label><input class="inp" type="date" name="vencimento" value="{{ x.data }}"></div>
+          <div><label class="lbl">{{ 'Cliente' if rec else 'Fornecedor' }}</label><select class="inp" name="pessoa_id"><option value="">—</option>{% for p in pessoas %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}</select></div>
+          <div><label class="lbl">Categoria</label><select class="inp" name="categoria_id"><option value="">—</option>
+            {% for c in categorias %}{% if rec == (c.tipo == 'receita') %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endif %}{% endfor %}</select></div>
+          <div><label class="lbl">Competência</label><input class="inp" type="date" name="competencia" value="{{ x.data }}"></div>
+        </div>
+        <div class="cz-acoes" style="margin-top:.7rem"><button class="btn-pill fin-btn mini" type="submit">{{ fic('add') }} Criar lançamento</button>
+          <span class="fin-sub" style="margin:0">Depois de criado, ele aparece ao lado como sugestão para você conciliar.</span></div>
+      </form>
     </div>
   </article>
   {% else %}
     <p class="fin-vazio">Nada pendente. Importe um extrato OFX para começar.</p>
   {% endfor %}
 </section>
+<script>
+(function () {
+  document.querySelectorAll('[data-abre]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = document.getElementById(b.dataset.abre); if (!p) return;
+      var irmao = p.id.indexOf('busca-') === 0 ? 'novo-' + p.id.slice(6) : 'busca-' + p.id.slice(5);
+      var o = document.getElementById(irmao); if (o) o.hidden = true;
+      p.hidden = !p.hidden;
+      if (!p.hidden) { var q = p.querySelector('.cz-q'); if (q) { q.focus(); buscar(p); } }
+    });
+  });
+  var csrf = '{{ csrf_token() }}';
+  function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+  function buscar(p) {
+    var inp = p.querySelector('.cz-q'), res = p.querySelector('.cz-busca-res');
+    res.innerHTML = '<small class="fin-sub">Buscando…</small>';
+    fetch(inp.dataset.url + '?q=' + encodeURIComponent(inp.value), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.itens.length) { res.innerHTML = '<small class="fin-sub">Nada encontrado. Tente outro termo ou crie um novo lançamento.</small>'; return; }
+      res.innerHTML = j.itens.map(function (l) {
+        var cls = l.nota >= 80 ? 'a' : (l.nota >= 55 ? 'm' : 'b');
+        return '<form class="cz-res" method="post" action="' + inp.dataset.vincular + '"><input type="hidden" name="_csrf" value="' + csrf + '"><input type="hidden" name="lancamento_id" value="' + l.id + '">' +
+          '<span><b>' + esc(l.descricao) + '</b><small>' + esc(l.pessoa || '—') + (l.categoria ? ' · ' + esc(l.categoria) : '') + ' · vence ' + esc(l.vencimento) + ' · em aberto ' + esc(l.saldo) + '</small></span>' +
+          '<span class="cz-pct ' + cls + '">' + l.nota + '%</span>' +
+          (l.maior ? '<label class="fin-check" style="font-size:.74rem"><input type="checkbox" name="quitar" value="1"> quitar</label>' : '') +
+          '<button class="btn-pill fin-btn mini" type="submit">Conciliar</button></form>';
+      }).join('');
+    }).catch(function () { res.innerHTML = '<small class="fin-sub">Não foi possível buscar agora.</small>'; });
+  }
+  document.querySelectorAll('.cz-painel').forEach(function (p) {
+    var inp = p.querySelector('.cz-q'); if (!inp) return;
+    p.querySelector('.cz-buscar').addEventListener('click', function () { buscar(p); });
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); buscar(p); } });
+  });
+})();
+</script>
 
 {% if feitas %}
 <section class="fin-box">
