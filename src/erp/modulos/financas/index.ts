@@ -768,7 +768,7 @@ export function registrar() {
     const itens = await d.buscar_para_conciliar(slug, x, String(request().args.get("q") || ""));
     return jsonify({ itens: itens.map((l: any) => ({
       id: l.id, descricao: l.descricao, pessoa: l.pessoa_nome || "", categoria: l.categoria_nome || "", vencimento: d.data_br(l.vencimento),
-      saldo: d.moeda(l.saldo), nota: l.nota, maior: l.saldo > Math.abs(x.valor),
+      saldo: d.moeda(l.saldo), nota: l.nota, maior: l.saldo > Math.abs(x.valor), resta: d.moeda(Math.max(l.saldo - Math.abs(x.valor), 0)),
     })) });
   });
 
@@ -852,8 +852,10 @@ export function registrar() {
         flash("Esse lançamento não combina com a linha do extrato.", "erro");
         return redirect(volta);
       }
-      await _conciliar(slug, x, l, !!f.get("quitar"), u.id);
-      flash("Conciliado.", "ok");
+      const quitar = f.get("forma") === "quitar" || !!f.get("quitar");
+      await _conciliar(slug, x, l, quitar, u.id);
+      const resta = l.saldo - Math.abs(x.valor);
+      flash(resta > 0 && !quitar ? `Baixa parcial conciliada. Ficam ${d.moeda(resta)} em aberto nesse lançamento.` : "Conciliado.", "ok");
       return redirect(volta);
     }
     // criar: só cria o lançamento (em aberto, no contas a pagar/receber). Ele aparece como sugestão para conciliar.

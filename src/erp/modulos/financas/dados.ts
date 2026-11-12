@@ -515,8 +515,9 @@ function _tokens(...txts: any[]): Set<string> {
 /** Nota de 0 a 100 de quanto o lançamento combina com a linha do extrato (valor, data e nome). */
 export function nota_conciliacao(linha: any, l: any, tk_linha?: Set<string>): any {
   const alvo = Math.abs(linha.valor);
-  const dif = Math.abs((l.saldo ?? l.valor) - alvo);
-  const nv = dif <= 1 ? 1 : Math.max(0, 1 - dif / (alvo * 0.1 + 100));
+  const aberto = l.saldo ?? l.valor;
+  const dif = Math.abs(aberto - alvo);
+  let nv = dif <= 1 ? 1 : Math.max(0, 1 - dif / (alvo * 0.1 + 100));
   const dias = Math.abs(PyDate.fromisoformat(String(l.vencimento).slice(0, 10)).diffDays(PyDate.fromisoformat(linha.data)));
   const nd = Math.max(0, 1 - dias / 30);
   const a = tk_linha ?? _tokens(linha.descricao);
@@ -524,9 +525,12 @@ export function nota_conciliacao(linha: any, l: any, tk_linha?: Set<string>): an
   let comum = 0;
   for (const w of a) if (b.has(w) || [...b].some((x) => x.length >= 5 && w.length >= 5 && (x.startsWith(w) || w.startsWith(x)))) comum++;
   const nn = a.size && b.size ? Math.min(1, comum / Math.min(a.size, b.size)) : 0;
+  // Pagamento parcial: o banco recebeu/pagou menos que o aberto e o nome confere (ex.: 170 mil pagos em dois Pix).
+  const parcial = alvo < aberto - 1 && nn >= 0.5;
+  if (parcial) nv = Math.max(nv, 0.6);
   let nota = Math.round(100 * (0.55 * nv + 0.2 * nd + 0.25 * nn));
   if (nv === 1 && nn >= 0.5 && dias <= 3) nota = Math.max(nota, 97);
-  return { nota, dif_valor: dif, dif_dias: dias, nome_ok: nn >= 0.5, valor_ok: nv === 1 };
+  return { nota, dif_valor: dif, dif_dias: dias, nome_ok: nn >= 0.5, valor_ok: dif <= 1, parcial, resta: parcial ? aberto - alvo : 0 };
 }
 
 /** Sugestões para várias linhas de uma vez (uma consulta só): lançamentos em aberto do mesmo tipo, com a nota. */
@@ -553,8 +557,9 @@ export async function sugestoes_lote(slug: string, linhas: any[], limite = 4): P
   }
   // Um lançamento não deve ser sugerido para duas linhas: fica com a linha em que tem a maior certeza.
   const dono = new Map<number, [number, any]>();
-  for (const x of linhas) for (const l of x.sugestoes) { const a = dono.get(l.id); if (!a || l.nota > a[0]) dono.set(l.id, [l.nota, x]); }
-  for (const x of linhas) x.sugestoes = x.sugestoes.filter((l: any) => dono.get(l.id)![1] === x).slice(0, limite);
+  // (pagamento parcial pode aparecer em mais de uma linha: um mesmo lançamento pago em vários Pix)
+  for (const x of linhas) for (const l of x.sugestoes) { if (l.parcial) continue; const a = dono.get(l.id); if (!a || l.nota > a[0]) dono.set(l.id, [l.nota, x]); }
+  for (const x of linhas) x.sugestoes = x.sugestoes.filter((l: any) => l.parcial || dono.get(l.id)?.[1] === x).slice(0, limite);
 }
 
 /** Busca livre de lançamentos em aberto para conciliar uma linha (texto, pessoa, documento ou valor). */
