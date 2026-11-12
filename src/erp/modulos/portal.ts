@@ -59,7 +59,7 @@ export const EMPRESAS: any[] = [
 ];
 // Módulo Finanças nas empresas que o utilizam.
 for (const e of EMPRESAS) {
-  if (["assessoria", "cred", "ethernexus", "terceiriza", "hortstufas"].includes(e.slug)) {
+  if (["assessoria", "cred", "ethernexus", "terceiriza", "hortstufas", "worldgym"].includes(e.slug)) {
     e.modulos.push({ id: "financas", nome: "Finanças", icone: "payments", desc: "Contas a pagar e receber, extrato, conciliação, fluxo de caixa e DRE.", destino: `/financas/${e.slug}/` });
   }
 }
