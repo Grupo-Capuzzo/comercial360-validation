@@ -688,13 +688,30 @@ export function registrar() {
     if (conta) {
       pend = await d.q("SELECT * FROM financas_extrato_importado WHERE conta_id = ? AND status = 'pendente' ORDER BY data, id", [conta.id]);
       await d.sugestoes_lote(slug, pend);
+      // Transferências entre contas: movimento de transferência ainda não conciliado nesta conta (mesmo valor, até 5 dias),
+      // ou linha oposta pendente no extrato de outra conta da empresa (sugere registrar a transferência).
+      if (pend.length) {
+        const movs = await d.q("SELECT m.*, t.origem_id, t.destino_id FROM financas_movimentos m JOIN financas_transferencias t ON t.id = m.transferencia_id " +
+          "WHERE m.conta_id = ? AND COALESCE(m.conciliado, 0) = 0 AND m.id NOT IN (SELECT movimento_id FROM financas_extrato_importado WHERE movimento_id IS NOT NULL)", [conta.id]);
+        const outras = await d.q("SELECT x.*, c.nome AS conta_nome FROM financas_extrato_importado x JOIN financas_contas c ON c.id = x.conta_id " +
+          "WHERE x.empresa_slug = ? AND x.conta_id <> ? AND x.status = 'pendente'", [slug, conta.id]);
+        const nomes = new Map<number, string>(contas.map((c: any) => [c.id, c.nome]));
+        const dias = (a: string, b: string) => Math.abs(PyDate.fromisoformat(a).diffDays(PyDate.fromisoformat(b)));
+        const usados = new Set<number>();
+        for (const p of pend) {
+          const m = movs.find((m: any) => !usados.has(m.id) && Number(m.valor) === Number(p.valor) && dias(m.data, p.data) <= 5);
+          if (m) { usados.add(m.id); p.transf_mov = { ...m, outra: nomes.get(Number(p.valor) < 0 ? m.destino_id : m.origem_id) ?? "outra conta" }; continue; }
+          const par = outras.find((o: any) => Number(o.valor) === -Number(p.valor) && dias(o.data, p.data) <= 3);
+          if (par) p.transf_par = par;
+        }
+      }
       const criado = _int("criado", request().args);
       for (const p of pend) p.aberta = p.id === criado;
       feitas = await d.q("SELECT * FROM financas_extrato_importado WHERE conta_id = ? AND status <> 'pendente' ORDER BY data DESC, id DESC LIMIT 30",
         [conta.id]);
     }
     return render_template("financas/conciliacao.html", {
-      ...(await _ctx(e, "conciliacao")), contas, conta, pend,
+      ...(await _ctx(e, "conciliacao")), contas, conta, pend, contas_todas: await d.contas(slug, true),
       feitas, categorias: await d.categorias(slug), pessoas: await d.pessoas(slug),
       n_auto: pend.filter((p: any) => p.sugestoes?.length && p.sugestoes[0].nota >= 95).length,
       importacoes: conta ? await d.q("SELECT * FROM financas_importacoes WHERE conta_id = ? ORDER BY id DESC LIMIT 5", [conta.id]) : [],
@@ -777,7 +794,7 @@ export function registrar() {
     return redirect(volta);
   });
 
-  post("financas.conciliacao_acao", "/financas/<slug>/conciliacao/<int:xid>/<any(vincular, criar, ignorar, desfazer):acao>", async (slug: string, xid: number, acao: string) => {
+  post("financas.conciliacao_acao", "/financas/<slug>/conciliacao/<int:xid>/<any(vincular, criar, ignorar, desfazer, transferir, vincular_mov):acao>", async (slug: string, xid: number, acao: string) => {
     await _empresa(slug);
     _csrf();
     const x = await _linha_ou_404(slug, xid);
@@ -793,6 +810,41 @@ export function registrar() {
       return redirect(volta);
     }
     if (x.status !== "pendente") return redirect(volta);
+    if (acao === "vincular_mov") { // transferência já registrada: liga a linha ao movimento
+      const m = await d.q("SELECT * FROM financas_movimentos WHERE id = ? AND conta_id = ? AND empresa_slug = ?", [_int("movimento_id"), x.conta_id, slug], true);
+      if (!m || Number(m.valor) !== Number(x.valor)) { flash("Esse movimento não combina com a linha do extrato.", "erro"); return redirect(volta); }
+      await d.ex("UPDATE financas_movimentos SET conciliado = 1, fitid = ? WHERE id = ?", [x.fitid, m.id]);
+      await d.ex("UPDATE financas_extrato_importado SET status = 'conciliado', movimento_id = ? WHERE id = ?", [m.id, xid]);
+      flash("Transferência conciliada.", "ok");
+      return redirect(volta);
+    }
+    if (acao === "transferir") { // registra a transferência entre contas e concilia esta linha (e a linha oposta da outra conta, se houver)
+      const outra = await _do_slug("financas_contas", _int("outra_conta_id"), slug);
+      if (!outra || outra === x.conta_id) { flash("Escolha a outra conta da transferência.", "erro"); return redirect(volta); }
+      const valor = Math.abs(x.valor);
+      const [o, dd] = x.valor < 0 ? [x.conta_id, outra] : [outra, x.conta_id];
+      const nomes = new Map<number, string>((await d.contas(slug)).map((c) => [c.id, c.nome]));
+      const desc = corta((f.get("descricao") || "").trim(), 200);
+      const agora = d.agora_iso();
+      const tid = await d.ex("INSERT INTO financas_transferencias (empresa_slug, origem_id, destino_id, data, valor, descricao, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [slug, o, dd, x.data, valor, desc, agora]);
+      const mo = await d.ex("INSERT INTO financas_movimentos (empresa_slug, conta_id, data, descricao, valor, origem, transferencia_id, criado_por, criado_em) " +
+        "VALUES (?, ?, ?, ?, ?, 'transferencia', ?, ?, ?)", [slug, o, x.data, desc || `Transferência para ${nomes.get(dd)}`, -valor, tid, u.id, agora]);
+      const md = await d.ex("INSERT INTO financas_movimentos (empresa_slug, conta_id, data, descricao, valor, origem, transferencia_id, criado_por, criado_em) " +
+        "VALUES (?, ?, ?, ?, ?, 'transferencia', ?, ?, ?)", [slug, dd, x.data, desc || `Transferência de ${nomes.get(o)}`, valor, tid, u.id, agora]);
+      const meu = x.conta_id === o ? mo : md, dela = x.conta_id === o ? md : mo;
+      await d.ex("UPDATE financas_movimentos SET conciliado = 1, fitid = ? WHERE id = ?", [x.fitid, meu]);
+      await d.ex("UPDATE financas_extrato_importado SET status = 'conciliado', movimento_id = ? WHERE id = ?", [meu, xid]);
+      // linha oposta já importada no extrato da outra conta: concilia também
+      const par = (await d.q("SELECT * FROM financas_extrato_importado WHERE conta_id = ? AND status = 'pendente' AND valor = ? ORDER BY id", [outra, -Number(x.valor)]))
+        .find((p: any) => Math.abs(PyDate.fromisoformat(p.data).diffDays(PyDate.fromisoformat(x.data))) <= 3);
+      if (par) {
+        await d.ex("UPDATE financas_movimentos SET conciliado = 1, fitid = ? WHERE id = ?", [par.fitid, dela]);
+        await d.ex("UPDATE financas_extrato_importado SET status = 'conciliado', movimento_id = ? WHERE id = ?", [dela, par.id]);
+      }
+      flash(`Transferência ${x.valor < 0 ? "para" : "de"} ${nomes.get(outra)} registrada e conciliada${par ? " nas duas contas" : ""}.`, "ok");
+      return redirect(volta);
+    }
     if (acao === "vincular") {
       const l = (await d.completar([await _lanc_ou_404(slug, _int("lancamento_id") || 0)], slug))[0];
       const tipo_ok = (l.tipo === "receber") === (x.valor > 0);
