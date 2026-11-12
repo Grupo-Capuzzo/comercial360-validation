@@ -21,7 +21,7 @@
     <header class="oc-col-h"><span class="pill">{{ col.nome }}</span><small>{{ col.itens|length }}</small></header>
     <div class="oc-lista" data-drop="{{ col.id if col.id != 'lancado' else '' }}">
       {% for o in col.itens %}
-      <a class="oc-card" draggable="{{ 'false' if o.status == 'lancado' else 'true' }}" href="{{ url_for('orcamentos.ver', slug=empresa.slug, oid=o.id) }}" data-id="{{ o.id }}" data-status="{{ o.status }}"
+      <a class="oc-card" draggable="false" href="{{ url_for('orcamentos.ver', slug=empresa.slug, oid=o.id) }}" data-id="{{ o.id }}" data-status="{{ o.status }}"
          data-acao="{{ url_for('orcamentos.etapa', slug=empresa.slug, oid=o.id) }}" style="--pc:{{ o.prio_cor }}">
         <b>{{ o.titulo }}</b>
         <span class="oc-tags">
@@ -32,7 +32,7 @@
         <span class="oc-prazo {{ o.sit }}"><i></i>{% if o.sit == 'sem' %}SEM PRAZO{% elif o.sit == 'atrasado' %}ATRASADO · {{ data_br(o.prazo) }}{% elif o.sit == 'hoje' %}VENCE HOJE{% else %}{{ data_br(o.prazo) }}{% endif %}</span>
         {% if o.vencedora %}<div class="oc-val">Vencedor: <b>{{ o.vencedora.nome }}</b> · {{ moeda(o.vencedora.total) }}</div>
         {% elif o.menor is not none %}<div class="oc-val">Menor cotação: <b>{{ moeda(o.menor) }}</b></div>{% endif %}
-        {% if o.resp_nome %}<div class="oc-val">{{ o.resp_nome.split()[0] }}</div>{% endif %}
+        {% if o.resp_nome or o.n_itens or o.n_anexos %}<div class="oc-card-meta">{% if o.resp_nome %}<span>👤 {{ o.resp_nome.split()[0] }}</span>{% endif %}{% if o.n_itens %}<span title="{{ o.n_itens }} item(ns) em {{ o.n_etapas }} etapa(s)">☰ {{ o.n_itens }} itens{% if o.n_etapas > 1 %} · {{ o.n_etapas }} etapas{% endif %}</span>{% endif %}{% if o.n_anexos %}<span title="Arquivos">📎 {{ o.n_anexos }}</span>{% endif %}</div>{% endif %}
       </a>
       {% endfor %}
     </div>
@@ -41,24 +41,67 @@
   {% endfor %}
 </div>
 <script>
+// Arrastar os cartões entre as etapas (mouse e toque). Funciona por pointer events, não pelo
+// drag-and-drop nativo do navegador (que falha em links e no celular).
 (function () {
-  var kb = document.getElementById('oc-kb'), csrf = kb.dataset.csrf, arr = null;
-  kb.querySelectorAll('.oc-card[draggable=true]').forEach(function (c) {
-    c.addEventListener('dragstart', function (e) { arr = c; e.dataTransfer.effectAllowed = 'move'; });
-    c.addEventListener('dragend', function () { kb.querySelectorAll('.oc-lista').forEach(function (l) { l.classList.remove('alvo'); }); });
+  var kb = document.getElementById('oc-kb'), csrf = kb.dataset.csrf;
+  var arr = null, fant = null, ox = 0, oy = 0, x0 = 0, y0 = 0, ativo = false, alvo = null, marca = null, bloquearClique = false;
+  function coluna(x, y) {
+    var el = document.elementFromPoint(x, y); var col = el && el.closest('.oc-col');
+    var l = col && col.querySelector('.oc-lista'); return l && l.dataset.drop ? l : null;
+  }
+  function limpa() { kb.querySelectorAll('.oc-col.alvo').forEach(function (c) { c.classList.remove('alvo'); }); if (marca) marca.remove(); marca = null; }
+  kb.addEventListener('dragstart', function (e) { if (e.target.closest && e.target.closest('.oc-card')) e.preventDefault(); });
+  kb.addEventListener('pointerdown', function (e) {
+    var c = e.target.closest('.oc-card'); if (!c || c.dataset.status === 'lancado' || e.button > 0) return;
+    arr = c; x0 = e.clientX; y0 = e.clientY; ativo = false;
+    var r = c.getBoundingClientRect(); ox = e.clientX - r.left; oy = e.clientY - r.top;
   });
-  kb.querySelectorAll('.oc-lista').forEach(function (l) {
-    var dest = l.dataset.drop;
-    l.addEventListener('dragover', function (e) { if (!dest || !arr) return; e.preventDefault(); l.classList.add('alvo'); });
-    l.addEventListener('dragleave', function () { l.classList.remove('alvo'); });
-    l.addEventListener('drop', function (e) {
-      e.preventDefault(); l.classList.remove('alvo'); var c = arr; arr = null;
-      if (!c || !dest || c.dataset.status === dest) return;
-      var fd = new FormData(); fd.append('_csrf', csrf); fd.append('status', dest);
-      fetch(c.dataset.acao, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'x-requested-with': 'fetch' } })
-        .then(function (r) { return r.json(); }).then(function (j) { if (!j.ok) alert(j.msg); location.reload(); }).catch(function () { location.reload(); });
-    });
-  });
+  window.addEventListener('pointermove', function (e) {
+    if (!arr) return;
+    if (!ativo) {
+      if (Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) < 7) return;
+      ativo = true; document.body.classList.add('oc-arrastando');
+      var r = arr.getBoundingClientRect();
+      fant = arr.cloneNode(true); fant.classList.add('oc-fantasma'); fant.style.width = r.width + 'px'; document.body.appendChild(fant);
+      arr.classList.add('arrastando');
+      try { arr.setPointerCapture && e.pointerId !== undefined && arr.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    e.preventDefault();
+    fant.style.left = (e.clientX - ox) + 'px'; fant.style.top = (e.clientY - oy) + 'px';
+    var l = coluna(e.clientX, e.clientY); limpa(); alvo = l;
+    if (l) {
+      l.closest('.oc-col').classList.add('alvo');
+      marca = document.createElement('div'); marca.className = 'oc-marca';
+      var antes = null; l.querySelectorAll('.oc-card:not(.arrastando)').forEach(function (k) { var r = k.getBoundingClientRect(); if (!antes && e.clientY < r.top + r.height / 2) antes = k; });
+      l.insertBefore(marca, antes);
+    }
+    // rola o quadro na horizontal perto das bordas
+    var kr = kb.getBoundingClientRect();
+    if (e.clientX > kr.right - 60) kb.scrollLeft += 18; else if (e.clientX < kr.left + 60) kb.scrollLeft -= 18;
+  }, { passive: false });
+  function fim(e) {
+    if (!arr) return;
+    var c = arr; arr = null;
+    if (!ativo) return;
+    bloquearClique = true; setTimeout(function () { bloquearClique = false; }, 300);
+    document.body.classList.remove('oc-arrastando'); if (fant) fant.remove(); fant = null;
+    var l = alvo, ref = marca; alvo = null;
+    c.classList.remove('arrastando');
+    if (!l || e.type === 'pointercancel') { limpa(); return; }
+    var dest = l.dataset.drop, origem = c.dataset.status, lOrig = c.parentNode, prox = c.nextSibling;
+    l.insertBefore(c, ref); limpa();
+    if (dest === origem) return;
+    c.dataset.status = dest; atualizaContagens();
+    var fd = new FormData(); fd.append('_csrf', csrf); fd.append('status', dest);
+    fetch(c.dataset.acao, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'x-requested-with': 'fetch' } })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (!j.ok) { alert(j.msg || 'Não foi possível mover.'); lOrig.insertBefore(c, prox); c.dataset.status = origem; atualizaContagens(); } })
+      .catch(function () { location.reload(); });
+  }
+  function atualizaContagens() { kb.querySelectorAll('.oc-col').forEach(function (col) { var s = col.querySelector('.oc-col-h small'); if (s) s.textContent = col.querySelectorAll('.oc-card').length; }); }
+  window.addEventListener('pointerup', fim); window.addEventListener('pointercancel', fim);
+  kb.addEventListener('click', function (e) { if (bloquearClique && e.target.closest('.oc-card')) { e.preventDefault(); e.stopPropagation(); } }, true);
 })();
 </script>
 {% endblock %}
