@@ -84,8 +84,21 @@
       <span class="val {{ 'pos' if rec else 'risco' }}" style="color:{{ 'var(--fin-pos)' if rec else 'var(--fin-neg)' }}">{{ moeda(x.valor, true) }}</span>
     </div>
     <div class="cz-meio"><span class="{{ 'ok' if s and s.nota >= 80 }}">{{ '=' if s else '?' }}</span></div>
-    <div class="cz-sis {{ ('alta' if s.nota >= 80 else 'tem') if s }}">
-      {% if s %}
+    <div class="cz-sis {{ 'alta' if x.transf_mov else (('alta' if s.nota >= 80 else 'tem') if s) }}">
+      {% if x.transf_mov %}
+        <div class="cz-sug-topo">
+          <div><b>{{ fic('transferir') }} {{ 'Transferência para' if x.valor < 0 else 'Transferência de' }} {{ x.transf_mov.outra }}</b><br><small>{{ x.transf_mov.descricao }} · já registrada no extrato do sistema</small></div>
+          <span class="cz-pct a">100%</span>
+        </div>
+        <div class="cz-det"><span>{{ data_br(x.transf_mov.data) }}</span><span class="ok">valor igual</span></div>
+        <div class="cz-acoes">
+          <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='vincular_mov') }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="movimento_id" value="{{ x.transf_mov.id }}">
+            <button class="btn-pill fin-btn mini" type="submit">{{ fic('check') }} Conciliar transferência</button></form>
+          <button class="fin-link" type="button" data-abre="busca-{{ x.id }}">{{ fic('search') }} Buscar lançamento</button>
+          <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='ignorar') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link" type="submit">Ignorar</button></form>
+        </div>
+      {% elif s %}
         <div class="cz-sug-topo">
           <div><b>{{ s.descricao }}</b><br><small>{{ s.pessoa_nome or 'Sem ' ~ ('cliente' if rec else 'fornecedor') }}{% if s.categoria_nome %} · {{ s.categoria_nome }}{% endif %}</small></div>
           <span class="cz-pct {{ 'a' if s.nota >= 80 else ('m' if s.nota >= 55 else 'b') }}" title="Certeza: valor, data e nome">{{ s.nota }}%</span>
@@ -102,6 +115,7 @@
             <button class="btn-pill fin-btn mini" type="submit">{{ fic('check') }} Conciliar</button></form>
           <button class="fin-link" type="button" data-abre="busca-{{ x.id }}">{{ fic('search') }} Buscar outro</button>
           <button class="fin-link" type="button" data-abre="novo-{{ x.id }}">{{ fic('add') }} Novo lançamento</button>
+          <button class="fin-link" type="button" data-abre="transf-{{ x.id }}">{{ fic('transferir') }} Transferência</button>
           <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='ignorar') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link" type="submit">Ignorar</button></form>
         </div>
         {% if x.sugestoes|length > 1 %}
@@ -114,10 +128,20 @@
         </div>
         {% endif %}
       {% else %}
+        {% if x.transf_par %}
+        <div class="cz-sug-topo"><div><b>{{ fic('transferir') }} Parece uma transferência {{ 'para' if x.valor < 0 else 'de' }} {{ x.transf_par.conta_nome }}</b><br><small>O extrato de {{ x.transf_par.conta_nome }} tem {{ moeda(x.transf_par.valor, true) }} em {{ data_br(x.transf_par.data) }} ainda não conciliado.</small></div><span class="cz-pct a">95%</span></div>
+        <div class="cz-acoes">
+          <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='transferir') }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="outra_conta_id" value="{{ x.transf_par.conta_id }}">
+            <button class="btn-pill fin-btn mini" type="submit">{{ fic('check') }} Registrar transferência e conciliar as duas</button></form>
+        </div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:.3rem 0">
+        {% endif %}
         <div class="cz-sug-topo"><div><b>Nenhum lançamento encontrado</b><br><small>Não há {{ 'conta a receber' if rec else 'conta a pagar' }} em aberto parecida com esta linha.</small></div></div>
         <div class="cz-acoes">
           <button class="btn-pill outline fin-btn mini" type="button" data-abre="busca-{{ x.id }}">{{ fic('search') }} Buscar lançamento</button>
           <button class="btn-pill fin-btn mini" type="button" data-abre="novo-{{ x.id }}">{{ fic('add') }} Novo lançamento</button>
+          <button class="btn-pill outline fin-btn mini" type="button" data-abre="transf-{{ x.id }}">{{ fic('transferir') }} Transferência entre contas</button>
           <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='ignorar') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="fin-link" type="submit">Ignorar</button></form>
         </div>
       {% endif %}
@@ -147,6 +171,20 @@
           <span class="fin-sub" style="margin:0">Depois de criado, ele aparece ao lado como sugestão para você conciliar.</span></div>
       </form>
     </div>
+    <div class="cz-painel" id="transf-{{ x.id }}" hidden>
+      <h4>{{ 'Transferência para outra conta' if x.valor < 0 else 'Transferência vinda de outra conta' }} · {{ moeda(x.valor|abs) }} em {{ data_br(x.data) }}</h4>
+      <form method="post" action="{{ url_for('financas.conciliacao_acao', slug=empresa.slug, xid=x.id, acao='transferir') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="cz-novo">
+          <div><label class="lbl">{{ 'Conta de destino' if x.valor < 0 else 'Conta de origem' }}</label>
+            <select class="inp" name="outra_conta_id" required><option value="">Escolha…</option>
+              {% for c in contas_todas if c.id != conta.id %}<option value="{{ c.id }}" {{ 'selected' if x.transf_par and x.transf_par.conta_id == c.id }}>{{ c.nome }}</option>{% endfor %}</select></div>
+          <div style="grid-column:span 2"><label class="lbl">Descrição (opcional)</label><input class="inp" name="descricao" maxlength="200" placeholder="Ex.: Aplicação no CDB"></div>
+        </div>
+        <div class="cz-acoes" style="margin-top:.7rem"><button class="btn-pill fin-btn mini" type="submit">{{ fic('check') }} Registrar transferência e conciliar</button>
+          <span class="fin-sub" style="margin:0">Entra nas duas contas. Se o extrato da outra conta já tiver a linha oposta, ela é conciliada junto.</span></div>
+      </form>
+    </div>
   </article>
   {% else %}
     <p class="fin-vazio">Nada pendente. Importe um extrato OFX para começar.</p>
@@ -157,8 +195,8 @@
   document.querySelectorAll('[data-abre]').forEach(function (b) {
     b.addEventListener('click', function () {
       var p = document.getElementById(b.dataset.abre); if (!p) return;
-      var irmao = p.id.indexOf('busca-') === 0 ? 'novo-' + p.id.slice(6) : 'busca-' + p.id.slice(5);
-      var o = document.getElementById(irmao); if (o) o.hidden = true;
+      var id = p.id.split('-').pop();
+      ['busca-', 'novo-', 'transf-'].forEach(function (k) { var o = document.getElementById(k + id); if (o && o !== p) o.hidden = true; });
       p.hidden = !p.hidden;
       if (!p.hidden) { var q = p.querySelector('.cz-q'); if (q) { q.focus(); buscar(p); } }
     });
