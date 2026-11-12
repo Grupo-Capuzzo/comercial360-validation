@@ -50,6 +50,7 @@
         <span class="fin-conta-ic">{{ fic('banco') }}</span>
         <span class="txt"><b>{{ c.nome }}</b><small>{{ TIPOS_CONTA.get(c.tipo) }}{% if c.banco %} · {{ c.banco }}{% endif %}{% if c.agencia %} · Ag. {{ c.agencia }}{% endif %}{% if c.numero %} · C/C {{ c.numero }}{% endif %}{% if not c.ativa %} · inativa{% endif %}{% if not c.considerada %} · fora do sistema{% endif %}</small></span>
         <b class="{{ 'neg' if c.saldo < 0 }}">{{ moeda(c.saldo) }}</b>
+        <span class="fin-link" style="margin-left:.6rem;white-space:nowrap">{{ fic('edit') }} Editar</span>
       </a>
     {% else %}
       <p class="fin-vazio">Nenhuma conta ainda. Cadastre ao lado.</p>
@@ -75,8 +76,18 @@
       </div>
       {% if editar %}<label class="fin-check"><input type="hidden" name="ativa" value="0"><input type="checkbox" name="ativa" value="1" {{ 'checked' if c.ativa }}> Conta ativa</label>
       <label class="fin-check"><input type="hidden" name="considerada" value="0"><input type="checkbox" name="considerada" value="1" {{ 'checked' if c.considerada }}> Considerar no sistema</label>{% endif %}
-      <button class="btn-pill fin-btn" type="submit">Salvar</button>
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+        <button class="btn-pill fin-btn" type="submit">{{ 'Salvar alterações' if editar else 'Cadastrar conta' }}</button>
+        {% if editar %}<a class="btn-pill outline fin-btn" href="{{ url_for('financas.cad_contas', slug=empresa.slug) }}">Cancelar</a>{% endif %}
+      </div>
     </form>
+    {% if editar %}
+    <form method="post" style="margin-top:.8rem" onsubmit="return confirm('Excluir a conta {{ c.nome }}? Isso não pode ser desfeito.')">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ c.id }}">
+      <button class="fin-link fin-link-risco" name="acao" value="excluir" type="submit">{{ fic('delete') }} Excluir conta</button>
+      <p class="fin-sub" style="margin:.3rem 0 0">Só dá para excluir conta sem lançamentos. Conta com movimento: desmarque "Conta ativa".</p>
+    </form>
+    {% endif %}
   </section>
 </div>
 {% endblock %}

@@ -102,5 +102,27 @@
   document.addEventListener('touchstart', function (e) { var a = e.target.closest && e.target.closest('a'); if (a) pre(a); }, { passive: true });
 })();
 </script>
+<script>
+/* Evita salvar duas vezes: depois do primeiro clique, o formulário fica travado até a página responder. */
+(function () {
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (!f || f.target === '_blank' || (f.method || '').toLowerCase() === 'get' || f.hasAttribute('data-livre')) return;
+    if (f.dataset.enviando) { e.preventDefault(); return; }
+    setTimeout(function () { if (e.defaultPrevented) return;
+      f.dataset.enviando = '1';
+      f.querySelectorAll('button[type=submit], button:not([type]), input[type=submit]').forEach(function (b) {
+        b.disabled = true; b.style.opacity = '.6'; b.style.cursor = 'wait';
+      });
+    }, 0);
+  });
+  window.addEventListener('pageshow', function () {
+    document.querySelectorAll('form[data-enviando]').forEach(function (f) {
+      delete f.dataset.enviando;
+      f.querySelectorAll('button, input[type=submit]').forEach(function (b) { b.disabled = false; b.style.opacity = ''; b.style.cursor = ''; });
+    });
+  });
+})();
+</script>
 </body>
 </html>
