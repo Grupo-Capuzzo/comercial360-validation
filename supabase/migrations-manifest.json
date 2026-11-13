@@ -1,0 +1,49 @@
+{
+  "cli_version": "2.119.0",
+  "source_commit": "1233daa1820525f788f2d61252914b92a2191b1f",
+  "conversion": "Only outer BEGIN/COMMIT removed; original SQL body and review sources preserved.",
+  "migrations": [
+    {
+      "order": 1,
+      "file": "migrations/20261008142948_financeiro_origem.sql",
+      "sha256": "8c92cdd4672071e851b2ed0bde9c4a8c88c96686f366d7c9fa201d454f0e15d3",
+      "source": "tools/finance-migration/migrations/financeiro_origem.review.sql",
+      "source_sha256": "984003365e40226f70b87edb189c5581886018fec91564157ceb48c256701410"
+    },
+    {
+      "order": 2,
+      "file": "migrations/20261008142950_portal_acesso.sql",
+      "sha256": "77e69592e7c90d82b77b4fca99e32c0621e0fff824d92d075203151909b381f5",
+      "source": "tools/finance-migration/migrations/portal_acesso.review.sql",
+      "source_sha256": "e71c2c0a8e26ec336ba680fd9d0e924694567ca5a91284e0d8b777d76deb710a"
+    },
+    {
+      "order": 3,
+      "file": "migrations/20261008142952_financeiro.sql",
+      "sha256": "ff3f50176f9193a32a153c333e5848a13b09415d934acdae8fb3677b1233ac4a",
+      "source": "tools/finance-migration/migrations/financeiro_operacional.review.sql",
+      "source_sha256": "2143236a02be05c03ec31292c7fc889b3c259ac3ae1712e9514c074f9c16969a"
+    },
+    {
+      "order": 4,
+      "file": "migrations/20261008142954_portal_consulta.sql",
+      "sha256": "b35b0f66a737ee6e574dea4bc043647969a76c5a4ce256d97e9d1e318890964c",
+      "source": "tools/finance-migration/migrations/portal_consulta.review.sql",
+      "source_sha256": "bac18dcf480abee56bb907fdc952a5886d2e58e901749e32db72b3a6b86f2cc9"
+    },
+    {
+      "order": 5,
+      "file": "migrations/20261008142957_control.sql",
+      "sha256": "8d904f5f543ede0b552ffefbd814a11317f16caaab6149aef8f14892eaa2abc8",
+      "source": "tools/finance-first-load/control.review.sql",
+      "source_sha256": "dd83a411a95b782ec3b738c87e58bf6324de55e0b78b0cf5ceff5a63c322a1dd"
+    },
+    {
+      "order": 6,
+      "file": "migrations/20261008142959_api_exposure.sql",
+      "sha256": "b744aa83a390860abf87ebfc2f4fb0fd7a1b67b4a53145beb9022333934e8b5f",
+      "source": "tools/finance-first-load/api_exposure.review.sql",
+      "source_sha256": "4ff9e4bc2a130a6e6e84a43efc7f60a7f40ad4a3d2bb96f7fe73a7211f4b8001"
+    }
+  ]
+}
