@@ -1,7 +1,7 @@
 {% extends "portal/base.html" %}
 {% block title %}{{ empresa.nome }} · Portal Grupo Capuzzo{% endblock %}
 {% block brand %}
-  <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt=""></span>
+  <span class="logo-circle xs"><img src="{{ logo_url(empresa) }}" alt=""></span>
   <span class="tb-name"><b>{{ empresa.nome }}</b><small>Grupo Capuzzo</small></span>
 {% endblock %}
 {% block tb_links %}
@@ -12,7 +12,7 @@
 {% endblock %}
 {% block content %}
 <section class="emp-head">
-  <span class="logo-square"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt="{{ empresa.nome }}"></span>
+  <span class="logo-square"><img src="{{ logo_url(empresa) }}" alt="{{ empresa.nome }}"></span>
   <div>
     <div class="eyebrow-line">Módulos</div>
     <h1>{{ empresa.nome }}</h1>

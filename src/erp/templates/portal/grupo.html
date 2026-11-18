@@ -74,7 +74,7 @@
         </div>
       </header>
       <div class="card-body">
-        <span class="logo-circle"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt="{{ e.nome }}"></span>
+        <span class="logo-circle"><img src="{{ logo_url(e) }}" alt="{{ e.nome }}"></span>
         <div><h3>{{ e.nome }}</h3>{% if e.descricao %}<p>{{ e.descricao }}</p>{% endif %}</div>
       </div>
       <footer class="card-foot">
@@ -110,7 +110,7 @@
 <script>
   const DADOS = {
     {% for e in empresas %}"{{ e.slug }}": {nome: {{ e.nome|tojson }}, status: "{{ e.status }}", obs: {{ e.obs|tojson }},
-      logo: "{{ url_for('static', filename='portal/logos/' ~ e.logo) }}",
+      logo: "{{ logo_url(e) }}",
       url: "{{ url_for('portal_admin_empresa', slug=e.slug) }}"},{% endfor %}
   };
   function abrirConfig(slug) {

@@ -21,7 +21,7 @@
   <a class="tr-emp-card" href="{{ url_for('portal_treinamentos_empresa', slug=e.slug) }}" data-nome="{{ e.nome|lower }}"
      style="--e1: {{ e.tema_full.primary }}; --e2: {{ e.tema_full.secondary }}; --ea: {{ e.tema_full.accent }}">
     <div class="tr-emp-topo">
-      <span class="logo-circle sm"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt=""></span>
+      <span class="logo-circle sm"><img src="{{ logo_url(e) }}" alt=""></span>
       <div><b>{{ e.nome }}</b><small>{{ e.total }} conteúdo{{ 's' if e.total != 1 }}</small></div>
     </div>
     <ol class="tr-emp-etapas">

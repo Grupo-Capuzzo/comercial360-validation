@@ -1,108 +1,186 @@
 {% extends "portal/base.html" %}
 {% block title %}Administração · Portal Grupo Capuzzo{% endblock %}
-{% block tb_links %}
-  <a class="tb-btn" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span class="lbl">Empresas</span></a>
-{% endblock %}
+{% block head %}{% include "portal/_admin_estilo.html" %}{% endblock %}
 {% block content %}
-<section class="page-title"><div class="eyebrow-line">Grupo Capuzzo</div><h1>Administração</h1></section>
+<section class="page-title adm-topo">
+  <div><div class="eyebrow-line">Grupo Capuzzo</div><h1>Administração</h1></div>
+  {% if aba != 'empresas' %}<a class="btn-pill" href="{{ url_for('portal_admin_novo') }}">{{ ic('add') }} Novo usuário</a>
+  {% else %}<button class="btn-pill" type="button" onclick="abrirEmpresa()">{{ ic('add') }} Nova empresa</button>{% endif %}
+</section>
 <nav class="tabs">
-  <a class="{{ 'on' if aba != 'empresas' }}" href="{{ url_for('portal_admin') }}">Usuários</a>
-  <a class="{{ 'on' if aba == 'empresas' }}" href="{{ url_for('portal_admin', aba='empresas') }}">Empresas</a>
+  <a class="{{ 'on' if aba != 'empresas' }}" href="{{ url_for('portal_admin') }}">Usuários <small>{{ usuarios|length }}</small></a>
+  <a class="{{ 'on' if aba == 'empresas' }}" href="{{ url_for('portal_admin', aba='empresas') }}">Empresas <small>{{ empresas|length }}</small></a>
 </nav>
 
 {% if aba != 'empresas' %}
-<div class="box">
-  <table class="tbl">
-    <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Gestor</th><th>Setores</th><th>Situação</th><th>Empresas</th><th>Último acesso</th><th></th></tr></thead>
-    <tbody>
-    {% for u in usuarios %}
-      <tr class="{{ 'sel' if editar and editar.id == u.id }}">
-        <td><b>{{ u.nome }}</b></td><td>{{ u.email }}</td>
-        <td>{{ 'Administrador' if u.perfil == 'admin' else 'Usuário' }}{% if u.equipe_n %} <small>· equipe de {{ u.equipe_n }}</small>{% endif %}</td>
-        <td>{{ u.gestor_nome or '—' }}</td>
-        <td>{{ u.setores|join(', ') if u.setores else 'Todos' }}</td>
-        <td>{% if u.ativo %}<span class="tag tag-on">Ativo</span>{% else %}<span class="tag tag-off">Bloqueado</span>{% endif %}</td>
-        <td>{% if u.perfil == 'admin' and not u.empresas %}Todas{% else %}{% for e in u.emp_lista %}{{ e.nome }}{% if u.modulos.get(e.slug) %} <small>({{ e.modulos|selectattr('id', 'in', u.modulos.get(e.slug))|map(attribute='nome')|join(', ') }})</small>{% endif %}{{ ', ' if not loop.last }}{% else %}—{% endfor %}{% endif %}</td>
-        <td>{{ (u.ultimo_login or '—')|replace('T', ' ') }}</td>
-        <td><a class="lnk" href="{{ url_for('portal_admin', u=u.id) }}">Editar</a></td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-<div class="cols">
-  {% for modo in ['novo', 'editar'] %}
-  {% set u = editar if modo == 'editar' else none %}
-  {% if modo == 'novo' or u %}
-  <form class="box" method="post" action="{{ url_for('portal_admin_usuario') }}">
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    {% if u %}<input type="hidden" name="id" value="{{ u.id }}">{% endif %}
-    <div class="box-title">{{ 'Editar ' ~ u.nome if u else 'Novo usuário' }}</div>
-    <label class="lbl">Nome</label><input class="inp" name="nome" value="{{ u.nome if u else '' }}" required>
-    <label class="lbl">E-mail</label>
-    <input class="inp" name="email" type="email" value="{{ u.email if u else '' }}" {% if u %}disabled{% else %}required{% endif %}>
-    {% set eu = u and u.id == portal_user.id %}
-    <label class="lbl">Perfil</label>
-    <div class="radios">
-      <label><input type="radio" name="perfil" value="usuario" {% if not u or u.perfil != 'admin' %}checked{% endif %} {% if eu %}disabled{% endif %}> Usuário</label>
-      <label><input type="radio" name="perfil" value="admin" {% if u and u.perfil == 'admin' %}checked{% endif %} {% if eu %}disabled{% endif %}> Administrador</label>
-    </div>
-    <label class="lbl">Gestor responsável</label>
-    <select class="inp" name="gestor_id">
-      <option value="">— Nenhum —</option>
-      {% for x in gestores if not u or x.id != u.id %}<option value="{{ x.id }}" {% if u and u.gestor_id == x.id %}selected{% endif %}>{{ x.nome }}</option>{% endfor %}
-    </select>
-    <p class="hint">O gestor vê no Início e em Demandas as demandas deste usuário. Só administradores podem ser gestores.</p>
-    <label class="lbl">Setores <small>(acessa e recebe os chamados desses setores)</small></label>
-    <div class="radios ger-setores">
-      {% for st in SETORES %}<label><input type="checkbox" name="setores" value="{{ st }}" {% if u and st in u.setores %}checked{% endif %}> {{ st }}</label>{% endfor %}
-    </div>
-    <p class="hint">Nenhum marcado = todos os setores. Administradores sempre veem todos os chamados.</p>
-    <label class="lbl">Empresas liberadas</label>
-    <p class="hint" style="margin-top:-.2rem">Para administrador: as empresas em que ele trabalha como gestor (nenhuma marcada = todas).</p>
-    <div class="checks">
-      {% for e in empresas %}
-        <label><input type="checkbox" name="empresas" value="{{ e.slug }}" {% if u and e.slug in u.empresas %}checked{% endif %}>
-          <span class="logo-circle xxs"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt=""></span>{{ e.nome }}</label>
-        {% if e.modulos %}<div class="hint" style="margin:-.15rem 0 .45rem 1.7rem">Módulos:
-          {% for m in e.modulos %}<label style="display:inline-flex;align-items:center;gap:.25rem;margin-right:.7rem;font-weight:400"><input type="checkbox" name="mod_{{ e.slug }}" value="{{ m.id }}" {% if u and m.id in (u.modulos.get(e.slug) or []) %}checked{% endif %}>{{ m.nome }}</label>{% endfor %}
-          <span style="opacity:.75">(nenhum marcado = todos)</span></div>{% endif %}
-      {% endfor %}
-    </div>
-    <label class="check-line"><input type="checkbox" name="crm" value="1" {% if u and u.crm %}checked{% endif %} {% if u and u.perfil == 'admin' %}disabled{% endif %}> Acesso ao <b>CRM Geral</b> (Comercial)</label>
-    <p class="hint">Administradores sempre acessam o CRM Geral.</p>
-    <label class="lbl">{{ 'Redefinir senha (opcional)' if u else 'Senha provisória' }}</label>
-    <input class="inp" name="senha" type="password" {% if not u %}required{% endif %} minlength="8" autocomplete="new-password">
-    <p class="hint">Mínimo de 8 caracteres, com letras e números.</p>
-    {% if u %}
-    <label class="check-line"><input type="checkbox" name="ativo" value="1" {% if u.ativo %}checked{% endif %} {% if eu %}disabled{% endif %}> Acesso ativo</label>
-    {% if eu %}<p class="hint">Você não pode remover o seu próprio acesso de administrador.</p>{% endif %}
-    {% else %}<input type="hidden" name="ativo" value="1">{% endif %}
-    <div class="row-btns">
-      {% if u %}<a class="btn-pill outline" href="{{ url_for('portal_admin') }}">Fechar</a>{% endif %}
-      <button class="btn-pill" type="submit">{{ 'Salvar alterações' if u else 'Criar usuário' }}</button>
-    </div>
-  </form>
-  {% endif %}
+<div class="box adm-lista">
+  <div class="adm-lista-h">
+    <label class="search">{{ ic('search') }}<input id="adm-busca" type="search" placeholder="Buscar por nome ou e-mail…" autocomplete="off"></label>
+    <span class="hint">Clique num usuário para ver e alterar os acessos.</span>
+  </div>
+  {% for u in usuarios %}
+  <a class="adm-u {{ 'off' if not u.ativo }}" href="{{ url_for('portal_admin_editar', uid=u.id) }}" data-busca="{{ (u.nome ~ ' ' ~ u.email)|lower }}">
+    <span class="avatar">{{ u.nome[:1]|upper }}</span>
+    <span class="adm-u-n"><b>{{ u.nome }}</b><small>{{ u.email }}</small></span>
+    <span class="adm-u-p">
+      {% if u.perfil == 'admin' %}<span class="tag tag-adm">Administrador</span>{% elif u.perfil == 'juridico' %}<span class="tag">Somente Jurídico</span>{% else %}<span class="tag">Usuário</span>{% endif %}
+      {% if not u.ativo %}<span class="tag tag-off">Bloqueado</span>{% endif %}
+    </span>
+    <span class="adm-u-e">
+      {% if u.perfil == 'admin' and not u.empresas %}<span class="adm-todas">Todas as empresas</span>
+      {% else %}{% for e in u.emp_lista %}<span class="logo-circle xxs" title="{{ e.nome }}"><img src="{{ logo_url(e) }}" alt="{{ e.nome }}"></span>{% else %}<span class="adm-nenhuma">Nenhuma empresa</span>{% endfor %}{% endif %}
+    </span>
+    <span class="adm-u-g">
+      {% if u.crm %}<span class="adm-chip">CRM Geral</span>{% endif %}
+      {% if u.juridico %}<span class="adm-chip">Jurídico Geral</span>{% endif %}
+    </span>
+    <span class="adm-u-d"><small>Último acesso</small>{{ (u.ultimo_login or '—')[:16]|replace('T', ' ') }}</span>
+    {{ ic('chevron_right') }}
+  </a>
   {% endfor %}
+  <div class="vazio" id="adm-semres" hidden>Nenhum usuário encontrado.</div>
 </div>
+<script>
+(function () {
+  var b = document.getElementById('adm-busca'); if (!b) return;
+  b.addEventListener('input', function () {
+    var t = b.value.trim().toLowerCase(), n = 0;
+    document.querySelectorAll('.adm-u').forEach(function (a) { var ok = !t || a.dataset.busca.indexOf(t) >= 0; a.hidden = !ok; if (ok) n++; });
+    document.getElementById('adm-semres').hidden = n > 0;
+  });
+})();
+</script>
 
 {% else %}
+<p class="hint" style="margin:-.4rem 0 1rem">Toda empresa nova já vem com os módulos padrão: <b>Finanças</b> (contas a pagar e receber, extrato, conciliação, fluxo de caixa e DRE), <b>Comercial</b> e <b>Jurídico</b>. Depois é só liberar o acesso aos usuários.</p>
 <div class="emp-admin">
   {% for e in empresas %}
-  <form class="box emp-row" method="post" action="{{ url_for('portal_admin_empresa', slug=e.slug) }}">
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    <input type="hidden" name="voltar" value="{{ url_for('portal_admin', aba='empresas') }}">
-    <span class="logo-circle"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt=""></span>
-    <div class="emp-row-name"><b>{{ e.nome }}</b>
-      <span class="swatches">{% for k in ['primary','secondary','accent','bg'] %}<i style="background:{{ e.tema_full[k] }}"></i>{% endfor %}</span></div>
-    <select class="inp" name="status">{% for k, v in STATUS.items() %}<option value="{{ k }}" {% if e.status == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-    <input class="inp" name="obs" value="{{ e.obs }}" placeholder="Observação (ex.: Pendência financeira)" maxlength="120">
-    <button class="btn-pill" type="submit">Salvar</button>
-  </form>
+  <div class="box emp-card" id="emp-{{ e.slug }}">
+    <form class="emp-row" method="post" action="{{ url_for('portal_admin_empresa', slug=e.slug) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="voltar" value="{{ url_for('portal_admin', aba='empresas') }}">
+      <span class="logo-circle"><img src="{{ logo_url(e) }}" alt=""></span>
+      <div class="emp-row-name"><b>{{ e.nome }}</b>
+        <span class="emp-mods">{% for m in e.modulos %}<span class="adm-chip">{{ m.nome }}</span>{% endfor %}<span class="adm-chip">Jurídico</span></span>
+        <span class="swatches">{% for k in ['primary','secondary','accent','bg'] %}<i style="background:{{ e.tema_full[k] }}"></i>{% endfor %}</span></div>
+      <select class="inp" name="status">{% for k, v in STATUS.items() %}<option value="{{ k }}" {% if e.status == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      <input class="inp" name="obs" value="{{ e.obs }}" placeholder="Observação (ex.: Pendência financeira)" maxlength="120">
+      <div class="emp-btns">
+        {% if e.cadastrada %}<button class="btn-pill outline" type="button" onclick='abrirEmpresa({{ {"slug": e.slug, "nome": e.nome, "descricao": e.descricao, "tema": e.tema_full, "modulos": e.mod_ids, "logo": logo_url(e)}|tojson }})'>Editar</button>{% endif %}
+        <button class="btn-pill" type="submit">Salvar</button>
+      </div>
+    </form>
+  </div>
   {% endfor %}
-  <p class="hint">Cores, logos e módulos de cada empresa ficam no arquivo <code>app/portal_grupo.py</code>.</p>
 </div>
+
+<dialog class="adm-dlg" id="dlg-empresa">
+  <form method="post" enctype="multipart/form-data" id="f-empresa" action="{{ url_for('portal_admin_empresa_nova') }}" data-nova="{{ url_for('portal_admin_empresa_nova') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="adm-dlg-h"><b id="emp-dlg-titulo">Nova empresa</b><button type="button" class="adm-x" onclick="this.closest('dialog').close()" aria-label="Fechar">✕</button></div>
+    <div class="adm-dlg-c">
+      <div class="emp-logo-area">
+        <label class="emp-logo-drop" id="emp-logo-drop">
+          <img id="emp-logo-prev" alt="" hidden><span id="emp-logo-txt">{{ ic('add_photo_alternate') }}<b>Logo da empresa</b><small>PNG, JPG ou WEBP · até 3 MB</small></span>
+          <input type="file" name="logo" id="emp-logo" accept="image/png,image/jpeg,image/webp" hidden>
+        </label>
+        <small class="hint">As cores abaixo são sugeridas a partir da logo. Ajuste se precisar.</small>
+      </div>
+      <div>
+        <label class="lbl">Nome *</label><input class="inp" name="nome" id="emp-nome" required maxlength="80" placeholder="Ex.: Capuzzo Imóveis">
+        <label class="lbl">Descrição</label><input class="inp" name="descricao" id="emp-descricao" maxlength="120" placeholder="Uma linha sobre a empresa (opcional)">
+        <div class="lbl">Cores</div>
+        <div class="emp-cores">
+          {% for k, n in [('primary', 'Principal'), ('secondary', 'Secundária'), ('accent', 'Destaque'), ('bg', 'Fundo')] %}
+          <label class="emp-cor"><input type="color" name="cor_{{ k }}" id="cor-{{ k }}" value="{{ {'primary': '#1c1a16', 'secondary': '#3a3428', 'accent': '#c9a45c', 'bg': '#f4f1ea'}[k] }}"><span>{{ n }}</span></label>
+          {% endfor %}
+          {% for k in ['accent_dark', 'on_primary', 'on_accent', 'text', 'muted'] %}<input type="hidden" name="cor_{{ k }}" id="cor-{{ k }}">{% endfor %}
+        </div>
+        <label class="lbl">Fonte dos títulos</label>
+        <select class="inp" name="fonte" id="emp-fonte">{% for fn in FONTES %}<option>{{ fn }}</option>{% endfor %}</select>
+        <div class="lbl">Módulos</div>
+        <div class="emp-mod-esc">
+          {% for m in MODULOS_PADRAO_LISTA %}<label><input type="checkbox" name="modulos" value="{{ m.id }}" {{ 'checked' if m.id in ['financas', 'comercial'] }}><span>{{ ic(m.icone) }} {{ m.nome }}</span></label>{% endfor %}
+          <label class="fixo"><input type="checkbox" checked disabled><span>{{ ic('account_balance') }} Jurídico</span></label>
+        </div>
+        <p class="hint">Finanças no modelo padrão (o mesmo da World Gym), sem as áreas específicas de cada empresa.</p>
+      </div>
+      <div class="emp-prev" id="emp-prev">
+        <div class="emp-prev-bar"><span class="logo-circle xs"><img id="emp-prev-logo" alt=""></span><b id="emp-prev-nome">Nova empresa</b></div>
+        <div class="emp-prev-body"><span class="emp-prev-btn">Botão</span><span class="emp-prev-card">Cartão</span></div>
+      </div>
+    </div>
+    <div class="adm-dlg-f"><button class="btn-pill outline" type="button" onclick="this.closest('dialog').close()">Cancelar</button><button class="btn-pill" type="submit" id="emp-salvar">Criar empresa</button></div>
+  </form>
+</dialog>
+<script>
+(function () {
+  var dlg = document.getElementById('dlg-empresa'), f = document.getElementById('f-empresa');
+  var inp = document.getElementById('emp-logo'), prev = document.getElementById('emp-logo-prev'), txt = document.getElementById('emp-logo-txt');
+  function $(id) { return document.getElementById(id); }
+  function hex(r, g, b) { return '#' + [r, g, b].map(function (x) { return Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0'); }).join(''); }
+  function rgb(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+  function mix(a, b, p) { var x = rgb(a), y = rgb(b); return hex(x[0] + (y[0] - x[0]) * p, x[1] + (y[1] - x[1]) * p, x[2] + (y[2] - x[2]) * p); }
+  function lum(h) { var c = rgb(h).map(function (v) { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; }
+  function sat(r, g, b) { var mx = Math.max(r, g, b), mn = Math.min(r, g, b); return mx === 0 ? 0 : (mx - mn) / mx; }
+  // Cores que não são escolhidas na tela saem das principais (texto legível sobre cada uma)
+  function derivadas() {
+    var p = $('cor-primary').value, a = $('cor-accent').value, bg = $('cor-bg').value;
+    $('cor-accent_dark').value = mix(a, '#000000', .25);
+    $('cor-on_primary').value = lum(p) > .45 ? '#141414' : mix('#ffffff', a, .08);
+    $('cor-on_accent').value = lum(a) > .45 ? '#141414' : '#ffffff';
+    $('cor-text').value = lum(p) < .2 ? mix(p, '#000000', .2) : '#1a1814';
+    $('cor-muted').value = mix(lum(p) < .2 ? p : '#1a1814', bg, .45);
+    var pv = $('emp-prev');
+    pv.style.setProperty('--p', p); pv.style.setProperty('--s', $('cor-secondary').value); pv.style.setProperty('--a', a); pv.style.setProperty('--b', bg);
+    pv.style.setProperty('--op', $('cor-on_primary').value); pv.style.setProperty('--oa', $('cor-on_accent').value);
+    pv.style.fontFamily = "'" + $('emp-fonte').value + "', sans-serif";
+    $('emp-prev-nome').textContent = $('emp-nome').value || 'Nova empresa';
+  }
+  // Sugere a paleta pela logo: cor escura mais presente = principal; a mais viva = destaque
+  function paleta(img) {
+    var c = document.createElement('canvas'), n = 64; c.width = n; c.height = n;
+    var x = c.getContext('2d'); x.drawImage(img, 0, 0, n, n);
+    var d = x.getImageData(0, 0, n, n).data, cont = {};
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 128) continue;
+      var k = [d[i] >> 4, d[i + 1] >> 4, d[i + 2] >> 4].join(',');
+      (cont[k] = cont[k] || { n: 0, r: 0, g: 0, b: 0 }); cont[k].n++; cont[k].r += d[i]; cont[k].g += d[i + 1]; cont[k].b += d[i + 2];
+    }
+    var cores = Object.keys(cont).map(function (k) { var o = cont[k]; return { n: o.n, h: hex(o.r / o.n, o.g / o.n, o.b / o.n), s: sat(o.r / o.n, o.g / o.n, o.b / o.n) }; }).sort(function (a, b) { return b.n - a.n; });
+    if (!cores.length) return;
+    var escuras = cores.filter(function (c) { return lum(c.h) < .12; }), vivas = cores.filter(function (c) { return c.s > .35 && lum(c.h) > .06 && lum(c.h) < .8; });
+    var acc = (vivas[0] || cores.find(function (c) { return lum(c.h) > .08 && lum(c.h) < .85; }) || cores[0]).h;
+    var pri = escuras.length ? escuras[0].h : mix(acc, '#000000', .72);
+    if (pri === acc) pri = mix(acc, '#000000', .72);
+    $('cor-primary').value = pri; $('cor-accent').value = acc;
+    $('cor-secondary').value = mix(pri, acc, .3); $('cor-bg').value = mix(acc, '#ffffff', .93);
+    derivadas();
+  }
+  inp.addEventListener('change', function () {
+    var fl = inp.files[0]; if (!fl) return;
+    var url = URL.createObjectURL(fl);
+    prev.src = url; prev.hidden = false; txt.hidden = true; $('emp-prev-logo').src = url;
+    var im = new Image(); im.onload = function () { try { paleta(im); } catch (e) {} }; im.src = url;
+  });
+  ['cor-primary', 'cor-secondary', 'cor-accent', 'cor-bg', 'emp-fonte', 'emp-nome'].forEach(function (id) { $(id).addEventListener('input', derivadas); });
+  window.abrirEmpresa = function (e) {
+    f.reset(); prev.hidden = true; txt.hidden = false; $('emp-prev-logo').removeAttribute('src');
+    if (e) {
+      f.action = '{{ url_for("portal_admin_empresa_editar", slug="__S__") }}'.replace('__S__', e.slug);
+      $('emp-dlg-titulo').textContent = 'Editar ' + e.nome; $('emp-salvar').textContent = 'Salvar alterações';
+      $('emp-nome').value = e.nome; $('emp-descricao').value = e.descricao || '';
+      ['primary', 'secondary', 'accent', 'bg'].forEach(function (k) { if (e.tema[k]) $('cor-' + k).value = e.tema[k]; });
+      $('emp-fonte').value = e.tema.font_head || 'Montserrat';
+      f.querySelectorAll('[name=modulos]').forEach(function (c) { c.checked = e.modulos.indexOf(c.value) >= 0; });
+      prev.src = e.logo; prev.hidden = false; txt.hidden = true; $('emp-prev-logo').src = e.logo;
+    } else {
+      f.action = f.dataset.nova; $('emp-dlg-titulo').textContent = 'Nova empresa'; $('emp-salvar').textContent = 'Criar empresa';
+    }
+    derivadas(); dlg.showModal();
+  };
+  if (location.hash === '#nova') abrirEmpresa();
+})();
+</script>
 {% endif %}
 {% endblock %}

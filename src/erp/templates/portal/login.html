@@ -16,7 +16,7 @@
         com a identidade de cada marca.</p>
       <div class="cover-brands">
         {% for e in marcas %}
-          <span class="logo-circle sm"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt="{{ e.nome }}"></span>
+          <span class="logo-circle sm"><img src="{{ logo_url(e) }}" alt="{{ e.nome }}"></span>
         {% endfor %}
         <span class="cb-txt">{{ marcas|length }} empresas conectadas</span>
       </div>

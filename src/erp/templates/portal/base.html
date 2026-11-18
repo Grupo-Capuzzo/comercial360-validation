@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='portal/portal.css') }}?v=2">
   <link rel="stylesheet" href="{{ url_for('static', filename='portal/tema.css') }}?v=1">
   <script>try { if (localStorage.getItem('tema') === 'escuro') document.documentElement.setAttribute('data-tema', 'escuro'); } catch (e) {}</script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='portal/inicio.css') }}?v=2">
+  <link rel="stylesheet" href="{{ url_for('static', filename='portal/inicio.css') }}?v=3">
   {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -30,6 +30,7 @@
       <img class="brand" src="{{ url_for('static', filename='portal/logos/grupo_word_light.png') }}" alt="Grupo Capuzzo">
     {% endblock %}</a>
     <nav class="tb-nav">
+      {% if request.endpoint != 'portal_inicio' %}{# No Início os atalhos já estão nos cartões grandes: a barra fica limpa #}
       {% block tb_links %}
         {% if not visao_juridica %}<a class="tb-btn {{ 'tb-on' if request.endpoint == 'portal_inicio' }}" href="{{ url_for('portal_inicio') }}">{{ ic('home') }}<span class="lbl">Início</span></a>{% endif %}
         <a class="tb-btn {{ 'tb-on' if request.endpoint == 'portal_grupo' }}" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span class="lbl">Empresas</span></a>
@@ -39,7 +40,8 @@
       {% endblock %}
       {% if portal_user.admin %}
         <a class="tb-btn" href="/erp/central/plano">{{ ic('checklist') }}<span class="lbl">Plano de ação</span></a>
-        <a class="tb-btn" href="{{ url_for('portal_admin') }}">{{ ic('admin_panel_settings') }}<span class="lbl">Administração</span></a>
+        <a class="tb-btn {{ 'tb-on' if request.endpoint and request.endpoint.startswith('portal_admin') }}" href="{{ url_for('portal_admin') }}">{{ ic('admin_panel_settings') }}<span class="lbl">Administração</span></a>
+      {% endif %}
       {% endif %}
       <button type="button" class="tb-btn tb-tema" id="tb-tema" title="Alternar tema claro / escuro" aria-label="Alternar tema claro / escuro">
         <svg class="ms lua" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21q-3.75 0-6.375-2.625T3 12q0-3.75 2.625-6.375T12 3q.35 0 .688.025t.662.075q-1.025.725-1.638 1.888T11.1 7.5q0 2.25 1.575 3.825T16.5 12.9q1.375 0 2.525-.613T20.9 10.65q.05.325.075.662T21 12q0 3.75-2.625 6.375T12 21"/></svg>

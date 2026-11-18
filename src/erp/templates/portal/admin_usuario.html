@@ -1,0 +1,139 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ u.nome if u else 'Novo usuário' }} · Administração{% endblock %}
+{% block head %}{% include "portal/_admin_estilo.html" %}{% endblock %}
+{% block content %}
+{% set eu = u and u.id == portal_user.id %}
+<a href="{{ url_for('portal_admin') }}" style="display:inline-flex;align-items:center;gap:.3rem;color:var(--muted);margin-top:1.6rem;font-size:.88rem">{{ ic('arrow_back') }} Usuários</a>
+<section class="page-title" style="margin-top:.6rem"><div class="eyebrow-line">Administração</div><h1>{{ u.nome if u else 'Novo usuário' }}</h1></section>
+
+<form method="post" action="{{ url_for('portal_admin_usuario') }}" id="f-usuario">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  {% if u %}<input type="hidden" name="id" value="{{ u.id }}">{% endif %}
+  <div class="adm-form">
+
+    <!-- 1. Dados de acesso -->
+    <section class="box adm-sec">
+      <div class="adm-sec-h">{{ ic('person') }}<span><b>1. Dados de acesso</b><small>Quem é a pessoa e com qual e-mail ela entra no portal.</small></span></div>
+      <label class="lbl">Nome</label><input class="inp" name="nome" value="{{ u.nome if u else '' }}" required maxlength="120">
+      <label class="lbl">E-mail</label>
+      <input class="inp" name="email" type="email" value="{{ u.email if u else '' }}" {% if u %}disabled title="O e-mail não pode ser trocado"{% else %}required{% endif %}>
+      <label class="lbl">{{ 'Nova senha (deixe em branco para manter)' if u else 'Senha provisória' }}</label>
+      <input class="inp" name="senha" type="password" {% if not u %}required{% endif %} minlength="8" autocomplete="new-password" placeholder="Mínimo 8 caracteres, com letras e números">
+      {% if u %}
+      <div class="adm-linha" style="margin-top:.6rem">
+        <span><b>Acesso ativo</b><small>{{ 'Você não pode bloquear o seu próprio acesso.' if eu else 'Desligue para bloquear a entrada sem apagar o usuário.' }}</small></span>
+        <label class="adm-sw"><input type="checkbox" name="ativo" value="1" {{ 'checked' if u.ativo }} {{ 'disabled' if eu }}><i></i></label>
+      </div>
+      {% else %}<input type="hidden" name="ativo" value="1">{% endif %}
+    </section>
+
+    <!-- 2. Tipo de usuário + acessos do Grupo -->
+    <section class="box adm-sec">
+      <div class="adm-sec-h">{{ ic('admin_panel_settings') }}<span><b>2. Tipo de usuário</b><small>O administrador vê tudo e cuida dos usuários. O usuário vê só o que for liberado.</small></span></div>
+      <div class="adm-perfis {{ 'tres' if u and u.perfil == 'juridico' }}">
+        <label class="adm-opc"><input type="radio" name="perfil" value="usuario" {{ 'checked' if not u or u.perfil == 'usuario' }} {{ 'disabled' if eu }}>{{ ic('person') }}<span><b>Usuário</b><small>Acessa as empresas e módulos marcados abaixo.</small></span></label>
+        <label class="adm-opc"><input type="radio" name="perfil" value="admin" {{ 'checked' if u and u.perfil == 'admin' }} {{ 'disabled' if eu }}>{{ ic('admin_panel_settings') }}<span><b>Administrador</b><small>Gestor: vê todos os módulos, os chamados e a Administração.</small></span></label>
+        {% if u and u.perfil == 'juridico' %}<label class="adm-opc"><input type="radio" name="perfil" value="juridico" checked>{{ ic('account_balance') }}<span><b>Somente Jurídico</b><small>Entra direto na visão do Jurídico.</small></span></label>{% endif %}
+      </div>
+      {% if eu %}<input type="hidden" name="perfil" value="admin">{% endif %}
+
+      <div class="lbl" style="margin-top:1.3rem">Acessos do Grupo</div>
+      <div class="adm-linha">
+        {{ ic('handshake') }}<span><b>CRM Geral</b><small>Comercial do Grupo (sistema da Bia).</small></span>
+        <label class="adm-sw"><input type="checkbox" name="crm" value="1" class="so-usuario" {{ 'checked' if u and u.crm }}><i></i></label>
+      </div>
+      <div class="adm-linha">
+        {{ ic('account_balance') }}<span><b>Jurídico Geral</b><small>Casos e pedidos jurídicos das empresas que a pessoa acessa.</small></span>
+        <label class="adm-sw"><input type="checkbox" name="juridico" value="1" class="so-usuario" {{ 'checked' if u and u.juridico }}><i></i></label>
+      </div>
+      <p class="hint" id="hint-admin-geral" hidden>Administrador sempre tem CRM Geral e Jurídico Geral.</p>
+    </section>
+
+    <!-- 3. Empresas e módulos -->
+    <section class="box adm-sec full" id="sec-empresas">
+      <div class="adm-sec-h">{{ ic('apps') }}<span><b>3. Empresas e módulos</b>
+        <small id="txt-emp-usuario">Ligue as empresas que a pessoa vai usar e marque os módulos de cada uma.</small>
+        <small id="txt-emp-admin" hidden>Para administrador: ligue as empresas em que ele é gestor. Nenhuma ligada = todas as empresas.</small></span></div>
+      <div class="adm-emps">
+        {% for e in empresas %}
+        {% set marcada = u and e.slug in u.empresas %}
+        {% set mods_u = u.modulos.get(e.slug) if u else none %}
+        <div class="adm-emp {{ 'on' if marcada }}">
+          <label class="adm-emp-h">
+            <span class="logo-circle xs"><img src="{{ logo_url(e) }}" alt=""></span>
+            <b>{{ e.nome }}{% if e.status != 'ativo' %}<small>{{ STATUS[e.status] }}</small>{% endif %}</b>
+            <span class="adm-sw"><input type="checkbox" name="empresas" value="{{ e.slug }}" class="emp-sw" {{ 'checked' if marcada }}><i></i></span>
+          </label>
+          <div class="adm-mods">
+            {% for m in e.mods %}
+            <label class="adm-mod"><input type="checkbox" name="mod_{{ e.slug }}" value="{{ m.id }}" {{ 'checked' if marcada and (not mods_u or m.id in mods_u) }}><span>{{ ic(m.icone) }} {{ m.nome }}</span></label>
+            {% endfor %}
+            <label class="adm-mod fixo jur-chip" title="Liberado pelo Jurídico Geral"><input type="checkbox" disabled><span>{{ ic('account_balance') }} Jurídico</span></label>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- 4. Equipe e chamados -->
+    <section class="box adm-sec full">
+      <div class="adm-sec-h">{{ ic('support_agent') }}<span><b>4. Equipe e chamados</b><small>Quem acompanha as demandas desta pessoa e quais chamados ela recebe.</small></span></div>
+      <div class="adm-g2">
+        <div>
+          <label class="lbl">Gestor responsável</label>
+          <select class="inp" name="gestor_id">
+            <option value="">— Nenhum —</option>
+            {% for x in gestores %}<option value="{{ x.id }}" {{ 'selected' if u and u.gestor_id == x.id }}>{{ x.nome }}</option>{% endfor %}
+          </select>
+          <p class="hint">O gestor vê as demandas desta pessoa no Início e em Demandas. Só administradores podem ser gestores.</p>
+        </div>
+        <div>
+          <label class="lbl">Setores dos chamados</label>
+          <div class="adm-chips">
+            {% for st in SETORES %}<label class="adm-mod"><input type="checkbox" name="setores" value="{{ st }}" {{ 'checked' if u and st in u.setores }}><span>{{ st }}</span></label>{% endfor %}
+          </div>
+          <p class="hint">Recebe e vê os chamados dos setores marcados. Nenhum marcado = todos. Administrador sempre vê todos.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="adm-barra">
+    <span class="hint" id="resumo"></span>
+    <a class="btn-pill outline" href="{{ url_for('portal_admin') }}">Cancelar</a>
+    <button class="btn-pill" type="submit">{{ 'Salvar alterações' if u else 'Criar usuário' }}</button>
+  </div>
+</form>
+
+<script>
+(function () {
+  var f = document.getElementById('f-usuario');
+  function admin() { var r = f.querySelector('[name=perfil]:checked'); return r ? r.value === 'admin' : {{ 'true' if eu else 'false' }}; }
+  function atualizar() {
+    var adm = admin() || {{ 'true' if eu else 'false' }};
+    document.getElementById('sec-empresas').classList.toggle('adm-so-admin', adm);
+    document.getElementById('txt-emp-usuario').hidden = adm; document.getElementById('txt-emp-admin').hidden = !adm;
+    document.getElementById('hint-admin-geral').hidden = !adm;
+    f.querySelectorAll('.so-usuario').forEach(function (c) { c.disabled = adm; if (adm) c.checked = true; });
+    var jur = adm || f.querySelector('[name=juridico]').checked;
+    f.querySelectorAll('.jur-chip').forEach(function (c) { c.hidden = !jur; c.querySelector('input').checked = jur; });
+    var n = f.querySelectorAll('.emp-sw:checked').length;
+    document.getElementById('resumo').textContent = adm ? (n ? 'Gestor de ' + n + ' empresa(s)' : 'Administrador de todas as empresas') : (n ? n + ' empresa(s) liberada(s)' : 'Nenhuma empresa liberada ainda');
+  }
+  // Ligar a empresa marca todos os módulos; desmarcar todos os módulos desliga a empresa.
+  f.querySelectorAll('.adm-emp').forEach(function (card) {
+    var sw = card.querySelector('.emp-sw'), mods = card.querySelectorAll('.adm-mod:not(.fixo) input');
+    sw.addEventListener('change', function () {
+      card.classList.toggle('on', sw.checked);
+      mods.forEach(function (m) { m.checked = sw.checked; });
+      atualizar();
+    });
+    mods.forEach(function (m) { m.addEventListener('change', function () {
+      if (![].some.call(mods, function (x) { return x.checked; })) { sw.checked = false; card.classList.remove('on'); atualizar(); }
+    }); });
+  });
+  f.querySelectorAll('[name=perfil], [name=juridico]').forEach(function (r) { r.addEventListener('change', atualizar); });
+  atualizar();
+})();
+</script>
+{% endblock %}
