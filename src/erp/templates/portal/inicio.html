@@ -7,11 +7,16 @@
     <h1>{{ saudacao }}, <b>{{ portal_user.nome.split()[0] }}</b>.</h1>
     <p>Este é o resumo das empresas que você acompanha.</p>
   </div>
-  <div class="ini-atalhos">
+  {% set n_at = 2 + (1 if portal_user.crm else 0) + (1 if acesso_juridico else 0) + (2 if portal_user.admin else 0) %}
+  <div class="ini-atalhos" style="--cols:{{ n_at if n_at <= 4 else 3 }}">
     <a class="ini-atalho" href="{{ url_for('portal_grupo') }}">{{ ic('apps') }}<span><b>Empresas</b><small>Módulos de cada empresa</small></span>{{ ic('chevron_right') }}</a>
     <a class="ini-atalho" href="{{ url_for('portal_treinamentos') }}">{{ ic('school') }}<span><b>Treinamentos</b><small>{{ n_trein }} conteúdo{{ 's' if n_trein != 1 }} disponíve{{ 'is' if n_trein != 1 else 'l' }}</small></span>{{ ic('chevron_right') }}</a>
     {% if portal_user.crm %}<a class="ini-atalho" href="{{ url_for('portal_crm') }}">{{ ic('handshake') }}<span><b>CRM Geral</b><small>Comercial do Grupo</small></span>{{ ic('chevron_right') }}</a>{% endif %}
     {% if acesso_juridico %}<a class="ini-atalho" href="{{ url_for('juridico.geral') }}">{{ ic('account_balance') }}<span><b>Jurídico Geral</b><small>Casos e demandas jurídicas do Grupo</small></span>{{ ic('chevron_right') }}</a>{% endif %}
+    {% if portal_user.admin %}
+    <a class="ini-atalho" href="/erp/central/plano">{{ ic('checklist') }}<span><b>Plano de ação</b><small>Etapas e tarefas do Grupo</small></span>{{ ic('chevron_right') }}</a>
+    <a class="ini-atalho" href="{{ url_for('portal_admin') }}">{{ ic('admin_panel_settings') }}<span><b>Administração</b><small>Usuários, acessos e empresas</small></span>{{ ic('chevron_right') }}</a>
+    {% endif %}
   </div>
 </section>
 
@@ -37,7 +42,7 @@
       <div class="ini-linha ini-cab"><span>Empresa</span><span>Chamados</span><span>Atrasadas</span><span>Hoje</span><span></span></div>
       {% for e in empresas %}
       <a class="ini-linha" href="{{ url_for('portal_empresa', slug=e.slug) }}" data-nome="{{ e.nome|lower }}">
-        <span class="ini-nome"><span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ e.logo) }}" alt=""></span>
+        <span class="ini-nome"><span class="logo-circle xs"><img src="{{ logo_url(e) }}" alt=""></span>
           <span><b>{{ e.nome }}</b>{% if e.status != 'ativo' %}<small class="ini-st st-{{ e.status }}">{{ STATUS[e.status] }}{% if e.obs %} · {{ e.obs }}{% endif %}</small>{% endif %}</span></span>
         <span class="ini-num {{ 'n-cham' if e.chamados }}" data-rot="Chamados">{{ e.chamados }}</span>
         <span class="ini-num {{ 'n-atr' if e.atrasadas }}" data-rot="Atrasadas">{{ e.atrasadas }}</span>
@@ -110,7 +115,7 @@
     {% for gr in equipe_grupos %}
     <div class="ini-eq-emp">
       <div class="ini-eq-head">
-        <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ gr.empresa.logo) }}" alt=""></span>
+        <span class="logo-circle xs"><img src="{{ logo_url(gr.empresa) }}" alt=""></span>
         <b>{{ gr.empresa.nome }}</b>
         <a class="lnk" href="{{ url_for('operacao.demandas', slug=gr.empresa.slug, de='equipe') }}">Quadro da equipe</a>
       </div>

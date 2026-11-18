@@ -3,12 +3,13 @@
 // Diferença do original: a senha é a do Supabase Auth (o mesmo login do site da Bia).
 import {
   Markup, PyDate, abort, beforeRequest, contextProcessor, errorHandler, flash, g, get, q, q1, redirect,
-  render_template, request, route, run, session, url_for, montarPublico, post,
+  render_template, request, route, run, session, url_for, montarPublico, post, sendFile,
 } from "../core/flask";
 import { definirUsuarioAuth, emailLogado, entrar, sair, senhaConfere } from "../core/auth";
 import { ICONES_PORTAL } from "../dados/icones";
 import { limparMemo, memo } from "../core/memo";
 import { temAcessoJuridico, emVisaoJuridica, rotaDaVisaoJuridica } from "./juridico/acesso";
+import { lerArquivo, salvarArquivo } from "../core/arquivos";
 
 export const TEMA_GRUPO: Record<string, string> = {
   primary: "#0B0B0B", secondary: "#1C1A16", accent: "#C9A45C",
@@ -68,12 +69,65 @@ for (const e of EMPRESAS) {
   }
 }
 export const EMPRESAS_POR_SLUG: Record<string, any> = Object.fromEntries(EMPRESAS.map((e) => [e.slug, e]));
+const SLUGS_FIXOS = new Set(EMPRESAS.map((e) => e.slug));
+
+// ───────────── Empresas cadastradas pela Administração (tabela portal_empresas) ─────────────
+// Nascem com os módulos padrão: Finanças no modelo padrão (contas a pagar/receber, extrato,
+// conciliação, fluxo, DRE — sem os módulos específicos da Capuzzo), Comercial e Jurídico (o Jurídico
+// aparece para quem tem acesso ao Jurídico Geral, como nas outras empresas).
+export const MODULOS_PADRAO: Record<string, (slug: string) => any> = {
+  financas: (slug) => ({ id: "financas", nome: "Finanças", icone: "payments", desc: "Contas a pagar e receber, extrato, conciliação, fluxo de caixa e DRE.", destino: `/financas/${slug}/` }),
+  comercial: () => ({ id: "comercial", nome: "Comercial", icone: "handshake", desc: "Clientes, oportunidades e funil de vendas da empresa. Em preparação: será ligado ao Comercial (CRM) do Grupo.", destino: null, status: "construcao" }),
+  orcamentos: (slug) => ({ id: "orcamentos", nome: "Orçamentos", icone: "receipt_long", desc: "Cotações com fornecedores, aprovação e lançamento no contas a pagar.", destino: `/orcamentos/${slug}/` }),
+};
+export const FONTES = ["Montserrat", "Poppins", "Nunito", "Mulish", "Raleway", "Oswald", "Roboto Slab", "Lato", "Inter"];
+const COR = /^#[0-9a-f]{6}$/i;
+export const CHAVES_TEMA = ["primary", "secondary", "accent", "accent_dark", "on_primary", "on_accent", "bg", "text", "muted"];
+
+function empresa_da_linha(r: any) {
+  let t: any = {};
+  try { t = JSON.parse(r.tema || "{}"); } catch { t = {}; }
+  const tema: Record<string, string> = {};
+  for (const k of CHAVES_TEMA) if (COR.test(t[k] ?? "")) tema[k] = t[k];
+  tema.font_head = FONTES.includes(t.font_head) ? t.font_head : "Montserrat";
+  const mods = String(r.modulos || "").split(",").map((x) => x.trim()).filter((x) => MODULOS_PADRAO[x]);
+  return {
+    slug: r.slug, nome: r.nome, descricao: r.descricao || "", logo: "", logo_db: !!r.logo_caminho, logo_versao: r.logo_versao || 0,
+    tema, modulos: mods.map((m) => MODULOS_PADRAO[m](r.slug)), cadastrada: true, mod_ids: mods,
+  };
+}
+/** Junta as empresas cadastradas no banco à lista fixa (em memória, 30 s). */
+export async function carregar_empresas() {
+  const linhas: any[] = await memo("portal:empresas_db", 30000, async () => {
+    try { return await q("SELECT * FROM portal_empresas ORDER BY ordem, nome"); } catch { return []; }
+  });
+  const novas = linhas.filter((r) => !SLUGS_FIXOS.has(r.slug)).map(empresa_da_linha);
+  const atuais = new Set(novas.map((e) => e.slug));
+  for (let i = EMPRESAS.length - 1; i >= 0; i--) if (EMPRESAS[i].cadastrada && !atuais.has(EMPRESAS[i].slug)) { delete EMPRESAS_POR_SLUG[EMPRESAS[i].slug]; EMPRESAS.splice(i, 1); }
+  for (const e of novas) {
+    const i = EMPRESAS.findIndex((x) => x.slug === e.slug);
+    if (i >= 0) EMPRESAS[i] = e; else EMPRESAS.push(e);
+    EMPRESAS_POR_SLUG[e.slug] = e;
+  }
+}
+/** Endereço da logo: as fixas ficam nos arquivos do site; as cadastradas, no banco. */
+export function logo_url(e: any) {
+  if (!e) return "";
+  if (e.cadastrada) return url_for("portal_logo", { slug: e.slug, v: e.logo_versao || 0 });
+  return url_for("static", { filename: "portal/logos/" + e.logo });
+}
+export function slug_de(nome: string) {
+  const base = nome.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24) || "empresa";
+  let s = base, n = 2;
+  while (EMPRESAS_POR_SLUG[s] || ["grupo", "admin", "central", "login", "erp", "static"].includes(s)) s = `${base}${n++}`;
+  return s;
+}
 
 export const EMPRESA_CONDOMINIOS = "assessoria";
 /** Prefixo da URL → empresa dona do módulo. */
 export const PREFIXOS_MODULOS: Record<string, string> = {};
 /** Rotas que não exigem login (caminho interno). */
-export const ROTAS_PUBLICAS: string[] = ["/login"];
+export const ROTAS_PUBLICAS: string[] = ["/login", "/grupo/logo/"];
 
 export const STATUS: Record<string, string> = { ativo: "Ativo", pendente: "Pendente", inativo: "Inativo" };
 const LOGIN_MAX_TENTATIVAS = 5;
@@ -163,6 +217,13 @@ export async function tem_crm(user: any): Promise<boolean> {
   return todos.some((r) => r.empresa_slug === "_grupo" && r.modulo_id === "crm");
 }
 
+/** Jurídico Geral liberado em Administração para um usuário comum (administrador já tem). */
+export async function tem_juridico_geral(user: any): Promise<boolean> {
+  if (!user || user.perfil === "admin") return false;
+  const todos = await memo(`portal:mod:${user.id}`, TTL, async () => await q("SELECT empresa_slug, modulo_id FROM portal_usuario_modulos WHERE usuario_id = ?", [user.id]));
+  return todos.some((r) => r.empresa_slug === "_grupo" && r.modulo_id === "juridico");
+}
+
 export async function pode_ver_modulo(user: any, slug: string, modulo: string) {
   if (!(await pode_ver(user, slug))) return false;
   const lib = await modulos_liberados(user, slug);
@@ -209,12 +270,13 @@ export function exige_admin() {
 export function registrar() {
   montarPublico("/login", "/login-grupo");
 
-  contextProcessor(() => ({ portal_user: g().portal_user ?? null, acesso_juridico: temAcessoJuridico(g().portal_user), visao_juridica: emVisaoJuridica(g().portal_user), STATUS, tema_grupo: TEMA_GRUPO, ic }));
+  contextProcessor(() => ({ portal_user: g().portal_user ?? null, acesso_juridico: temAcessoJuridico(g().portal_user), visao_juridica: emVisaoJuridica(g().portal_user), STATUS, tema_grupo: TEMA_GRUPO, ic, logo_url }));
 
   // ── Porteiro: nenhuma página abre sem login ──
   beforeRequest(async () => {
     const G = g();
     G.portal_user = null;
+    await carregar_empresas();
     const email = await emailLogado();
     if (email) {
       const u0 = await memo(`portal:user:${email}`, TTL, async () => await q1("SELECT id, nome, email, perfil, ativo FROM portal_usuarios WHERE lower(email) = ?", [email]));
@@ -224,6 +286,7 @@ export function registrar() {
         u.admin = u.perfil === "admin" && visao === "admin";
         u.modo_juridico = visao === "juridico" && u.perfil === "admin";
         u.crm = emVisaoJuridica(u) ? false : await tem_crm(u);
+        u.juridico_geral = await tem_juridico_geral(u);
         G.portal_user = u;
       }
     }
@@ -377,27 +440,46 @@ export function registrar() {
   });
 
   // ── Administração ──
-  get("portal_admin", "/grupo/admin", async () => {
-    exige_admin();
+  async function usuarios_admin() {
     const usuarios = await q("SELECT * FROM portal_usuarios ORDER BY nome");
-    for (const u of usuarios) {
-      u.empresas = await empresas_liberadas(u.id);
-      u.modulos = {} as Record<string, string[]>;
-      for (const r of await q("SELECT empresa_slug, modulo_id FROM portal_usuario_modulos WHERE usuario_id = ?", [u.id])) (u.modulos[r.empresa_slug] ??= []).push(r.modulo_id);
-      u.crm = u.perfil === "admin" || (u.modulos["_grupo"] ?? []).includes("crm");
-    }
+    const [emps, mods, sets] = await Promise.all([
+      q("SELECT usuario_id, empresa_slug FROM portal_usuario_empresas"),
+      q("SELECT usuario_id, empresa_slug, modulo_id FROM portal_usuario_modulos"),
+      q("SELECT usuario_id, setor FROM portal_usuario_setores")]);
     const nomes = new Map(usuarios.map((u) => [u.id, u.nome]));
     for (const u of usuarios) {
+      u.empresas = new Set(emps.filter((r) => r.usuario_id === u.id).map((r) => r.empresa_slug));
+      u.modulos = {} as Record<string, string[]>;
+      for (const r of mods.filter((x) => x.usuario_id === u.id)) (u.modulos[r.empresa_slug] ??= []).push(r.modulo_id);
+      u.crm = u.perfil === "admin" || (u.modulos["_grupo"] ?? []).includes("crm");
+      u.juridico = u.perfil === "admin" || u.perfil === "juridico" || (u.modulos["_grupo"] ?? []).includes("juridico");
       u.gestor_nome = u.gestor_id ? (nomes.get(u.gestor_id) ?? "") : "";
       u.equipe_n = usuarios.filter((x) => x.gestor_id === u.id).length;
       u.emp_lista = EMPRESAS.filter((e) => u.empresas.has(e.slug));
-      u.setores = await setores_do_usuario(u.id);
+      u.setores = sets.filter((r) => r.usuario_id === u.id).map((r) => r.setor);
     }
-    const gestores = usuarios.filter((u) => u.perfil === "admin" && u.ativo);
+    return usuarios;
+  }
+
+  get("portal_admin", "/grupo/admin", async () => {
+    exige_admin();
     const sel = request().args.get("u", null, "int");
-    const editar = usuarios.find((u) => u.id === sel) ?? null;
-    return render_template("portal/admin.html", { t: TEMA_GRUPO, usuarios, editar, gestores, SETORES, empresas: await empresas_com_status(), aba: request().args.get("aba", "usuarios") });
+    if (sel) return redirect(url_for("portal_admin_editar", { uid: sel }));
+    const aba = request().args.get("aba", "usuarios");
+    const usuarios = await usuarios_admin();
+    return render_template("portal/admin.html", { t: TEMA_GRUPO, usuarios, empresas: await empresas_com_status(), aba, FONTES, MODULOS_PADRAO_LISTA: Object.entries(MODULOS_PADRAO).map(([k, f]) => ({ id: k, ...f("x") })) });
   });
+
+  async function tela_usuario(uid: number | null) {
+    const usuarios = await usuarios_admin();
+    const u = uid ? usuarios.find((x) => x.id === uid) : null;
+    if (uid && !u) abort(404);
+    const gestores = usuarios.filter((x) => x.perfil === "admin" && x.ativo && (!u || x.id !== u.id));
+    const empresas = (await empresas_com_status()).map((e) => ({ ...e, mods: modulos_da_empresa(e) }));
+    return render_template("portal/admin_usuario.html", { t: TEMA_GRUPO, u, gestores, SETORES, empresas });
+  }
+  get("portal_admin_novo", "/grupo/admin/usuario/novo", async () => { exige_admin(); return tela_usuario(null); });
+  get("portal_admin_editar", "/grupo/admin/usuario/<int:uid>", async (uid: number) => { exige_admin(); return tela_usuario(uid); });
 
   post("portal_admin_usuario", "/grupo/admin/usuario", async () => {
     exige_admin();
@@ -406,12 +488,12 @@ export function registrar() {
     let uid = f.get("id", null, "int");
     const nome = (f.get("nome") ?? "").trim();
     const email = (f.get("email") ?? "").trim().toLowerCase();
-    let perfil = f.get("perfil") === "admin" ? "admin" : "usuario";
+    let perfil = f.get("perfil") === "admin" ? "admin" : f.get("perfil") === "juridico" ? "juridico" : "usuario";
     let ativo = f.get("ativo") ? 1 : 0;
     const senha = f.get("senha") ?? "";
     const empresas = f.getlist("empresas").filter((s: string) => EMPRESAS_POR_SLUG[s]);
     let gestor_id: number | null = f.get("gestor_id", null, "int") || null;
-    const voltar = uid ? url_for("portal_admin", { u: uid }) : url_for("portal_admin");
+    const voltar = uid ? url_for("portal_admin_editar", { uid }) : url_for("portal_admin_novo");
     let msg: string | null;
     if (senha && (msg = validar_senha(senha))) { flash(msg, "erro"); return redirect(voltar); }
     if (gestor_id) {
@@ -448,17 +530,21 @@ export function registrar() {
     await run("DELETE FROM portal_usuario_modulos WHERE usuario_id = ?", [uid]);
     const crmAgora = !!f.get("crm");
     if (crmAgora) await run("INSERT INTO portal_usuario_modulos (usuario_id, empresa_slug, modulo_id) VALUES (?, '_grupo', 'crm')", [uid]);
+    if (f.get("juridico") && perfil === "usuario") await run("INSERT INTO portal_usuario_modulos (usuario_id, empresa_slug, modulo_id) VALUES (?, '_grupo', 'juridico')", [uid]);
     if (crmAntes !== crmAgora && perfil !== "admin") {
       const em = (await q1("SELECT email FROM portal_usuarios WHERE id = ?", [uid]))?.email;
       const erro = em ? await sincronizar_acesso_comercial(em, crmAgora) : null;
       if (erro) flash(`CRM Geral salvo no portal, mas não foi possível ajustar o acesso no sistema Comercial: ${erro}`, "erro");
     }
-    for (const s of empresas) {
-      const validos = new Set(modulos_da_empresa(EMPRESAS_POR_SLUG[s]).map((m: any) => m.id));
-      for (const m of f.getlist("mod_" + s)) if (validos.has(m)) await run("INSERT INTO portal_usuario_modulos (usuario_id, empresa_slug, modulo_id) VALUES (?, ?, ?)", [uid, s, m]);
+    // Todos os módulos marcados = nenhuma linha (assim a pessoa ganha os módulos novos que a empresa vier a ter).
+    if (perfil !== "admin") for (const s of empresas) {
+      const validos = modulos_da_empresa(EMPRESAS_POR_SLUG[s]).map((m: any) => m.id);
+      const marcados = f.getlist("mod_" + s).filter((m: string) => validos.includes(m));
+      if (marcados.length && marcados.length < validos.length)
+        for (const m of marcados) await run("INSERT INTO portal_usuario_modulos (usuario_id, empresa_slug, modulo_id) VALUES (?, ?, ?)", [uid, s, m]);
     }
     limparMemo("portal:");
-    return redirect(url_for("portal_admin", { u: uid }));
+    return redirect(url_for("portal_admin"));
   });
 
   post("portal_admin_empresa", "/grupo/admin/empresa/<slug>", async (slug: string) => {
@@ -473,6 +559,82 @@ export function registrar() {
     flash(`Situação de ${EMPRESAS_POR_SLUG[slug].nome} atualizada.`, "ok");
     const destino = request().form.get("voltar") || url_for("portal_grupo");
     return redirect(destino.startsWith("/") && !destino.startsWith("//") ? destino : url_for("portal_grupo"));
+  });
+
+  // ── Empresas cadastradas pela Administração ──
+  get("portal_logo", "/grupo/logo/<slug>", async (slug: string) => {
+    const e = EMPRESAS_POR_SLUG[slug];
+    if (!e) abort(404);
+    const r = e.cadastrada ? await q1("SELECT logo_caminho FROM portal_empresas WHERE slug = ?", [slug]) : null;
+    const dados = r?.logo_caminho ? await lerArquivo(r.logo_caminho) : null;
+    let resp;
+    if (dados) {
+      const tipo = r!.logo_caminho.endsWith(".png") ? "image/png" : r!.logo_caminho.endsWith(".webp") ? "image/webp" : "image/jpeg";
+      resp = sendFile(dados, { mimetype: tipo });
+    } else {
+      // sem logo: círculo com as iniciais nas cores da empresa
+      const t = tema(e.tema);
+      const ini = String(e.nome).split(/\s+/).filter((w: string) => w.length > 2 || /^[A-Z]/.test(w)).slice(0, 2).map((w: string) => w[0]).join("").toUpperCase() || "?";
+      resp = sendFile(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="${t.primary}"/><text x="50" y="50" dy=".35em" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="38" fill="${t.accent}">${ini.replace(/[<&>"]/g, "")}</text></svg>`, { mimetype: "image/svg+xml" });
+    }
+    resp.headers.set("cache-control", "public, max-age=86400");
+    resp.headers.set("x-content-type-options", "nosniff");
+    return resp;
+  });
+
+  async function dados_empresa_form(slug: string, nova: boolean) {
+    const f = request().form;
+    const nome = (f.get("nome") ?? "").trim().slice(0, 80);
+    if (!nome) return { erro: "Informe o nome da empresa." };
+    const t: Record<string, string> = {};
+    for (const k of CHAVES_TEMA) { const v = (f.get("cor_" + k) ?? "").trim(); if (COR.test(v)) t[k] = v.toLowerCase(); }
+    t.font_head = FONTES.includes(f.get("fonte") ?? "") ? f.get("fonte")! : "Montserrat";
+    const mods = (f.getlist("modulos") as string[]).filter((m) => MODULOS_PADRAO[m]);
+    const arq = request().file("logo");
+    let logo: { caminho: string; dados: Uint8Array } | null = null;
+    if (arq && arq.filename && arq.size) {
+      const ext = (arq.filename.toLowerCase().match(/\.(png|jpe?g|webp)$/) ?? [])[1];
+      if (!ext) return { erro: "A logo precisa ser PNG, JPG ou WEBP." };
+      if (arq.size > 3 * 1024 * 1024) return { erro: "A logo pode ter no máximo 3 MB." };
+      logo = { caminho: `portal/logos/${slug}.${ext === "jpeg" ? "jpg" : ext}`, dados: arq.read() };
+    } else if (nova && f.get("logo_obrigatoria")) return { erro: "Envie a logo da empresa." };
+    return { nome, descricao: (f.get("descricao") ?? "").trim().slice(0, 120), tema: JSON.stringify(t), modulos: (mods.length ? mods : ["financas", "comercial"]).join(","), logo };
+  }
+
+  post("portal_admin_empresa_nova", "/grupo/admin/empresas/nova", async () => {
+    exige_admin();
+    checar_csrf();
+    const volta = url_for("portal_admin", { aba: "empresas" });
+    const slug = slug_de((request().form.get("nome") ?? "").trim());
+    const d: any = await dados_empresa_form(slug, true);
+    if (d.erro) { flash(d.erro, "erro"); return redirect(volta + "#nova"); }
+    if (d.logo) await salvarArquivo(d.logo.caminho, d.logo.dados, "image/*");
+    const ordem = Number((await q1("SELECT COALESCE(MAX(ordem), 0) AS m FROM portal_empresas"))?.m || 0) + 1;
+    await run("INSERT INTO portal_empresas (slug, nome, descricao, tema, logo_caminho, logo_versao, modulos, ordem, criado_em, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [slug, d.nome, d.descricao, d.tema, d.logo?.caminho ?? "", 1, d.modulos, ordem, agora(), g().portal_user.id]);
+    limparMemo("portal:");
+    await carregar_empresas();
+    flash(`Empresa ${d.nome} criada com os módulos padrão. Libere o acesso aos usuários em Administração → Usuários.`, "ok");
+    return redirect(volta + `#emp-${slug}`);
+  });
+
+  post("portal_admin_empresa_editar", "/grupo/admin/empresas/<slug>/editar", async (slug: string) => {
+    exige_admin();
+    checar_csrf();
+    const volta = url_for("portal_admin", { aba: "empresas" }) + `#emp-${slug}`;
+    const atual = await q1("SELECT * FROM portal_empresas WHERE slug = ?", [slug]);
+    if (!atual) abort(404);
+    const d: any = await dados_empresa_form(slug, false);
+    if (d.erro) { flash(d.erro, "erro"); return redirect(volta); }
+    let caminho = atual.logo_caminho, versao = atual.logo_versao || 0;
+    if (d.logo) { await salvarArquivo(d.logo.caminho, d.logo.dados, "image/*"); caminho = d.logo.caminho; versao++; }
+    else versao++; // cores mudam o círculo de iniciais
+    await run("UPDATE portal_empresas SET nome = ?, descricao = ?, tema = ?, modulos = ?, logo_caminho = ?, logo_versao = ? WHERE slug = ?",
+      [d.nome, d.descricao, d.tema, d.modulos, caminho, versao, slug]);
+    limparMemo("portal:");
+    await carregar_empresas();
+    flash(`Empresa ${d.nome} atualizada.`, "ok");
+    return redirect(volta);
   });
 
   errorHandler(403, () => [render_template("portal/erro.html", { t: TEMA_GRUPO, codigo: 403, msg: "Você não tem acesso a esta área." }), 403]);

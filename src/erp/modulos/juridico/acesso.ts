@@ -1,10 +1,11 @@
 /** Authorization uses the existing server-side portal record, never user metadata. */
-type Usuario = { ativo?: number; admin?: boolean; perfil?: string; modo_juridico?: boolean };
+type Usuario = { ativo?: number; admin?: boolean; perfil?: string; modo_juridico?: boolean; juridico_geral?: boolean };
 export function emVisaoJuridica(user: Usuario | null | undefined) {
   return !!user && (user.perfil === "juridico" || (user.perfil === "admin" && user.modo_juridico === true));
 }
 export function temAcessoJuridico(user: Usuario | null | undefined) {
-  return !!user && user.ativo === 1 && (user.admin === true || emVisaoJuridica(user));
+  // juridico_geral: usuário comum com o Jurídico Geral liberado em Administração (portal.tem_juridico_geral)
+  return !!user && user.ativo === 1 && (user.admin === true || emVisaoJuridica(user) || user.juridico_geral === true);
 }
 export function rotaDaVisaoJuridica(caminho: string) {
   return caminho === "/juridico" || caminho.startsWith("/juridico/") || caminho === "/grupo" ||

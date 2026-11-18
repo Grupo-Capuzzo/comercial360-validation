@@ -3,7 +3,7 @@
 {% block head %}<link rel="stylesheet" href="{{ url_for('financas.static', filename='financas.css') }}?v=18">{% endblock %}
 {% block body_class %}erp-com-trilho{% endblock %}
 {% block brand %}
-  <span class="logo-circle xs"><img src="{{ url_for('static', filename='portal/logos/' ~ empresa.logo) }}" alt=""></span>
+  <span class="logo-circle xs"><img src="{{ logo_url(empresa) }}" alt=""></span>
   <span class="tb-name"><b>{{ empresa.nome }}</b><small>Grupo Capuzzo</small></span>
 {% endblock %}
 {% block tb_links %}
