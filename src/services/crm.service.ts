@@ -1,4 +1,4 @@
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { scopedRows, scopedMutation } from "./crm-scope.client";
 import type {
   CrmOpportunityRow,
   CrmPipelineRow,
@@ -28,82 +28,19 @@ export type CrmLoadResult =
       };
     };
 
-export async function loadCrm(): Promise<CrmLoadResult> {
-  const supabase = getSupabaseBrowserClient();
-
-  const [
-    pipelineResult,
-    opportunitiesResult,
-    tasksResult,
-  ] = await Promise.all([
-    supabase
-      .schema("api_comercial")
-      .from("crm_pipeline")
-      .select("*")
-      .eq("ativo", true)
-      .order("ordem", { ascending: true }),
-
-    supabase
-      .schema("api_comercial")
-      .from("crm_oportunidades")
-      .select("*")
-      .order("etapa_ordem", { ascending: true })
-      .order("atualizado_em", { ascending: false }),
-
-    supabase
-      .schema("api_comercial")
-      .from("crm_tarefas")
-      .select("*")
-      .order("prazo_em", {
-        ascending: true,
-        nullsFirst: false,
-      }),
+export async function loadCrm(scope = "geral"): Promise<CrmLoadResult> {
+  const [pipeline, opportunities, tasks] = await Promise.all([
+    scopedRows<CrmPipelineRow>(scope, "pipeline"),
+    scopedRows<CrmOpportunityRow>(scope, "opportunities"),
+    scopedRows<CrmTaskRow>(scope, "tasks"),
   ]);
-
-  if (pipelineResult.error) {
-    return {
-      ok: false,
-      error: {
-        source: "crm_pipeline",
-        code: pipelineResult.error.code,
-        message: pipelineResult.error.message,
-        hint: pipelineResult.error.hint,
-      },
-    };
+  for (const [source, result] of [["crm_pipeline", pipeline], ["crm_oportunidades", opportunities], ["crm_tarefas", tasks]] as const) {
+    if (result.error) return { ok: false, error: { source, ...result.error } };
   }
-
-  if (opportunitiesResult.error) {
-    return {
-      ok: false,
-      error: {
-        source: "crm_oportunidades",
-        code: opportunitiesResult.error.code,
-        message: opportunitiesResult.error.message,
-        hint: opportunitiesResult.error.hint,
-      },
-    };
-  }
-
-  if (tasksResult.error) {
-    return {
-      ok: false,
-      error: {
-        source: "crm_tarefas",
-        code: tasksResult.error.code,
-        message: tasksResult.error.message,
-        hint: tasksResult.error.hint,
-      },
-    };
-  }
-
-  return {
-    ok: true,
-    data: {
-      pipeline: pipelineResult.data ?? [],
-      opportunities: opportunitiesResult.data ?? [],
-      tasks: tasksResult.data ?? [],
-    },
-  };
+  pipeline.data.sort((a, b) => a.ordem - b.ordem);
+  opportunities.data.sort((a, b) => a.etapa_ordem - b.etapa_ordem || b.atualizado_em.localeCompare(a.atualizado_em));
+  tasks.data.sort((a, b) => a.prazo_em === b.prazo_em ? a.tarefa_id.localeCompare(b.tarefa_id) : !a.prazo_em ? 1 : !b.prazo_em ? -1 : a.prazo_em.localeCompare(b.prazo_em));
+  return { ok: true, data: { pipeline: pipeline.data, opportunities: opportunities.data, tasks: tasks.data } };
 }
 
 async function callCrmRpc(
@@ -113,39 +50,20 @@ async function callCrmRpc(
     | "crm_criar_tarefa"
     | "crm_concluir_tarefa",
   payload: Json,
+  scope = "geral",
 ): Promise<{
   ok: boolean;
   id: string | null;
   error: string | null;
 }> {
-  const supabase = getSupabaseBrowserClient();
-
-  const { data, error } = await supabase
-    .schema("api_comercial")
-    .rpc(functionName, {
-      p_dados: payload,
-    });
-
-  if (error) {
-    return {
-      ok: false,
-      id: null,
-      error: error.message,
-    };
-  }
-
-  return {
-    ok: true,
-    id: typeof data === "string" ? data : null,
-    error: null,
-  };
+  return scopedMutation(scope, functionName, payload);
 }
 
 export async function moveOpportunity(input: {
   oportunidadeId: string;
   etapaCodigo: string;
   motivoPerda?: string;
-}) {
+}, scope = "geral") {
   if (input.etapaCodigo.toUpperCase() === "FECHADO") {
     return { ok: false, oportunidadeId: null, error: "Conclua a formalização contratual para fechar e disponibilizar o output comercial." };
   }
@@ -161,6 +79,7 @@ export async function moveOpportunity(input: {
   const result = await callCrmRpc(
     "crm_mover_oportunidade",
     payload,
+    scope,
   );
 
   return {
@@ -175,7 +94,7 @@ export async function updateOpportunity(input: {
   proximaAcao?: string;
   proximaAcaoEm?: string;
   previsaoFechamento?: string;
-}) {
+}, scope = "geral") {
   const payload: Record<string, Json> = {
     oportunidade_id: input.oportunidadeId,
   };
@@ -200,6 +119,7 @@ export async function updateOpportunity(input: {
   const result = await callCrmRpc(
     "crm_atualizar_oportunidade",
     payload,
+    scope,
   );
 
   return {
@@ -216,7 +136,7 @@ export async function createCrmTask(input: {
   tipo?: string;
   prioridade?: string;
   prazoEm?: string;
-}) {
+}, scope = "geral") {
   const payload: Record<string, Json> = {
     oportunidade_id: input.oportunidadeId,
     titulo: input.titulo.trim(),
@@ -243,6 +163,7 @@ export async function createCrmTask(input: {
   const result = await callCrmRpc(
     "crm_criar_tarefa",
     payload,
+    scope,
   );
 
   return {
@@ -254,12 +175,14 @@ export async function createCrmTask(input: {
 
 export async function completeCrmTask(
   tarefaId: string,
+  scope = "geral",
 ) {
   const result = await callCrmRpc(
     "crm_concluir_tarefa",
     {
       tarefa_id: tarefaId,
     },
+    scope,
   );
 
   return {

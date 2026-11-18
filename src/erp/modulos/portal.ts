@@ -59,6 +59,7 @@ export const EMPRESAS: any[] = [
 ];
 // Módulo Finanças nas empresas que o utilizam.
 for (const e of EMPRESAS) {
+  e.modulos.push({ id: "comercial", nome: "Comercial / CRM", icone: "handshake", desc: "CRM exclusivo da empresa; operação sujeita à conciliação validada.", destino: `/comercial/${e.slug}` });
   if (["assessoria", "cred", "ethernexus", "terceiriza", "hortstufas", "worldgym", "grao"].includes(e.slug)) {
     e.modulos.push({ id: "financas", nome: "Finanças", icone: "payments", desc: "Contas a pagar e receber, extrato, conciliação, fluxo de caixa e DRE.", destino: `/financas/${e.slug}/` });
   }
@@ -155,7 +156,7 @@ export async function modulos_liberados(user: any, slug: string): Promise<Set<st
   return l.length ? new Set(l.map((r) => r.modulo_id)) : null;
 }
 /** CRM Geral (Comercial da Bia): administradores e usuários com o acesso liberado em Administração. */
-export const CRM_DESTINO = "/comercial/40ca9f00-a17c-4605-9323-a15974c52817";
+export const CRM_DESTINO = "/crm";
 export async function tem_crm(user: any): Promise<boolean> {
   if (!user) return false;
   if (user.perfil === "admin") return true;
@@ -444,15 +445,9 @@ export function registrar() {
     await run("DELETE FROM portal_usuario_empresas WHERE usuario_id = ?", [uid]);
     for (const s of empresas) await run("INSERT INTO portal_usuario_empresas VALUES (?, ?)", [uid, s]);
     // módulos por empresa (nenhum marcado = todos os módulos da empresa) + CRM Geral
-    const crmAntes = !!(await q1("SELECT 1 AS x FROM portal_usuario_modulos WHERE usuario_id = ? AND empresa_slug = '_grupo' AND modulo_id = 'crm'", [uid]));
     await run("DELETE FROM portal_usuario_modulos WHERE usuario_id = ?", [uid]);
     const crmAgora = !!f.get("crm");
     if (crmAgora) await run("INSERT INTO portal_usuario_modulos (usuario_id, empresa_slug, modulo_id) VALUES (?, '_grupo', 'crm')", [uid]);
-    if (crmAntes !== crmAgora && perfil !== "admin") {
-      const em = (await q1("SELECT email FROM portal_usuarios WHERE id = ?", [uid]))?.email;
-      const erro = em ? await sincronizar_acesso_comercial(em, crmAgora) : null;
-      if (erro) flash(`CRM Geral salvo no portal, mas não foi possível ajustar o acesso no sistema Comercial: ${erro}`, "erro");
-    }
     for (const s of empresas) {
       const validos = new Set(modulos_da_empresa(EMPRESAS_POR_SLUG[s]).map((m: any) => m.id));
       for (const m of f.getlist("mod_" + s)) if (validos.has(m)) await run("INSERT INTO portal_usuario_modulos (usuario_id, empresa_slug, modulo_id) VALUES (?, ?, ?)", [uid, s, m]);
@@ -478,19 +473,10 @@ export function registrar() {
   errorHandler(403, () => [render_template("portal/erro.html", { t: TEMA_GRUPO, codigo: 403, msg: "Você não tem acesso a esta área." }), 403]);
 }
 
-/** Libera (ou retira) a leitura do Comercial da Bia (portal_acesso.permissoes) — via função erp.acesso_comercial. */
-async function sincronizar_acesso_comercial(email: string, liberar: boolean): Promise<string | null> {
-  try {
-    const r = await q1("SELECT erp.acesso_comercial(?, ?) AS erro", [email, liberar]);
-    return r?.erro ?? null;
-  } catch (e: any) {
-    return e?.message ?? String(e);
-  }
-}
-
 /** Destinos dos módulos: caminhos do app viram /erp/...; o Comercial é o da Bia. */
 export function destinoModulo(destino: string) {
   // Comercial: módulo da Bia (rota /comercial/<empresa_id do portal_acesso>), fora do /erp.
+  if (destino === "/crm") return destino;
   if (destino === "/comercial" || destino.startsWith("/comercial/")) return destino;
   return "/erp" + destino;
 }

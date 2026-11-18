@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
+import type { CrmScopeContext } from "@/lib/crm/scope";
 import { usePathname } from "next/navigation";
 
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -46,7 +47,7 @@ const navigation: Array<{
     href: "/leads",
   },
   {
-    label: "CRM",
+    label: "CRM GERAL",
     icon: "briefcase",
     href: "/crm",
   },
@@ -57,6 +58,7 @@ const navigation: Array<{
 ];
 
 type SidebarProps = {
+  crm?: CrmScopeContext;
   isOpen: boolean;
   onClose: () => void;
 };
@@ -64,8 +66,14 @@ type SidebarProps = {
 export function Sidebar({
   isOpen,
   onClose,
+  crm,
 }: SidebarProps) {
   const pathname = usePathname();
+  const items: typeof navigation = crm && !crm.general ? [
+    { label: "Voltar à empresa", icon: "dashboard", href: `/erp/grupo/empresa/${crm.scope}` },
+    { label: `CRM — ${crm.nome}`, icon: "briefcase", href: `/comercial/${crm.scope}` },
+    ...(crm.can_general ? [{ label: "CRM GERAL", icon: "briefcase" as const, href: "/crm" }] : []),
+  ] : navigation.filter(item => item.href !== "/crm" || crm?.general || ["/clientes","/produtos","/leads","/crm"].includes(pathname));
 
   return (
     <>
@@ -94,7 +102,7 @@ export function Sidebar({
 
           <div>
             <p className="font-serif text-[17px] font-semibold tracking-[0.01em]">
-              Grupo Capuzzo
+              {crm && !crm.general ? crm.nome : "Grupo Capuzzo"}
             </p>
 
             <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-white/45">
@@ -112,7 +120,7 @@ export function Sidebar({
           </p>
 
           <ul className="space-y-1">
-            {navigation.map((item) => {
+            {items.map((item) => {
               const active =
                 item.href === "/"
                   ? pathname === "/"

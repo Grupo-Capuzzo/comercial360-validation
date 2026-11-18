@@ -1,14 +1,15 @@
 ﻿"use client";
+import { useCrmScope } from "@/components/crm/scope-context";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
-  createLead,
-  loadLeads,
-  sendLeadToCrm,
-  updateLeadStatus,
+  createLead as createLeadScoped,
+  loadLeads as loadLeadsScoped,
+  sendLeadToCrm as sendLeadToCrmScoped,
+  updateLeadStatus as updateLeadStatusScoped,
 } from "@/services/leads.service";
-import { loadProducts } from "@/services/products.service";
+import { loadProducts as loadProductsScoped } from "@/services/products.service";
 import type {
   Json,
   LeadCentralRow,
@@ -57,6 +58,11 @@ function getCrmOpportunityId(
 }
 
 export function LeadsPage() {
+  const scope = useCrmScope();
+  const createLead = (input: Parameters<typeof createLeadScoped>[0]) => createLeadScoped(input, scope);
+  const updateLeadStatus = (id: string, status: string) => updateLeadStatusScoped(id, status, scope);
+  const sendLeadToCrm = (input: Parameters<typeof sendLeadToCrmScoped>[0]) => sendLeadToCrmScoped(input, scope);
+
   const [leads, setLeads] = useState<LeadCentralRow[]>([]);
   const [products, setProducts] = useState<ProductSummaryRow[]>([]);
 
@@ -85,8 +91,8 @@ export function LeadsPage() {
 
     const [leadResult, productResult] =
       await Promise.all([
-        loadLeads(),
-        loadProducts(),
+        loadLeadsScoped(scope),
+        loadProductsScoped(scope),
       ]);
 
     setLeads(leadResult.data);
@@ -102,7 +108,7 @@ export function LeadsPage() {
 
   useEffect(() => {
     let active = true;
-    void Promise.all([loadLeads(), loadProducts()]).then(([leadResult, productResult]) => {
+    void Promise.all([loadLeadsScoped(scope), loadProductsScoped(scope)]).then(([leadResult, productResult]) => {
       if (!active) return;
       setLeads(leadResult.data);
       setProducts(productResult.data);
@@ -110,7 +116,7 @@ export function LeadsPage() {
       setLoading(false);
     });
     return () => { active = false; };
-  }, []);
+  }, [scope]);
 
   const categories = useMemo(
     () =>

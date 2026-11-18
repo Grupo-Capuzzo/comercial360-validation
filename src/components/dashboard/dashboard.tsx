@@ -1,4 +1,5 @@
 "use client";
+import { useCrmScope } from "@/components/crm/scope-context";
 
 import {
   useCallback,
@@ -11,7 +12,7 @@ import { ConnectionStatus } from "@/components/dashboard/connection-status";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ProductOverview } from "@/components/dashboard/product-overview";
 import { Icon } from "@/components/ui/icon";
-import { loadDashboard } from "@/services/dashboard.service";
+import { loadDashboard as loadDashboardScoped } from "@/services/dashboard.service";
 import type { DashboardLoadResult } from "@/types/dashboard";
 
 const formatter = new Intl.NumberFormat("pt-BR");
@@ -29,6 +30,8 @@ function formatDate(value?: string | null) {
 }
 
 export function Dashboard() {
+  const scope = useCrmScope();
+
   const [result, setResult] =
     useState<DashboardLoadResult | null>(null);
 
@@ -37,16 +40,16 @@ export function Dashboard() {
   const refresh = useCallback(async () => {
     setLoading(true);
 
-    const dashboardResult = await loadDashboard();
+    const dashboardResult = await loadDashboardScoped(scope);
 
     setResult(dashboardResult);
     setLoading(false);
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     let cancelled = false;
 
-    void loadDashboard().then((dashboardResult) => {
+    void loadDashboardScoped(scope).then((dashboardResult) => {
       if (!cancelled) {
         setResult(dashboardResult);
         setLoading(false);
@@ -56,7 +59,7 @@ export function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope]);
 
   const data = result?.ok ? result.data : null;
 
@@ -315,9 +318,7 @@ export function Dashboard() {
 
                 <dd className="mt-1 text-xl font-semibold text-slate-800">
                   {data
-                    ? formatter.format(
-                        data.executive.pendencias_qualidade,
-                      )
+                    ? data.executive.pendencias_qualidade === null ? "Pendente de classificação" : formatter.format(data.executive.pendencias_qualidade)
                     : "—"}
                 </dd>
               </div>

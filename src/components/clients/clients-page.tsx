@@ -1,8 +1,9 @@
 ﻿"use client";
+import { useCrmScope } from "@/components/crm/scope-context";
 
 import { useEffect, useMemo, useState } from "react";
 
-import { loadClients } from "@/services/clients.service";
+import { loadClients as loadClientsScoped } from "@/services/clients.service";
 import type { Client360Row } from "@/types/database";
 
 function formatDocument(value: string | null) {
@@ -72,6 +73,8 @@ function qualityClasses(quality: string | null) {
 }
 
 export function ClientsPage() {
+  const scope = useCrmScope();
+
   const [clients, setClients] = useState<Client360Row[]>([]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -85,7 +88,7 @@ export function ClientsPage() {
       setLoading(true);
       setError(null);
 
-      const result = await loadClients();
+      const result = await loadClientsScoped(scope);
 
       if (!active) return;
 
@@ -104,7 +107,7 @@ export function ClientsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [scope]);
 
   const statuses = useMemo(() => {
     return Array.from(

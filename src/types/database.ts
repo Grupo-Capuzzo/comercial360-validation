@@ -16,7 +16,7 @@ export type DashboardExecutiveRow = {
   vinculos_inativos: number;
   vinculos_em_validacao: number;
   eventos_contratuais: number;
-  pendencias_qualidade: number;
+  pendencias_qualidade: number | null;
   consultado_em: string;
 };
 
@@ -125,6 +125,7 @@ export type CrmPipelineRow = {
 };
 
 export type CrmOpportunityRow = {
+    classificacao?: "classificado" | "pendente";
   oportunidade_id: string;
   cliente_id_global: string | null;
   nome_cliente: string | null;
