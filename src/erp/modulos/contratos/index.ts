@@ -197,7 +197,7 @@ export function registrar() {
       flash("Depósito confirmado — cotas ativadas.", "success");
       try {
         const r: any = await fc.gerar_lancamentos_aquisicao(cid, f.get("data_deposito", ""));
-        if (!r.ja_existia) flash(`Finanças da Capuzzo Assessoria: entrada no contas a receber + ${r.rendimentos} rendimento(s) previsto(s) e ${r.retiradas} retirada(s) no contas a pagar.`, "success");
+        flash(`Finanças da Capuzzo Assessoria: ${r.aporte ? "entrada no contas a receber; " : ""}previsões do cliente no contas a pagar — ${r.criados} criada(s), ${r.alterados} somada(s)/ajustada(s)${r.cancelados ? `, ${r.cancelados} cancelada(s)` : ""}.`, "success");
       } catch (e: any) { flash(`Cotas ativadas, mas não consegui gerar os lançamentos no Finanças: ${e?.message ?? e}`, "error"); }
     } catch (exc: any) {
       if (!d.ehValueError(exc)) throw exc;
@@ -211,8 +211,7 @@ export function registrar() {
     await _contrato(cid);
     try {
       const r: any = await fc.gerar_lancamentos_aquisicao(cid);
-      if (r.ja_existia) flash("Os lançamentos deste contrato já estão no Finanças.", "success");
-      else flash(`Lançamentos gerados no Finanças: entrada + ${r.rendimentos} rendimento(s) e ${r.retiradas} retirada(s).`, "success");
+      flash(`Finanças atualizado: ${r.aporte ? "entrada lançada; " : ""}${r.criados} previsão(ões) criada(s), ${r.alterados} ajustada(s)${r.cancelados ? `, ${r.cancelados} cancelada(s)` : ""}.`, "success");
     } catch (e: any) { flash(String(e?.message ?? e), "error"); }
     return redirect(url_for("contratos.detalhe", { cid }));
   });

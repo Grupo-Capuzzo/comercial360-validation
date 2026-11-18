@@ -103,7 +103,8 @@
                 <td style="text-align:right;white-space:nowrap" class="text-mono">{{ moeda(l.valor / 100) }}</td></tr>
             {% endfor %}</tbody>
           </table>
-          <p class="text-dim" style="font-size:11px;margin-top:6px;">Entrada no contas a receber; rendimentos e retirada são previsões no contas a pagar.</p>
+          <p class="text-dim" style="font-size:11px;margin-top:6px;">Entrada no contas a receber. Rendimentos e retiradas são previsões no contas a pagar, somando todas as cotas do cliente em cada data; renovar ou retirar em Vencimentos atualiza tudo sozinho.</p>
+          <form method="post" action="{{ url_for('contratos.gerar_financas', cid=c.id) }}" style="margin-top:6px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn btn-secondary btn-sm">Recalcular previsões do cliente</button></form>
         {% else %}
           <p class="text-dim" style="font-size:12.5px;">Ainda não há lançamentos deste contrato no Finanças.</p>
           <form method="post" action="{{ url_for('contratos.gerar_financas', cid=c.id) }}">
