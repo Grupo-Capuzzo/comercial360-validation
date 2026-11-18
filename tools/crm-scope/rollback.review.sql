@@ -11,8 +11,6 @@ DROP POLICY crm_company_products ON comercial_360.produtos;
 DROP POLICY crm_company_links ON comercial_360.cliente_produtos;
 DROP POLICY crm_company_clients ON comercial_360.clientes;
 DROP FUNCTION api_comercial.crm_escopo_contexto(text),api_comercial.crm_escopo_consultar(text,text,integer),api_comercial.crm_escopo_operar(text,text,jsonb);
-DROP INDEX crm.crm_scope_opportunity_product;
-DROP INDEX crm.crm_scope_task_opportunity;
 DROP INDEX comercial_360.crm_scope_lead_product;
 -- Export the reviewed company mapping and this private snapshot before this step.
 DROP SCHEMA crm_scope_private CASCADE;

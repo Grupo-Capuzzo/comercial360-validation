@@ -399,7 +399,5 @@ CREATE POLICY crm_company_clients ON comercial_360.clientes AS RESTRICTIVE FOR S
  USING(crm_scope_private.client_access(cliente_id_global,'geral') OR
  EXISTS(SELECT 1 FROM comercial_360.cliente_produtos cp WHERE cp.cliente_id_global=clientes.cliente_id_global AND crm_scope_private.any_product_access(cp.produto_id,false)));
 
-CREATE INDEX crm_scope_opportunity_product ON crm.oportunidades(produto_id,oportunidade_id);
-CREATE INDEX crm_scope_task_opportunity ON crm.tarefas(oportunidade_id,tarefa_id);
 CREATE INDEX crm_scope_lead_product ON comercial_360.leads(produto_id,lead_id);
 COMMIT;
