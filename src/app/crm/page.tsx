@@ -1,10 +1,7 @@
-import { CrmPage } from "@/components/crm/crm-page";
 import { AppShell } from "@/components/layout/app-shell";
-
-export default function CRMPage() {
-  return (
-    <AppShell>
-      <CrmPage />
-    </AppShell>
-  );
+import { CrmWorkspace } from "@/components/crm/crm-workspace";
+import { requireCrmScope } from "@/services/crm-scope.server";
+export default async function CRMPage() {
+  const { context } = await requireCrmScope("geral");
+  return <AppShell crm={context}><CrmWorkspace key={context.scope} context={context} /></AppShell>;
 }

@@ -1,11 +1,14 @@
 ﻿"use client";
+import { useCrmScope } from "@/components/crm/scope-context";
 
 import { useEffect, useMemo, useState } from "react";
 
-import { loadProducts } from "@/services/products.service";
+import { loadProducts as loadProductsScoped } from "@/services/products.service";
 import type { ProductSummaryRow } from "@/types/database";
 
 export function ProductsPage() {
+  const scope = useCrmScope();
+
   const [products, setProducts] = useState<ProductSummaryRow[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("todas");
@@ -16,7 +19,7 @@ export function ProductsPage() {
     let active = true;
 
     async function fetchProducts() {
-      const result = await loadProducts();
+      const result = await loadProductsScoped(scope);
 
       if (!active) return;
 
@@ -30,7 +33,7 @@ export function ProductsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [scope]);
 
   const categories = useMemo(
     () =>

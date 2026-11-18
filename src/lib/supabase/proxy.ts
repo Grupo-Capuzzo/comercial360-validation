@@ -78,5 +78,20 @@ export async function updateSession(request: NextRequest) {
     return concluir(NextResponse.redirect(url));
   }
 
+
+  // Return a real HTTP denial before Server Components can start streaming.
+  const companyMatch = path.match(/^\/comercial\/([^/]+)(?:\/|$)/);
+  const generalPage = ["/crm", "/clientes", "/produtos", "/leads"].includes(path);
+  if (claims && (companyMatch || generalPage)) {
+    const scope = companyMatch && companyMatch[1] !== "40ca9f00-a17c-4605-9323-a15974c52817" ? companyMatch[1] : "geral";
+    const access = await supabase.schema("api_comercial").rpc("crm_escopo_contexto", { p_escopo: scope });
+    if (access.error || !access.data) {
+      return concluir(new NextResponse(access.error?.code === "42501" ? "Sem permissão para este CRM." : "CRM temporariamente indisponível.", {
+        status: access.error?.code === "42501" ? 403 : 503,
+        headers: { "Cache-Control": "private, no-store", "Content-Type": "text/plain; charset=utf-8" },
+      }));
+    }
+    supabaseResponse.headers.set("Cache-Control", "private, no-store");
+  }
   return concluir(supabaseResponse);
 }

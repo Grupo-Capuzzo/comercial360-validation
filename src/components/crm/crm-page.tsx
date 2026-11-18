@@ -1,4 +1,5 @@
 "use client";
+import { useCrmScope } from "@/components/crm/scope-context";
 
 import {
   FormEvent,
@@ -9,11 +10,11 @@ import {
 } from "react";
 
 import {
-  completeCrmTask,
-  createCrmTask,
-  loadCrm,
-  moveOpportunity,
-  updateOpportunity,
+  completeCrmTask as completeCrmTaskScoped,
+  createCrmTask as createCrmTaskScoped,
+  loadCrm as loadCrmScoped,
+  moveOpportunity as moveOpportunityScoped,
+  updateOpportunity as updateOpportunityScoped,
 } from "@/services/crm.service";
 
 import type {
@@ -66,6 +67,12 @@ function toDateTimeLocal(value: string | null | undefined) {
 }
 
 export function CrmPage() {
+  const scope = useCrmScope();
+  const moveOpportunity = (input: Parameters<typeof moveOpportunityScoped>[0]) => moveOpportunityScoped(input, scope);
+  const updateOpportunity = (input: Parameters<typeof updateOpportunityScoped>[0]) => updateOpportunityScoped(input, scope);
+  const createCrmTask = (input: Parameters<typeof createCrmTaskScoped>[0]) => createCrmTaskScoped(input, scope);
+  const completeCrmTask = (input: Parameters<typeof completeCrmTaskScoped>[0]) => completeCrmTaskScoped(input, scope);
+
   const [pipeline, setPipeline] = useState<CrmPipelineRow[]>([]);
   const [opportunities, setOpportunities] = useState<
     CrmOpportunityRow[]
@@ -93,7 +100,7 @@ export function CrmPage() {
   const [responsible, setResponsible] = useState("todos");
 
   const refresh = useCallback(async () => {
-    const result = await loadCrm();
+    const result = await loadCrmScoped(scope);
 
     if (!result.ok) {
       setError(
@@ -108,7 +115,7 @@ export function CrmPage() {
     setTasks(result.data.tasks);
 
     return true;
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     let active = true;
@@ -117,7 +124,7 @@ export function CrmPage() {
       setLoading(true);
       setError(null);
 
-      const result = await loadCrm();
+      const result = await loadCrmScoped(scope);
 
       if (!active) return;
 
@@ -143,7 +150,7 @@ export function CrmPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [scope]);
 
   const products = useMemo(
     () =>
@@ -300,7 +307,7 @@ export function CrmPage() {
 
     if (newStage.tipo === "perdida") {
       const reason = window.prompt(
-        `Informe o motivo da perda de "${opportunity.titulo}":`,
+        `Informe o motivo da perda de "${opportunity.titulo}{opportunity.classificacao === "pendente" && <span className="ml-2 text-xs text-amber-700">Pendente de classificação</span>}":`,
       );
 
       if (reason === null) {
@@ -601,6 +608,7 @@ export function CrmPage() {
 
   return (
     <div className="space-y-6">
+      {opportunities.some(row => row.classificacao === "pendente") && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">Há negócios pendentes de classificação. Eles permanecem no histórico do CRM Geral e não podem ser operados até a validação da empresa.</p>}
       <section>
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--gold)]">
           Comercial 360

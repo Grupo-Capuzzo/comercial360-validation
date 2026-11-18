@@ -309,6 +309,12 @@ export const EMPRESAS: Empresa[] = [
   }
 ];
 
+for (const company of EMPRESAS) {
+  const commercialModule = company.modulos.find(item => item.id === "comercial");
+  if (commercialModule) commercialModule.nome = "Comercial / CRM";
+  else company.modulos.push({ id: "comercial", nome: "Comercial / CRM", icone: "handshake", desc: "CRM exclusivo da empresa; depende de conciliação validada.", status: "ativo", origem: "bia" });
+}
+
 export function tema(t?: Partial<Tema>): Tema {
   return { ...TEMA_GRUPO, surface: "#FFFFFF", ...(t ?? {}) } as Tema;
 }
