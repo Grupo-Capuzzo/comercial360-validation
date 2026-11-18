@@ -2438,6 +2438,25 @@ export function registrar() {
     return redirect(url_for("configuracoes"));
   });
 
+  // Gmail: envio dos arquivos gmail_credentials.json / gmail_token.json do app local (só administrador).
+  route("configuracoes_gmail_arquivos", "/configuracoes/gmail/arquivos", ["POST"], async () => {
+    const { g, abort } = await import("../core/flask");
+    const { checar_csrf } = await import("../modulos/portal");
+    if (!g().portal_user?.admin) abort(403);
+    checar_csrf();
+    const ler = (k: string) => { const a = request().file(k); return a && a.filename && a.size ? Buffer.from(a.read()).toString("utf8") : null; };
+    try {
+      const cred = ler("credenciais"), tok = ler("token");
+      if (!cred && !tok) flash("Escolha pelo menos um dos arquivos.", "error");
+      else {
+        const feitos = await gmail.importar_arquivos(cred, tok);
+        if (feitos.includes("token")) await gmail._get_valid_access_token(); // confere com o Google na hora
+        flash(`Gmail configurado (${feitos.join(" e ")}). Já é possível enviar contratos por e-mail.`, "success");
+      }
+    } catch (exc) { flash(`Gmail: ${strExc(exc)}`, "error"); }
+    return redirect(url_for("configuracoes"));
+  });
+
   // Gmail: online o fluxo OAuth é pelo navegador → Google → rota de retorno abaixo.
   const retornoGmail = () => url_for("configuracoes_gmail_retorno", { _external: true });
   route("configuracoes_gmail_autenticar", "/configuracoes/gmail/autenticar", ["POST"], async () => {
