@@ -256,6 +256,15 @@ export async function delete_client(client_id: number): Promise<Record<string, a
   } finally { await conn.close(); }
 }
 
+/** Quem precisa saber quando uma cota muda (ex.: previsões de rendimento/retirada no Finanças).
+ *  evento: "renovar" | "retirada" | "editar". Falha de um ouvinte não desfaz a alteração da cota. */
+export const OUVINTES_COTA: ((share_id: number, evento: string) => Promise<void>)[] = [];
+async function _avisar_cota(share_id: number, evento: string) {
+  for (const f of OUVINTES_COTA) {
+    try { await f(share_id, evento); } catch (exc) { logger.error(`ouvinte de cota falhou (id=${share_id}, ${evento}): ${strExc(exc)}`); }
+  }
+}
+
 export async function get_shares(condominium_id: number | null = null, client_id: number | null = null, status: string | null = null): Promise<Row[]> {
   const conn = await get_connection();
   try {
@@ -309,6 +318,7 @@ export async function insert_share(data: Record<string, any>, allow_duplicate = 
     const new_id = cur.lastrowid!;
     await _log(conn, "shares", new_id, "INSERT", null, pyRepr(data));
     await conn.commit();
+    await _avisar_cota(new_id, "editar");
     return new_id;
   } finally { await conn.close(); }
 }
@@ -350,6 +360,7 @@ export async function update_share(share_id: number, data: Record<string, any>, 
     if (allow_duplicate) audit_note = "Lançamento histórico com número de cota repetido permitido manualmente.";
     await _log(conn, "shares", share_id, "UPDATE", pyRepr(old), pyRepr(data), audit_note);
     await conn.commit();
+    await _avisar_cota(share_id, "editar");
     return true;
   } finally { await conn.close(); }
 }
@@ -587,6 +598,7 @@ export async function deactivate_share(share_id: number, withdrawal_date: string
       (user_note || "Cota inativada com data de retirada") + nota_prop);
     await conn.commit();
     logger.info(`deactivate_share: cota id=${share_id} inativada withdrawal_date=${wd} accrual_until_withdrawal=${prop_flag}`);
+    await _avisar_cota(share_id, "editar");
     return true;
   } catch (exc) {
     await conn.rollback();
@@ -619,6 +631,7 @@ export async function reactivate_share(share_id: number, user_note = ""): Promis
       user_note || "Cota reativada — dados de retirada removidos");
     await conn.commit();
     logger.info(`reactivate_share: cota id=${share_id} reativada, withdrawal_date limpo`);
+    await _avisar_cota(share_id, "editar");
     return true;
   } catch (exc) {
     await conn.rollback();
@@ -767,6 +780,7 @@ export async function create_multiple_shares(
     }
     await conn.commit();
     logger.info(`create_multiple_shares: ${new_ids.length} cotas criadas`);
+    for (const nid of new_ids) await _avisar_cota(nid, "editar");
     return new_ids;
   } catch (exc) {
     await conn.rollback();
@@ -1195,6 +1209,7 @@ export async function renew_share(share_id: number, renewal_date: string, maturi
     await _log(conn, "shares", share_id, "RENEW", old_val, new_val, user_note || `Cota ${old.share_number} renovada — novo vencimento ${md}`);
     await conn.commit();
     logger.info(`renew_share: cota id=${share_id} renovada em ${rd}, vencimento ${md}`);
+    await _avisar_cota(share_id, "renovar");
     return true;
   } catch (exc) {
     await conn.rollback();
@@ -1230,6 +1245,7 @@ export async function request_withdrawal(share_id: number, request_date: string,
       user_note || `Retirada solicitada — efetiva em ${eff}. Cota permanece ativa até lá.`);
     await conn.commit();
     logger.info(`request_withdrawal: cota id=${share_id} retirada solicitada, efetiva ${eff}`);
+    await _avisar_cota(share_id, "retirada");
     return true;
   } catch (exc) {
     await conn.rollback();
@@ -1257,6 +1273,7 @@ export async function update_withdrawal_effective_date(share_id: number, effecti
       pyJsonDumps({ withdrawal_effective_date: eff }),
       user_note || "Data efetiva da retirada alterada");
     await conn.commit();
+    await _avisar_cota(share_id, "retirada");
     return true;
   } catch (exc) {
     await conn.rollback();
@@ -1285,6 +1302,7 @@ export async function cancel_withdrawal(share_id: number, user_note = ""): Promi
       user_note || "Pedido de retirada cancelado");
     await conn.commit();
     logger.info(`cancel_withdrawal: cota id=${share_id} retirada cancelada`);
+    await _avisar_cota(share_id, "retirada");
     return true;
   } catch (exc) {
     await conn.rollback();
@@ -1314,6 +1332,7 @@ export async function finalize_withdrawal(share_id: number, user_note = ""): Pro
       user_note || `Retirada finalizada — cota inativada com retirada em ${eff}`);
     await conn.commit();
     logger.info(`finalize_withdrawal: cota id=${share_id} inativada, retirada ${eff}`);
+    await _avisar_cota(share_id, "editar");
     return true;
   } catch (exc) {
     await conn.rollback();
