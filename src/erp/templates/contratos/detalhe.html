@@ -92,6 +92,26 @@
       {% elif c.status == 'concluido' %}
         <div class="form-section-title" style="margin-bottom:8px;">✅ Concluído</div>
         <p class="text-dim" style="font-size:13px;">Depósito confirmado e cotas ativadas em {{ c.concluido_em | ct_data(True) }}.</p>
+        {% if c.tipo == 'aquisicao' %}
+        <div class="form-section-title" style="margin:14px 0 6px;">💰 Finanças · Capuzzo Assessoria</div>
+        {% if lancs_fin %}
+          <table class="ct-cotas" style="width:100%;font-size:12px;">
+            <thead><tr><th>Vencimento</th><th>Lançamento</th><th style="text-align:right">Valor</th></tr></thead>
+            <tbody>{% for l in lancs_fin %}
+              <tr style="{{ 'opacity:.5;text-decoration:line-through' if l.cancelado }}"><td class="text-mono" style="white-space:nowrap">{{ l.vencimento | ct_data }}</td>
+                <td><a href="{{ url_for('financas.lancamento', slug='assessoria', lid=l.id) }}" style="color:{{ '#4ade80' if l.tipo == 'receber' else '#f87171' }}">{{ '↓' if l.tipo == 'receber' else '↑' }} {{ l.descricao.split(' — ')[0] }}</a></td>
+                <td style="text-align:right;white-space:nowrap" class="text-mono">{{ moeda(l.valor / 100) }}</td></tr>
+            {% endfor %}</tbody>
+          </table>
+          <p class="text-dim" style="font-size:11px;margin-top:6px;">Entrada no contas a receber; rendimentos e retirada são previsões no contas a pagar.</p>
+        {% else %}
+          <p class="text-dim" style="font-size:12.5px;">Ainda não há lançamentos deste contrato no Finanças.</p>
+          <form method="post" action="{{ url_for('contratos.gerar_financas', cid=c.id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button class="btn btn-primary btn-sm" data-confirm="Gerar a entrada, os rendimentos previstos e a retirada no Finanças?">Gerar lançamentos no Finanças</button>
+          </form>
+        {% endif %}
+        {% endif %}
       {% else %}
         <div class="form-section-title" style="margin-bottom:8px;">Contrato cancelado</div>
         <p class="text-dim" style="font-size:13px;">{{ c.cancelado_em | ct_data(True) }}{% if c.motivo_cancelamento %} — {{ c.motivo_cancelamento }}{% endif %}</p>
