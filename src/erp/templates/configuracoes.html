@@ -49,8 +49,8 @@
 
   {% if not gmail_status.credentials_found %}
   <div class="note-box" style="margin-bottom:16px;color:#f87171;border-color:rgba(239,68,68,0.25);">
-    ⚠️ Arquivo config/gmail_credentials.json não encontrado. Configure
-    <span class="text-mono">config/gmail_credentials.json</span>.<br>
+    ⚠️ Credenciais do Gmail não configuradas. Envie os arquivos abaixo
+    (ou, no app local, salve <span class="text-mono">config/gmail_credentials.json</span>).<br>
     Baixe o arquivo de credenciais OAuth (tipo "App para computador") no
     <strong>Google Cloud Console</strong> → APIs e serviços → Credenciais, e salve exatamente
     nesse caminho, dentro da pasta do projeto.
@@ -66,6 +66,20 @@
     própria caixa de e-mail — nada é enviado automaticamente, apenas o rascunho fica pronto
     para revisão no Gmail.
   </div>
+  {% endif %}
+
+  {% if portal_user and portal_user.admin %}
+  <form method="post" action="{{ url_for('configuracoes_gmail_arquivos') }}" enctype="multipart/form-data" class="card" style="margin-bottom:16px;padding:14px;">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div style="font-weight:600;margin-bottom:6px;">Usar a mesma autorização do app local</div>
+    <p class="text-dim" style="font-size:12px;margin:0 0 10px;">Envie os arquivos da pasta <span class="text-mono">app condominios/config</span> do seu computador.
+      Eles ficam guardados no banco e o conteúdo nunca aparece na tela.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+      <label style="font-size:12px;">gmail_credentials.json<br><input type="file" name="credenciais" accept=".json,application/json"></label>
+      <label style="font-size:12px;">gmail_token.json<br><input type="file" name="token" accept=".json,application/json"></label>
+      <button type="submit" class="btn btn-primary">Enviar arquivos</button>
+    </div>
+  </form>
   {% endif %}
 
   <form method="post" action="{{ url_for('configuracoes_gmail_autenticar') }}">

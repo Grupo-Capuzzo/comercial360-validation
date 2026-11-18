@@ -187,3 +187,27 @@ export async function send_gmail_message(to_email: string, subject: string, body
   const sent = await _post_json(SEND_ENDPOINT, token, { raw }, "Erro ao enviar e-mail pelo Gmail", "Falha de conexao com o Gmail");
   return sent.id ?? "";
 }
+
+/** Online não há pasta config/: os arquivos gmail_credentials.json e gmail_token.json (os mesmos do app
+ *  local) são enviados pela tela Configurações e ficam em erp_config. Valida antes de gravar. */
+export async function importar_arquivos(credenciais: string | null, token: string | null): Promise<string[]> {
+  const feitos: string[] = [];
+  if (credenciais) {
+    let d: any;
+    try { d = JSON.parse(credenciais); } catch { throw new GmailCredentialsNotFoundError("O arquivo de credenciais não é um JSON válido."); }
+    const sec = d?.installed || d?.web;
+    if (!sec?.client_id || !sec?.client_secret) throw new GmailCredentialsNotFoundError("Esse arquivo não parece o gmail_credentials.json (faltam client_id/client_secret).");
+    await gravarConfig(CHAVE_CREDENCIAIS, JSON.stringify(d));
+    feitos.push("credenciais");
+  }
+  if (token) {
+    let t: any;
+    try { t = JSON.parse(token); } catch { throw new GmailNotAuthenticatedError("O arquivo de token não é um JSON válido."); }
+    if (!t?.refresh_token && !t?.access_token) throw new GmailNotAuthenticatedError("Esse arquivo não parece o gmail_token.json (falta o refresh_token).");
+    if (t.expiry && !t.expires_at) t.expires_at = Date.parse(t.expiry) / 1000;
+    if (!t.access_token) t.expires_at = 0;
+    await gravarConfig(CHAVE_TOKEN, JSON.stringify(t));
+    feitos.push("token");
+  }
+  return feitos;
+}
