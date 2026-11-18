@@ -9,6 +9,7 @@
 //
 //   Público (sem login): no app local era /contratos/assinar/<token>; online a página é servida em
 //   /auth/contrato/<token> (fora do /erp: o proxy do site libera /auth/... sem login).
+import * as fc from "./financas_cotas";
 import {
   PyDate, abort, flash, get, jsonify, montarPublico, post, redirect, render_template, request, route, templateFilter, url_for,
 } from "../../core/flask";
@@ -108,8 +109,9 @@ export function registrar() {
     const msg_wpp = `Olá, ${String(cli.nome).trim().split(/\s+/)[0]}! Segue o link para assinatura eletrônica do seu `
       + `${d.TIPOS[c.tipo]} (${c.dados.qtd} cota(s) — ${d.moeda(c.dados.valor_total)}): ${link}`;
     const fone = d.so_digitos(c.cliente_fone);
+    const lancs_fin = c.tipo === "aquisicao" && c.status === "concluido" ? await fc.lancamentos_do_contrato(cid) : [];
     return render_template("contratos/detalhe.html", _ctx({
-      c, cli, cfg, link, hoje, aq_sugerida: aq, venc_sugerido: venc, msg_wpp,
+      c, cli, cfg, link, hoje, aq_sugerida: aq, venc_sugerido: venc, msg_wpp, lancs_fin,
       fone_wpp: [10, 11].includes(fone.length) ? "55" + fone : "",
       link_local: cfg.url_publica.includes("127.0.0.1") || cfg.url_publica.includes("localhost"),
     }));
@@ -193,10 +195,25 @@ export function registrar() {
     try {
       await d.ativar_cotas(cid, f.get("data_deposito", ""), datas);
       flash("Depósito confirmado — cotas ativadas.", "success");
+      try {
+        const r: any = await fc.gerar_lancamentos_aquisicao(cid, f.get("data_deposito", ""));
+        if (!r.ja_existia) flash(`Finanças da Capuzzo Assessoria: entrada no contas a receber + ${r.rendimentos} rendimento(s) previsto(s) e ${r.retiradas} retirada(s) no contas a pagar.`, "success");
+      } catch (e: any) { flash(`Cotas ativadas, mas não consegui gerar os lançamentos no Finanças: ${e?.message ?? e}`, "error"); }
     } catch (exc: any) {
       if (!d.ehValueError(exc)) throw exc;
       flash(msg(exc), "error");
     }
+    return redirect(url_for("contratos.detalhe", { cid }));
+  });
+
+  post("contratos.gerar_financas", "/contratos/<int:cid>/gerar-financas", async (cid: number) => {
+    _csrf();
+    await _contrato(cid);
+    try {
+      const r: any = await fc.gerar_lancamentos_aquisicao(cid);
+      if (r.ja_existia) flash("Os lançamentos deste contrato já estão no Finanças.", "success");
+      else flash(`Lançamentos gerados no Finanças: entrada + ${r.rendimentos} rendimento(s) e ${r.retiradas} retirada(s).`, "success");
+    } catch (e: any) { flash(String(e?.message ?? e), "error"); }
     return redirect(url_for("contratos.detalhe", { cid }));
   });
 
